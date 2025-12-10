@@ -1,11 +1,10 @@
-
 services:
-  skeleton:
+  aura_grade:
     build:
       context: .
       dockerfile: Dockerfile
-    image: stiwar1098/skeleton
-    container_name: skeleton
+    image: stiwar1098/aura_grade
+    container_name: aura_grade_app
     restart: always
     ports:
       - '${PORT}:${PORT}'

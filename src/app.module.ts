@@ -14,6 +14,7 @@ import { UserModule } from './user/user.module';
 import { MailModule } from './mail/mail.module';
 // Config
 import { envs } from './config';
+import { CourseModule } from './course/course.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -28,7 +29,7 @@ import { envs } from './config';
             }
           : (false as any),
       host: envs.db_host,
-      port: +envs.db_host,
+      port: +envs.db_port,
       database: envs.db_name,
       username: envs.db_username,
       password: envs.db_password,
@@ -47,6 +48,7 @@ import { envs } from './config';
     AuthModule,
     UserModule,
     MailModule,
+    CourseModule,
   ],
 })
 export class AppModule {}

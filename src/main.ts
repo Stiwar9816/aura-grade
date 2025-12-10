@@ -7,10 +7,18 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { envs } from './config';
+
 async function bootstrap() {
-  const logger = new Logger('Skeleton API');
+  const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Permite Apollo Sandbox en /graphql
+      crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginResourcePolicy: false,
+    })
+  );
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -29,9 +37,9 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('Skeleton RESTFul API')
-    .setDescription('Skeleton endpoints')
-    .setVersion('1.0')
+    .setTitle('AuraGrade RESTFul API')
+    .setDescription('AuraGrade endpoints')
+    .setVersion('1.0.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('API', app, document);

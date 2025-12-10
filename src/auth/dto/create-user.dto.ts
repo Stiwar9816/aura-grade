@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { DocumentType } from '../enums/user-document-type.enum';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRoles } from '../enums';
 
 @InputType({
   description: 'Inputs user register',
@@ -102,9 +103,8 @@ export class CreateUserDto {
     nullable: false,
     type: 'string',
   })
-  @IsString()
-  @Field(() => String, {
+  @Field(() => UserRoles, {
     description: 'User roles wich can Administrator, User by default takes the user role',
   })
-  role: string;
+  role: UserRoles;
 }

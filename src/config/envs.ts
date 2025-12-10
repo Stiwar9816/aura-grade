@@ -6,6 +6,7 @@ const envsSchema = joi
   .object({
     PORT: joi.number().required(),
     STATE: joi.string().required(),
+    DB_PORT: joi.number().required(),
     DB_PASSWORD: joi.string().required(),
     DB_NAME: joi.string().required(),
     DB_HOST: joi.string().required(),
@@ -28,6 +29,7 @@ const envVars: EnvVars = value;
 export const envs = {
   port: envVars.PORT,
   state: envVars.STATE,
+  db_port: envVars.DB_PORT,
   db_host: envVars.DB_HOST,
   db_name: envVars.DB_NAME,
   db_username: envVars.DB_USERNAME,

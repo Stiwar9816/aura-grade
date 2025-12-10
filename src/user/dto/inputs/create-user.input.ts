@@ -11,7 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { DocumentType } from 'src/auth/enums';
+import { DocumentType, UserRoles } from 'src/auth/enums';
 
 @InputType()
 export class CreateUserInput {
@@ -100,9 +100,9 @@ export class CreateUserInput {
     nullable: false,
     type: 'string',
   })
-  @IsString()
-  @Field(() => String, {
+  @IsEnum(UserRoles)
+  @Field(() => UserRoles, {
     description: 'User roles wich can Administrator, User by default takes the user role',
   })
-  role: string;
+  role: UserRoles = UserRoles.Estudiante;
 }

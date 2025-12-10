@@ -1,1 +1,1 @@
-export { randomPassword } from './randomPassword';
+export * from './randomPassword';

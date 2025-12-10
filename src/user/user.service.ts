@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 // TypeORM
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,10 +17,11 @@ import * as bcrypt from 'bcryptjs';
 import { CreateUserInput, UpdateUserInput } from './dto';
 // Entities
 import { User } from './entities/user.entity';
-import { randomPassword } from 'src/auth/common/utils';
+// Services
 import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
-import { JwtService } from '@nestjs/jwt';
+// Utils
+import { randomPassword } from 'src/auth/common';
 
 @Injectable()
 export class UserService {
@@ -48,8 +50,8 @@ export class UserService {
     }
   }
 
-  async findAll(): Promise<User[]> {
-    const allowedRoles = ['Usuario', 'Administrador'];
+  async findAll(user: User): Promise<User[]> {
+    const allowedRoles = ['Estudiante', 'Docente', 'Administrador'];
     return this.userRepository
       .createQueryBuilder('user')
       .where('user.role IN (:...roles)', { roles: allowedRoles })

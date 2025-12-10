@@ -20,6 +20,7 @@ import { CreateUserDto, LoginUserDto } from './dto';
 import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
 import { MailService } from 'src/mail/mail.service';
+import { UserRoles } from './enums';
 
 @Injectable()
 export class AuthService {
@@ -99,7 +100,7 @@ export class AuthService {
     };
   }
 
-  async validateUser(role: string): Promise<User> {
+  async validateUser(role: UserRoles): Promise<User> {
     //TODO: Chague authRepository for UserService
     const user = await this.authRepository.findOneByOrFail({ role });
     if (!user.isActive)

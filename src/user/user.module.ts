@@ -10,14 +10,18 @@ import { UserResolver } from './user.resolver';
 import { UserService } from './user.service';
 // Entities
 import { User } from './entities/user.entity';
+// Modules
 import { AuthModule } from 'src/auth/auth.module';
+import { CourseModule } from 'src/course/course.module';
+
 @Module({
   providers: [UserResolver, UserService],
   imports: [
     TypeOrmModule.forFeature([User]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     forwardRef(() => AuthModule),
+    forwardRef(() => CourseModule),
   ],
-  exports: [UserService],
+  exports: [UserService, TypeOrmModule],
 })
 export class UserModule {}

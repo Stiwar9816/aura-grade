@@ -1,12 +1,12 @@
 services:
   db:
-    image: postgres:17.2-alpine3.21
-    restart: always
+    image: postgres:16.11-alpine3.23
+    restart: always # reiniciar el contenedor si se detiene
     ports:
       - 5432:5432
     environment:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
-    container_name: skeleton
+    container_name: aura_grade_db
     volumes:
-      - './postgres:/var/lib/postgresql/data && chmod -R 077 /var/lib/postgresql/data'
+      - ./postgres:/var/lib/postgresql/data

@@ -25,8 +25,8 @@ export class UserResolver {
     description: 'Find all users',
   })
   @UseGuards(JwtAuthGuard)
-  findAll(@CurrentUser(UserRoles.Administrador, UserRoles.superAdmin) user: User) {
-    return this.userService.findAll();
+  findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
+    return this.userService.findAll(user);
   }
 
   @Query(() => User, {
@@ -36,7 +36,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   findOne(
     @Args('id', { type: () => String }, ParseUUIDPipe) id: string,
-    @CurrentUser(UserRoles.Administrador, UserRoles.superAdmin) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
     return this.userService.findOneById(id);
   }
@@ -48,7 +48,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   findOneByEmail(
     @Args('email', { type: () => String }) email: string,
-    @CurrentUser(UserRoles.Administrador, UserRoles.superAdmin) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
     return this.userService.findOneByEmail(email);
   }
@@ -60,7 +60,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   updateUser(
     @Args('updateUserInput') updateUserInput: UpdateUserInput,
-    @CurrentUser(UserRoles.Administrador, UserRoles.superAdmin) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ) {
     return this.userService.update(updateUserInput.id, updateUserInput);
   }
@@ -72,7 +72,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   blockUser(
     @Args('id', { type: () => String }, ParseUUIDPipe) id: string,
-    @CurrentUser(UserRoles.Administrador, UserRoles.superAdmin) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
     return this.userService.block(id);
   }
@@ -93,7 +93,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   resetPasswordAuth(
     @Args('newPassword', { type: () => String }) password: string,
-    @CurrentUser() user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
     return this.userService.resetPasswordAuth(password, user);
   }

@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { CreateUserInput } from './create-user.input';
 import { InputType, Field, Int, PartialType } from '@nestjs/graphql';
 import { UserRoles } from 'src/auth/enums';
@@ -17,11 +17,11 @@ export class UpdateUserInput extends PartialType(CreateUserInput) {
     nullable: false,
     type: 'string',
   })
-  @IsString()
-  @Field(() => String, {
+  @IsEnum(UserRoles)
+  @Field(() => UserRoles, {
     description: 'User roles wich can Administrator, User by default takes the user role',
   })
-  role: string;
+  role: UserRoles;
 
   @ApiProperty({
     description: 'User role wich can Administrator, User by default takes the user role',

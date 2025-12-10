@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@apollo/protobufjs'
+  - '@nestjs/core'
+  - '@scarf/scarf'
+  - '@swc/core'
+  - unrs-resolver

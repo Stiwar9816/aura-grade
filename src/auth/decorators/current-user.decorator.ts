@@ -13,8 +13,7 @@ import { User } from '../../user/entities/user.entity';
 import { UserRoles } from '../enums';
 
 //Validation of user with roles required for EndPoint
-
-export const CurrentUser = createParamDecorator((role: UserRoles, ctx: ExecutionContext) => {
+export const CurrentUser = createParamDecorator((role: UserRoles[], ctx: ExecutionContext) => {
   // Validation with HTTP request
   const getUserFromHttpContext = (context: ExecutionContext): User => {
     const request = context.switchToHttp().getRequest();
@@ -46,7 +45,7 @@ export const CurrentUser = createParamDecorator((role: UserRoles, ctx: Execution
   if (!role) return user;
 
   // Validate the user's role
-  if (user.role === role) return user;
-
-  throw new ForbiddenException(`User ${user.name} ${user.last_name} need an role valid ${role}`);
+  if (role && !role.includes(user.role)) {
+    throw new ForbiddenException(`User ${user.name} ${user.last_name} You do not have permission`);
+  }
 });

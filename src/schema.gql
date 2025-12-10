@@ -2,6 +2,13 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type Course {
+  id: String!
+  course_name: String!
+  code_course: String!
+  users: [User!]
+}
+
 type User {
   id: String!
   name: String!
@@ -12,7 +19,10 @@ type User {
   email: String!
   password: String!
   isActive: Boolean!
-  role: String!
+  role: UserRoles!
+
+  """Many-to-many relationship with course table"""
+  courses: [Course!]
 }
 
 """
@@ -27,6 +37,13 @@ enum DocumentType {
   IDENTITY_CARD
 }
 
+"""Roles allowed in the system [Administrador, Estudiante, Docente]"""
+enum UserRoles {
+  Administrador
+  Estudiante
+  Docente
+}
+
 type Query {
   """Find all users"""
   users: [User!]!
@@ -36,6 +53,8 @@ type Query {
 
   """Search for a user by a unique Email"""
   userByEmail(email: String!): User!
+  courses: [Course!]!
+  course(id: String!): Course!
 }
 
 type Mutation {
@@ -50,6 +69,9 @@ type Mutation {
 
   """Reset password user authenticed"""
   resetPasswordAuth(newPassword: String!): User!
+  createCourse(createCourseInput: CreateCourseInput!): Course!
+  updateCourse(updateCourseInput: UpdateCourseInput!): Course!
+  removeCourse(id: String!): Course!
 }
 
 input UpdateUserInput {
@@ -77,11 +99,30 @@ input UpdateUserInput {
   password: String
 
   """User roles wich can Administrator, User by default takes the user role"""
-  role: String!
+  role: UserRoles! = Estudiante
 
   """Id automatically generated in integer format eg: 1,2,3.."""
   id: String!
 
   """User roles wich can Administrator, User by default takes the user role"""
   isActive: Boolean!
+}
+
+input CreateCourseInput {
+  """Name of the course"""
+  course_name: String!
+
+  """Code of the course"""
+  code_course: String!
+}
+
+input UpdateCourseInput {
+  """Name of the course"""
+  course_name: String
+
+  """Code of the course"""
+  code_course: String
+
+  """Id automatically generated in uuid format"""
+  id: String!
 }

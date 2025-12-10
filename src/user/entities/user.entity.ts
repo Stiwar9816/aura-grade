@@ -1,10 +1,22 @@
 // GraphQL
 import { ObjectType, Field, Float } from '@nestjs/graphql';
 // TypeORM
-import { BeforeInsert, BeforeUpdate, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToMany,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 // Enums
 import { DocumentType } from '../../../src/auth/enums/user-document-type.enum';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRoles } from 'src/auth/enums';
+import { Course } from 'src/course/entities/course.entity';
 
 @Entity({ name: 'users' })
 @ObjectType()
@@ -104,9 +116,17 @@ export class User {
     description: 'User role',
     type: 'string',
   })
-  @Column({ type: 'text', default: 'user' })
-  @Field(() => String)
-  role: string;
+  @Column({ type: 'enum', enum: UserRoles, default: UserRoles.Estudiante })
+  @Field(() => UserRoles)
+  role: UserRoles;
+
+  // Relations - Many-to-Many with Course
+  @ManyToMany(() => Course, (course) => course.users, { lazy: true })
+  @Field(() => [Course], {
+    nullable: true,
+    description: 'Many-to-many relationship with course table',
+  })
+  courses: Course[];
 
   // Convertimos los datos del email a minúsculas
   @BeforeInsert()
