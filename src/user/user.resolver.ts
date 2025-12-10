@@ -9,7 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // Services
 import { UserService } from './user.service';
 // Dto
-import { UpdateUserInput } from './dto';
+import { AssignCoursesInput, UpdateUserInput } from './dto';
 // Entities
 import { User } from './entities/user.entity';
 // Enums
@@ -96,5 +96,17 @@ export class UserResolver {
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
     return this.userService.resetPasswordAuth(password, user);
+  }
+
+  @Mutation(() => User, {
+    name: 'assignCoursesToUser',
+    description: 'Assign multiple courses to a user',
+  })
+  @UseGuards(JwtAuthGuard)
+  assignCoursesToUser(
+    @Args('assignCoursesInput') assignCoursesInput: AssignCoursesInput,
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+  ) {
+    return this.userService.assignCourses(assignCoursesInput);
   }
 }

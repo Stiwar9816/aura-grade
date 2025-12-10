@@ -29,8 +29,8 @@ export class AuthController {
   @ApiNotFoundResponse({ description: 'Not found' })
   @ApiInternalServerErrorResponse({ description: 'Internal Server Error' })
   // End - Doc API
-  craate(@Body() createUserDto: CreateUserDto) {
-    return this.authService.create(createUserDto);
+  register(@Body() createUserDto: CreateUserDto) {
+    return this.authService.register(createUserDto);
   }
   //EndPoint Login users
   @Post('login')

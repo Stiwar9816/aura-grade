@@ -21,6 +21,7 @@ import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
 import { MailService } from 'src/mail/mail.service';
 import { UserRoles } from './enums';
+import { Course } from 'src/course/entities/course.entity';
 
 @Injectable()
 export class AuthService {
@@ -35,13 +36,17 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async create(createAuthDto: CreateUserDto) {
+  async register(createAuthDto: CreateUserDto) {
     try {
-      const { password, ...userInfo } = createAuthDto;
+      const { password, courses, ...userInfo } = createAuthDto;
       const user = this.authRepository.create({
         ...userInfo,
         password: bcrypt.hashSync(password, 12),
       });
+
+      // Convertir IDs (string[]) → [{ id }, { id }, ...]
+      if (courses?.length) user.courses = courses.map((id) => ({ id })) as any;
+
       await this.authRepository.save(user);
 
       // Guarda una copia sin encriptar de la contraseña

@@ -69,6 +69,9 @@ type Mutation {
 
   """Reset password user authenticed"""
   resetPasswordAuth(newPassword: String!): User!
+
+  """Assign multiple courses to a user"""
+  assignCoursesToUser(assignCoursesInput: AssignCoursesInput!): User!
   createCourse(createCourseInput: CreateCourseInput!): Course!
   updateCourse(updateCourseInput: UpdateCourseInput!): Course!
   removeCourse(id: String!): Course!
@@ -106,6 +109,11 @@ input UpdateUserInput {
 
   """User roles wich can Administrator, User by default takes the user role"""
   isActive: Boolean!
+}
+
+input AssignCoursesInput {
+  userId: String!
+  courseIds: [String!]!
 }
 
 input CreateCourseInput {

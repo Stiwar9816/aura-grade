@@ -1,9 +1,11 @@
 import { Field, Float, InputType } from '@nestjs/graphql';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsPositive,
   IsString,
   Matches,
@@ -13,6 +15,7 @@ import {
 import { DocumentType } from '../enums/user-document-type.enum';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRoles } from '../enums';
+import { Course } from 'src/course/entities/course.entity';
 
 @InputType({
   description: 'Inputs user register',
@@ -100,11 +103,26 @@ export class CreateUserDto {
 
   @ApiProperty({
     description: 'User role wich can Administrator, User by default takes the user role',
-    nullable: false,
+    nullable: true,
     type: 'string',
+    enum: UserRoles,
   })
+  @IsOptional()
+  @IsEnum(UserRoles)
   @Field(() => UserRoles, {
+    nullable: true,
     description: 'User roles wich can Administrator, User by default takes the user role',
   })
-  role: UserRoles;
+  role?: UserRoles = UserRoles.Estudiante;
+
+  @ApiProperty({
+    description: 'User courses',
+    nullable: true,
+    type: 'string',
+  })
+  @IsString({ each: true })
+  @IsArray()
+  @IsOptional()
+  @Field(() => [String], { description: 'User courses', nullable: true })
+  courses?: string[];
 }

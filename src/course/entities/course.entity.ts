@@ -42,14 +42,14 @@ export class Course {
   code_course: string;
 
   // Relations - Many-to-Many with User
-  @ManyToMany(() => User, (user) => user.courses, { lazy: true })
+  @ManyToMany(() => User, (user) => user.courses)
   @JoinTable({
     name: 'course_users', // Nombre de la tabla intermedia
     joinColumn: { name: 'courseId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' },
   })
   @Field(() => [User], { nullable: true })
-  users: User[];
+  users?: User[];
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;

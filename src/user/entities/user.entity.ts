@@ -121,12 +121,12 @@ export class User {
   role: UserRoles;
 
   // Relations - Many-to-Many with Course
-  @ManyToMany(() => Course, (course) => course.users, { lazy: true })
+  @ManyToMany(() => Course, (course) => course.users)
   @Field(() => [Course], {
     nullable: true,
     description: 'Many-to-many relationship with course table',
   })
-  courses: Course[];
+  courses?: Course[];
 
   // Convertimos los datos del email a minúsculas
   @BeforeInsert()

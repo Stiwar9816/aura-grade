@@ -32,12 +32,14 @@ export class CourseService {
   }
 
   async findAll(user: User): Promise<Course[]> {
-    return await this.courseRepository.find();
+    return await this.courseRepository.find({
+      relations: ['users'],
+    });
   }
 
   async findOne(id: string): Promise<Course> {
     try {
-      return await this.courseRepository.findOneByOrFail({ id });
+      return await this.courseRepository.findOneOrFail({ where: { id }, relations: ['users'] });
     } catch (error) {
       this.handleDBException({
         code: 'error-001',

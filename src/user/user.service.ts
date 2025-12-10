@@ -10,11 +10,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 // TypeORM
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 // Bcrypt
 import * as bcrypt from 'bcryptjs';
 // Dto
-import { CreateUserInput, UpdateUserInput } from './dto';
+import { AssignCoursesInput, CreateUserInput, UpdateUserInput } from './dto';
 // Entities
 import { User } from './entities/user.entity';
 // Services
@@ -22,6 +22,7 @@ import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
 // Utils
 import { randomPassword } from 'src/auth/common';
+import { Course } from 'src/course/entities/course.entity';
 
 @Injectable()
 export class UserService {
@@ -33,7 +34,9 @@ export class UserService {
     private readonly mailService: MailService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    @InjectRepository(Course)
+    private readonly courseRepository: Repository<Course>
   ) {}
   async create(createUserInput: CreateUserInput): Promise<User> {
     try {
@@ -52,15 +55,20 @@ export class UserService {
 
   async findAll(user: User): Promise<User[]> {
     const allowedRoles = ['Estudiante', 'Docente', 'Administrador'];
-    return this.userRepository
-      .createQueryBuilder('user')
-      .where('user.role IN (:...roles)', { roles: allowedRoles })
-      .getMany();
+    return this.userRepository.find({
+      where: {
+        role: In(allowedRoles),
+      },
+      relations: ['courses'],
+    });
   }
 
   async findOneById(id: string): Promise<User> {
     try {
-      return await this.userRepository.findOneByOrFail({ id });
+      return await this.userRepository.findOneOrFail({
+        where: { id },
+        relations: ['courses'],
+      });
     } catch (error) {
       this.handleDBException({
         code: 'error-001',
@@ -71,7 +79,10 @@ export class UserService {
 
   async findOneByEmail(email: string): Promise<User> {
     try {
-      return await this.userRepository.findOneByOrFail({ email });
+      return await this.userRepository.findOneOrFail({
+        where: { email },
+        relations: ['courses'],
+      });
     } catch (error) {
       this.handleDBException({
         code: 'error-001',
@@ -136,6 +147,31 @@ export class UserService {
         code: 'error-001',
         detail: `${user} not found`,
       });
+    }
+  }
+
+  async assignCourses({ userId, courseIds }: AssignCoursesInput): Promise<User> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['courses'],
+      });
+
+      if (!user) throw new BadRequestException(`User with ID ${userId} not found`);
+
+      const courses = await this.courseRepository.findBy({
+        id: In(courseIds),
+      });
+
+      if (courses.length !== courseIds.length)
+        throw new BadRequestException(`Some courses do not exist`);
+
+      // Asignación
+      user.courses = courses;
+
+      return await this.userRepository.save(user);
+    } catch (error) {
+      this.handleDBException(error);
     }
   }
 
