@@ -8,7 +8,8 @@ import { ApiProperty } from '@nestjs/swagger';
 export class UpdateUserInput extends PartialType(CreateUserInput) {
   @IsUUID()
   @Field(() => String, {
-    description: 'Id automatically generated in integer format eg: 1,2,3..',
+    description:
+      'Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4',
   })
   id: string;
 

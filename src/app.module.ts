@@ -12,9 +12,11 @@ import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { MailModule } from './mail/mail.module';
+import { CourseModule } from './course/course.module';
+import { RubricModule } from './rubric/rubric.module';
 // Config
 import { envs } from './config';
-import { CourseModule } from './course/course.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -49,6 +51,7 @@ import { CourseModule } from './course/course.module';
     UserModule,
     MailModule,
     CourseModule,
+    RubricModule,
   ],
 })
 export class AppModule {}

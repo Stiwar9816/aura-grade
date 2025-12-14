@@ -13,6 +13,7 @@ import { User } from './entities/user.entity';
 // Modules
 import { AuthModule } from 'src/auth/auth.module';
 import { CourseModule } from 'src/course/course.module';
+import { RubricModule } from 'src/rubric/rubric.module';
 
 @Module({
   providers: [UserResolver, UserService],
@@ -21,6 +22,7 @@ import { CourseModule } from 'src/course/course.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     forwardRef(() => AuthModule),
     forwardRef(() => CourseModule),
+    forwardRef(() => RubricModule),
   ],
   exports: [UserService, TypeOrmModule],
 })

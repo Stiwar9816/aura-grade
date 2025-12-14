@@ -9,6 +9,13 @@ type Course {
   users: [User!]
 }
 
+type Rubric {
+  id: String!
+  title: String!
+  maxTotalScore: Float!
+  users: User
+}
+
 type User {
   id: String!
   name: String!
@@ -23,6 +30,9 @@ type User {
 
   """Many-to-many relationship with course table"""
   courses: [Course!]
+
+  """One-to-Many relationship with rubric table"""
+  createdRubrics: [Rubric!]
 }
 
 """
@@ -55,6 +65,8 @@ type Query {
   userByEmail(email: String!): User!
   courses: [Course!]!
   course(id: String!): Course!
+  rubrics: [Rubric!]!
+  rubric(id: String!): Rubric!
 }
 
 type Mutation {
@@ -75,6 +87,9 @@ type Mutation {
   createCourse(createCourseInput: CreateCourseInput!): Course!
   updateCourse(updateCourseInput: UpdateCourseInput!): Course!
   removeCourse(id: String!): Course!
+  createRubric(createRubricInput: CreateRubricInput!): Rubric!
+  updateRubric(updateRubricInput: UpdateRubricInput!): Rubric!
+  removeRubric(id: String!): Rubric!
 }
 
 input UpdateUserInput {
@@ -104,7 +119,9 @@ input UpdateUserInput {
   """User roles wich can Administrator, User by default takes the user role"""
   role: UserRoles! = Estudiante
 
-  """Id automatically generated in integer format eg: 1,2,3.."""
+  """
+  Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
+  """
   id: String!
 
   """User roles wich can Administrator, User by default takes the user role"""
@@ -132,5 +149,26 @@ input UpdateCourseInput {
   code_course: String
 
   """Id automatically generated in uuid format"""
+  id: String!
+}
+
+input CreateRubricInput {
+  """Title of the rubric"""
+  title: String!
+
+  """Max total score of the rubric"""
+  maxTotalScore: Float!
+}
+
+input UpdateRubricInput {
+  """Title of the rubric"""
+  title: String
+
+  """Max total score of the rubric"""
+  maxTotalScore: Float
+
+  """
+  Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
+  """
   id: String!
 }

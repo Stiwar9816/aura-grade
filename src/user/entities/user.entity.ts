@@ -12,11 +12,13 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-// Enums
-import { DocumentType } from '../../../src/auth/enums/user-document-type.enum';
+// Swagger
 import { ApiProperty } from '@nestjs/swagger';
-import { UserRoles } from 'src/auth/enums';
+// Enums
+import { UserRoles, DocumentType } from 'src/auth/enums';
+// Entities
 import { Course } from 'src/course/entities/course.entity';
+import { Rubric } from 'src/rubric/entities/rubric.entity';
 
 @Entity({ name: 'users' })
 @ObjectType()
@@ -128,6 +130,13 @@ export class User {
   })
   courses?: Course[];
 
+  @OneToMany(() => Rubric, (rubric) => rubric.users)
+  @JoinColumn({ name: 'rubric_id', referencedColumnName: 'id' })
+  @Field(() => [Rubric], {
+    nullable: true,
+    description: 'One-to-Many relationship with rubric table',
+  })
+  createdRubrics?: Rubric[];
   // Convertimos los datos del email a minúsculas
   @BeforeInsert()
   checkFieldsBeforeInsert() {

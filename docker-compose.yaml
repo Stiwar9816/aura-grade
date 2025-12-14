@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16.11-alpine3.23
+    image: postgres:18.1-trixie
     restart: always # reiniciar el contenedor si se detiene
     ports:
       - 5432:5432
@@ -9,4 +9,4 @@ services:
       - POSTGRES_DB=${DB_NAME}
     container_name: aura_grade_db
     volumes:
-      - ./postgres:/var/lib/postgresql/data
+      - ./postgres:/var/lib/postgresql/data pg_upgrade --link
