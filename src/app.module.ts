@@ -15,9 +15,10 @@ import { MailModule } from './mail/mail.module';
 import { CourseModule } from './course/course.module';
 import { RubricModule } from './rubric/rubric.module';
 import { CriterionModule } from './criterion/criterion.module';
+import { AssignmentModule } from './assignment/assignment.module';
+import { SubmissionModule } from './submission/submission.module';
 // Config
 import { envs } from './config';
-import { AssignmentModule } from './assignment/assignment.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { AssignmentModule } from './assignment/assignment.module';
     RubricModule,
     CriterionModule,
     AssignmentModule,
+    SubmissionModule,
   ],
 })
 export class AppModule {}

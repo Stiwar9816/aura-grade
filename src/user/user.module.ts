@@ -15,6 +15,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { CourseModule } from 'src/course/course.module';
 import { RubricModule } from 'src/rubric/rubric.module';
 import { AssignmentModule } from 'src/assignment/assignment.module';
+import { SubmissionModule } from 'src/submission/submission.module';
 
 @Module({
   providers: [UserResolver, UserService],
@@ -25,6 +26,7 @@ import { AssignmentModule } from 'src/assignment/assignment.module';
     forwardRef(() => CourseModule),
     forwardRef(() => RubricModule),
     forwardRef(() => AssignmentModule),
+    forwardRef(() => SubmissionModule),
   ],
   exports: [UserService, TypeOrmModule],
 })

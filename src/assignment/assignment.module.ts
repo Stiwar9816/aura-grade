@@ -10,6 +10,7 @@ import { Assignment } from './entities/assignment.entity';
 // Modules
 import { UserModule } from 'src/user/user.module';
 import { RubricModule } from 'src/rubric/rubric.module';
+import { SubmissionModule } from 'src/submission/submission.module';
 
 @Module({
   providers: [AssignmentResolver, AssignmentService],
@@ -17,7 +18,8 @@ import { RubricModule } from 'src/rubric/rubric.module';
     TypeOrmModule.forFeature([Assignment]),
     forwardRef(() => UserModule),
     forwardRef(() => RubricModule),
+    forwardRef(() => SubmissionModule),
   ],
-  exports: [AssignmentService],
+  exports: [AssignmentService, TypeOrmModule],
 })
 export class AssignmentModule {}

@@ -26,7 +26,7 @@ export class CreateAssignmentInput {
 
   @Field(() => ID, { description: 'Teacher ID' })
   @IsUUID('4')
-  teacherId: string;
+  userId: string;
 
   @Field(() => Boolean, { nullable: true, defaultValue: true })
   @IsOptional()

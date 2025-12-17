@@ -1,16 +1,21 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+// TypeORM
 import {
   Column,
   CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+// Swagger
 import { ApiProperty } from '@nestjs/swagger';
+// Entities
 import { User } from 'src/user/entities/user.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
+import { Submission } from 'src/submission/entities/submission.entity';
 
 @Entity({ name: 'assignments' })
 @ObjectType()
@@ -70,19 +75,21 @@ export class Assignment {
     (user: any) => user.assignments,
     { nullable: false }
   )
-  @JoinColumn({ name: 'teacher_id' })
+  @JoinColumn({ name: 'user_id' })
   @Field(() => require('../../user/entities/user.entity').User)
-  teacher: User;
+  user: User;
 
   @ManyToOne(() => require('../../rubric/entities/rubric.entity').Rubric, { nullable: false })
   @JoinColumn({ name: 'rubric_id' })
   @Field(() => require('../../rubric/entities/rubric.entity').Rubric)
   rubric: Rubric;
 
-  // @OneToMany(
-  //   () => require('../../submission/entities/submission.entity').Submission,
-  //   (submission: any) => submission.assignment
-  // )
-  // @Field(() => [require('../../submission/entities/submission.entity').Submission], { nullable: 'itemsAndList' })
-  // submissions?: Submission[];
+  @OneToMany(
+    () => require('../../submission/entities/submission.entity').Submission,
+    (submission: any) => submission.assignment
+  )
+  @Field(() => [require('../../submission/entities/submission.entity').Submission], {
+    nullable: true,
+  })
+  submissions?: Submission[];
 }

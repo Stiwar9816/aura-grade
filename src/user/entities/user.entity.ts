@@ -19,6 +19,8 @@ import { UserRoles, DocumentType } from 'src/auth/enums';
 // Entities
 import { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
+import { Submission } from 'src/submission/entities/submission.entity';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
 
 @Entity({ name: 'users' })
 @ObjectType()
@@ -97,9 +99,6 @@ export class User {
     description: 'User password',
     type: 'string',
   })
-  @Column('text', {
-    select: false,
-  })
   @Column({ type: 'text', select: false })
   @Field(() => String)
   password: string;
@@ -131,12 +130,30 @@ export class User {
   courses?: Course[];
 
   @OneToMany(() => Rubric, (rubric) => rubric.user)
-  @JoinColumn({ name: 'rubric_id', referencedColumnName: 'id' })
   @Field(() => [Rubric], {
     nullable: true,
     description: 'One-to-Many relationship with rubric table',
   })
   createdRubrics?: Rubric[];
+
+  @OneToMany(
+    () => require('../../submission/entities/submission.entity').Submission,
+    (submission: any) => submission.student
+  )
+  @Field(() => [require('../../submission/entities/submission.entity').Submission], {
+    nullable: true,
+  })
+  submissions?: Submission[];
+
+  @OneToMany(
+    () => require('../../assignment/entities/assignment.entity').Assignment,
+    (assignment: any) => assignment.user
+  )
+  @Field(() => [require('../../assignment/entities/assignment.entity').Assignment], {
+    nullable: true,
+  })
+  assignments?: Assignment[];
+
   // Convertimos los datos del email a minúsculas
   @BeforeInsert()
   checkFieldsBeforeInsert() {

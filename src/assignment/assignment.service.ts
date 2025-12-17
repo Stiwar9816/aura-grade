@@ -28,7 +28,7 @@ export class AssignmentService {
       const assignment = this.assignmentRepository.create({
         ...createAssignmentInput,
         rubric: { id: createAssignmentInput.rubricId } as any,
-        teacher: { id: createAssignmentInput.teacherId } as any,
+        user: { id: createAssignmentInput.userId } as any,
       });
 
       const savedAssignment = await this.assignmentRepository.save(assignment);
@@ -40,7 +40,7 @@ export class AssignmentService {
 
   async findAll(): Promise<Assignment[]> {
     return await this.assignmentRepository.find({
-      relations: ['rubric', 'teacher'],
+      relations: ['rubric', 'user'],
       where: { isActive: true }, // Opcional: solo traer activas por defecto
     });
   }
@@ -48,14 +48,14 @@ export class AssignmentService {
   async findOne(id: string): Promise<Assignment> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id },
-      relations: ['rubric', 'teacher', 'rubric.criteria'], // Cargamos todo para la IA
+      relations: ['rubric', 'user', 'rubric.criteria'], // Cargamos todo para la IA
     });
     if (!assignment) throw new BadRequestException(`Assignment with id ${id} not found`);
     return assignment;
   }
 
   async update(id: string, updateAssignmentInput: UpdateAssignmentInput): Promise<Assignment> {
-    const { rubricId, teacherId, ...toUpdate } = updateAssignmentInput;
+    const { rubricId, userId, ...toUpdate } = updateAssignmentInput;
 
     const assignment = await this.assignmentRepository.preload({
       id,
