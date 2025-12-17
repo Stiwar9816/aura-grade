@@ -17,6 +17,7 @@ import { RubricModule } from './rubric/rubric.module';
 import { CriterionModule } from './criterion/criterion.module';
 import { AssignmentModule } from './assignment/assignment.module';
 import { SubmissionModule } from './submission/submission.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 // Config
 import { envs } from './config';
 
@@ -58,6 +59,7 @@ import { envs } from './config';
     CriterionModule,
     AssignmentModule,
     SubmissionModule,
+    CloudinaryModule,
   ],
 })
 export class AppModule {}
