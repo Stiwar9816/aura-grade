@@ -24,6 +24,7 @@ import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
 // Config
 import { envs } from './config';
+import { SeedModule } from './seed/seed.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { envs } from './config';
     ExtractorModule,
     AiModule,
     NotificationsModule,
+    SeedModule,
   ],
 })
 export class AppModule {}
