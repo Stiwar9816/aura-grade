@@ -18,8 +18,10 @@ import { CriterionModule } from './criterion/criterion.module';
 import { AssignmentModule } from './assignment/assignment.module';
 import { SubmissionModule } from './submission/submission.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { EvaluationModule } from './evaluation/evaluation.module';
 // Config
 import { envs } from './config';
+import { ExtractorService } from './extractor/extractor.service';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { envs } from './config';
     AssignmentModule,
     SubmissionModule,
     CloudinaryModule,
+    EvaluationModule,
   ],
+  providers: [ExtractorService],
 })
 export class AppModule {}

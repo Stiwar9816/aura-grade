@@ -78,7 +78,7 @@ export class Criterion {
   // Relations - Many-to-Many with Rubric
   @ManyToOne(
     () => require('../../rubric/entities/rubric.entity').Rubric,
-    (rubric: any) => rubric.criteria,
+    (rubric: Rubric) => rubric.criteria,
     { nullable: false, onDelete: 'CASCADE' }
   )
   @JoinColumn({ name: 'rubric_id' })

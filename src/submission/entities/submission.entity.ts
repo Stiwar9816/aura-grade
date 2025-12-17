@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
   JoinColumn,
   ManyToOne,
+  OneToOne,
 } from 'typeorm';
 // Swagger
 import { ApiProperty } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ import { SubmissionStatus } from 'src/enums';
 // Entities
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { User } from 'src/user/entities/user.entity';
+import type { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 
 @Entity({ name: 'submissions' })
 @ObjectType()
@@ -76,7 +78,7 @@ export class Submission {
   // Relations
   @ManyToOne(
     () => require('../../user/entities/user.entity').User,
-    (user: any) => user.submissions,
+    (user: User) => user.submissions,
     { nullable: false, onDelete: 'CASCADE' }
   )
   @JoinColumn({ name: 'student_id' })
@@ -85,10 +87,19 @@ export class Submission {
 
   @ManyToOne(
     () => require('../../assignment/entities/assignment.entity').Assignment,
-    (assignment: any) => assignment.submissions,
+    (assignment: Assignment) => assignment.submissions,
     { nullable: false, onDelete: 'CASCADE' }
   )
   @JoinColumn({ name: 'assignment_id' })
   @Field(() => require('../../assignment/entities/assignment.entity').Assignment)
   assignment: Assignment;
+
+  @OneToOne(
+    () => require('../../evaluation/entities/evaluation.entity').Evaluation,
+    (evaluation: Evaluation) => evaluation.submission
+  )
+  @Field(() => require('../../evaluation/entities/evaluation.entity').Evaluation, {
+    nullable: true,
+  })
+  evaluation?: Evaluation;
 }

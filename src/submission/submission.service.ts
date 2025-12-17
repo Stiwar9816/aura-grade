@@ -12,6 +12,7 @@ import { Submission } from './entities/submission.entity';
 import { Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { SubmissionStatus } from 'src/enums';
+import { ExtractorService } from 'src/extractor/extractor.service';
 
 @Injectable()
 export class SubmissionService {
@@ -21,7 +22,8 @@ export class SubmissionService {
     @InjectRepository(Submission)
     private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Assignment)
-    private readonly assignmentRepository: Repository<Assignment>
+    private readonly assignmentRepository: Repository<Assignment>,
+    private readonly extractorService: ExtractorService
   ) {}
 
   async create(createSubmissionInput: CreateSubmissionInput): Promise<Submission> {
@@ -43,7 +45,12 @@ export class SubmissionService {
         status: SubmissionStatus.PENDING,
       });
 
-      return await this.submissionRepository.save(submission);
+      const savedSubmission = await this.submissionRepository.save(submission);
+
+      // Ejecutar extracción de forma asíncrona para no bloquear la respuesta al usuario
+      this.processExtraction(savedSubmission.id, savedSubmission.fileUrl);
+
+      return savedSubmission;
     } catch (error) {
       this.handleDBException(error);
     }
@@ -88,6 +95,25 @@ export class SubmissionService {
     return { ...submission, id };
   }
 
+  private async processExtraction(id: string, url: string) {
+    try {
+      this.logger.log(`Starting text extraction for submission: ${id}`);
+
+      const text = await this.extractorService.extractTextFromUrl(url);
+
+      await this.submissionRepository.update(id, {
+        extractedText: text,
+        status: SubmissionStatus.IN_PROGRESS, // Cambiamos a "En Progreso" para que la IA sepa que puede empezar
+      });
+
+      this.logger.log(`Text extracted successfully for submission ${id}`);
+
+      // AQUÍ: Llamarías al siguiente paso -> IA Service (Grading)
+    } catch (error) {
+      this.logger.error(`Failed processing submission ${id}: ${error.message}`);
+      await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
+    }
+  }
   private handleDBException(error: any): never {
     if (error.code === '23503')
       throw new BadRequestException('Foreign key violation: Check student or assignment ID');

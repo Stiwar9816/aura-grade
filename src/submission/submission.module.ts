@@ -12,6 +12,7 @@ import { Submission } from './entities/submission.entity';
 import { AssignmentModule } from 'src/assignment/assignment.module';
 import { UserModule } from 'src/user/user.module';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { EvaluationModule } from 'src/evaluation/evaluation.module';
 
 @Module({
   providers: [SubmissionResolver, SubmissionService],
@@ -19,6 +20,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
     TypeOrmModule.forFeature([Submission]),
     forwardRef(() => UserModule),
     forwardRef(() => AssignmentModule),
+    forwardRef(() => EvaluationModule),
     CloudinaryModule,
   ],
   exports: [SubmissionService, TypeOrmModule],

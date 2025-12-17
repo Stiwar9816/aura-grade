@@ -1,6 +1,6 @@
-import { InputType, Field, ID } from '@nestjs/graphql';
+import { InputType, Field, ID, Int } from '@nestjs/graphql';
 // Class-validator
-import { IsNotEmpty, IsUrl, IsUUID, IsString } from 'class-validator';
+import { IsNotEmpty, IsUrl, IsUUID, IsString, IsInt, Min, Max } from 'class-validator';
 
 @InputType()
 export class CreateSubmissionInput {
@@ -8,6 +8,12 @@ export class CreateSubmissionInput {
   @IsNotEmpty()
   @IsUrl()
   fileUrl: string;
+
+  @Field(() => Int)
+  @IsInt()
+  @Min(1)
+  @Max(15728640, { message: 'El archivo es demasiado grande. El límite es 15MB.' })
+  fileSize: number; // Tamaño en bytes
 
   @Field(() => ID, { description: 'ID of the assignment' })
   @IsUUID('4')

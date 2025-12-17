@@ -72,7 +72,7 @@ export class Assignment {
   // Relations
   @ManyToOne(
     () => require('../../user/entities/user.entity').User,
-    (user: any) => user.assignments,
+    (user: User) => user.assignments,
     { nullable: false }
   )
   @JoinColumn({ name: 'user_id' })
@@ -86,7 +86,7 @@ export class Assignment {
 
   @OneToMany(
     () => require('../../submission/entities/submission.entity').Submission,
-    (submission: any) => submission.assignment
+    (submission: Submission) => submission.assignment
   )
   @Field(() => [require('../../submission/entities/submission.entity').Submission], {
     nullable: true,

@@ -60,7 +60,7 @@ export class Rubric {
   // Relations - Many-to-Many with User
   @ManyToOne(
     () => require('../../user/entities/user.entity').User,
-    (user: any) => user.createdRubrics
+    (user: User) => user.createdRubrics
   )
   @JoinColumn({ name: 'userId' })
   @Field(() => require('../../user/entities/user.entity').User)
@@ -69,7 +69,7 @@ export class Rubric {
   // Relations - Many-to-Many with Criterion
   @OneToMany(
     () => require('../../criterion/entities/criterion.entity').Criterion,
-    (criterion: any) => criterion.rubric,
+    (criterion: Criterion) => criterion.rubric,
     { cascade: true }
   )
   @Field(() => [require('../../criterion/entities/criterion.entity').Criterion])
