@@ -17,6 +17,7 @@ import { RubricModule } from './rubric/rubric.module';
 import { CriterionModule } from './criterion/criterion.module';
 // Config
 import { envs } from './config';
+import { AssignmentModule } from './assignment/assignment.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { envs } from './config';
     CourseModule,
     RubricModule,
     CriterionModule,
+    AssignmentModule,
   ],
 })
 export class AppModule {}

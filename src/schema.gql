@@ -70,6 +70,22 @@ type Criterion {
   rubric: Rubric!
 }
 
+type Assignment {
+  id: ID!
+  title: String!
+  description: String!
+  dueDate: DateTime!
+  isActive: Boolean!
+  createdAt: DateTime!
+  teacher: User!
+  rubric: Rubric!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
 type Query {
   """Find all users"""
   users: [User!]!
@@ -83,6 +99,8 @@ type Query {
   course(id: String!): Course!
   rubrics: [Rubric!]!
   rubric(id: String!): Rubric!
+  assignments: [Assignment!]!
+  assignment(id: ID!): Assignment!
   criteria: [Criterion!]!
   criterion(id: String!): Criterion!
 }
@@ -108,6 +126,9 @@ type Mutation {
   createRubric(createRubricInput: CreateRubricInput!): Rubric!
   updateRubric(updateRubricInput: UpdateRubricInput!): Rubric!
   removeRubric(id: String!): Rubric!
+  createAssignment(createAssignmentInput: CreateAssignmentInput!): Assignment!
+  updateAssignment(updateAssignmentInput: UpdateAssignmentInput!): Assignment!
+  removeAssignment(id: ID!): Assignment!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
   updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!
   removeCriterion(id: String!): Criterion!
@@ -143,15 +164,15 @@ input UpdateUserInput {
   """
   Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
   """
-  id: String!
+  id: ID!
 
   """User roles wich can Administrator, User by default takes the user role"""
   isActive: Boolean!
 }
 
 input AssignCoursesInput {
-  userId: String!
-  courseIds: [String!]!
+  userId: ID!
+  courseIds: [ID!]!
 }
 
 input CreateCourseInput {
@@ -170,7 +191,7 @@ input UpdateCourseInput {
   code_course: String
 
   """Id automatically generated in uuid format"""
-  id: String!
+  id: ID!
 }
 
 input CreateRubricInput {
@@ -222,6 +243,45 @@ input UpdateRubricInput {
   """
   Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
   """
+  id: ID!
+}
+
+input CreateAssignmentInput {
+  """title of the task"""
+  title: String!
+
+  """Detailed instructions"""
+  description: String!
+
+  """Due date"""
+  dueDate: DateTime!
+
+  """Rubric ID"""
+  rubricId: ID!
+
+  """Teacher ID"""
+  teacherId: ID!
+  isActive: Boolean = true
+}
+
+input UpdateAssignmentInput {
+  """title of the task"""
+  title: String
+
+  """Detailed instructions"""
+  description: String
+
+  """Due date"""
+  dueDate: DateTime
+
+  """Rubric ID"""
+  rubricId: ID
+
+  """Teacher ID"""
+  teacherId: ID
+  isActive: Boolean = true
+
+  """ID of the assignment to update"""
   id: ID!
 }
 
