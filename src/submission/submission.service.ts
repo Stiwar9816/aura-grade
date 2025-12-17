@@ -21,6 +21,8 @@ import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { SubmissionStatus } from 'src/enums';
 // Gateway
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { FileUpload } from 'graphql-upload-ts';
+import { v2 as cloudinary } from 'cloudinary';
 
 @Injectable()
 export class SubmissionService {
@@ -37,20 +39,46 @@ export class SubmissionService {
     private readonly notificationsGateway: NotificationsGateway
   ) {}
 
-  async create(createSubmissionInput: CreateSubmissionInput): Promise<Submission> {
+  async create(
+    file: FileUpload,
+    createSubmissionInput: CreateSubmissionInput
+  ): Promise<Submission> {
+    const { createReadStream, filename } = file;
     const { assignmentId, studentId, ...submissionData } = createSubmissionInput;
 
-    // 1. Validar si la tarea existe y si aún está en fecha
+    // 1. Validaciones previas
     const assignment = await this.assignmentRepository.findOneBy({ id: assignmentId });
-
     if (!assignment) throw new NotFoundException(`Assignment with id ${assignmentId} not found`);
-
     if (new Date() > assignment.dueDate)
       throw new BadRequestException('The deadline for this assignment has passed');
 
     try {
+      // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
+      const extension = filename.split('.').pop(); // extrae pdf o docx
+      const cloudinaryResponse: any = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'auragrade/submissions',
+            resource_type: 'auto', // Permite PDF, DOCX, etc.
+            // USAR EL NOMBRE ORIGINAL (quitando la extensión para el public_id)
+            public_id: filename.split('.')[0],
+            // FORZAR QUE SE MANTENGA EL FORMATO ORIGINAL
+            use_filename: true,
+            unique_filename: true,
+            format: extension,
+          },
+          (error, result) => (result ? resolve(result) : reject(error))
+        );
+        createReadStream().pipe(uploadStream);
+      });
+
+      // LOG PARA VERIFICAR LA URL GENERADA
+      this.logger.log(`File uploaded to Cloudinary: ${cloudinaryResponse.secure_url}`);
+
+      // 3. Crear registro en base de datos con la URL de Cloudinary
       const submission = this.submissionRepository.create({
         ...submissionData,
+        fileUrl: cloudinaryResponse.secure_url, // URL pública de Cloudinary
         assignment: { id: assignmentId },
         student: { id: studentId },
         status: SubmissionStatus.PENDING,
@@ -58,11 +86,12 @@ export class SubmissionService {
 
       const savedSubmission = await this.submissionRepository.save(submission);
 
-      // Ejecutar extracción de forma asíncrona para no bloquear la respuesta al usuario
+      // 4. Iniciar proceso asíncrono (Extracción -> IA -> Evaluación)
       this.processExtraction(savedSubmission.id, savedSubmission.fileUrl);
 
       return savedSubmission;
     } catch (error) {
+      this.logger.error(`Error in upload/create: ${error.message}`);
       this.handleDBException(error);
     }
   }

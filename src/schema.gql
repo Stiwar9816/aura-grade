@@ -108,7 +108,7 @@ type Submission {
   id: ID!
 
   """URL of the file stored (Cloudinary)"""
-  fileUrl: String!
+  fileUrl: String
 
   """Extracted text from the document for the AI"""
   extractedText: String
@@ -176,7 +176,7 @@ type Mutation {
   createAssignment(createAssignmentInput: CreateAssignmentInput!): Assignment!
   updateAssignment(updateAssignmentInput: UpdateAssignmentInput!): Assignment!
   removeAssignment(id: ID!): Assignment!
-  createSubmission(createSubmissionInput: CreateSubmissionInput!): Submission!
+  createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
   updateSubmission(updateSubmissionInput: UpdateSubmissionInput!): Submission!
   removeSubmission(id: ID!): Submission!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
@@ -340,23 +340,19 @@ input UpdateAssignmentInput {
 }
 
 input CreateSubmissionInput {
-  """URL the file uploaded"""
-  fileUrl: String!
-  fileSize: Int!
+  fileSize: Int
 
   """ID of the assignment"""
   assignmentId: ID!
 
   """ID of the student"""
   studentId: ID!
-
-  """Extracted text from the document for the AI"""
-  extractedText: String
 }
 
+"""The `Upload` scalar type represents a file upload."""
+scalar Upload
+
 input UpdateSubmissionInput {
-  """URL the file uploaded"""
-  fileUrl: String
   fileSize: Int
 
   """ID of the assignment"""
@@ -365,14 +361,14 @@ input UpdateSubmissionInput {
   """ID of the student"""
   studentId: ID
 
-  """Extracted text from the document for the AI"""
-  extractedText: String
-
   """Submission ID"""
   id: ID!
 
   """Submission status"""
   status: SubmissionStatus
+
+  """Extracted text from the document for the AI"""
+  extractedText: String
 }
 
 input UpdateCriterionInput {

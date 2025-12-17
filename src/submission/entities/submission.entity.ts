@@ -37,9 +37,9 @@ export class Submission {
     description: 'URL of the file stored (Cloudinary)',
     format: 'uri',
   })
-  @Column({ type: 'text' })
-  @Field(() => String, { description: 'URL of the file stored (Cloudinary)' })
-  fileUrl: string;
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { description: 'URL of the file stored (Cloudinary)', nullable: true })
+  fileUrl?: string;
 
   @ApiProperty({
     example: 'Extracted text from the document for the AI',

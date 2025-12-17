@@ -8,16 +8,19 @@ import { SubmissionService } from './submission.service';
 import { Submission } from './entities/submission.entity';
 // DTOs
 import { CreateSubmissionInput, UpdateSubmissionInput } from './dto';
+// Graphql
+import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 
 @Resolver(() => Submission)
 export class SubmissionResolver {
   constructor(private readonly submissionService: SubmissionService) {}
 
   @Mutation(() => Submission, { name: 'createSubmission' })
-  createSubmission(
-    @Args('createSubmissionInput') createSubmissionInput: CreateSubmissionInput
+  async createSubmission(
+    @Args('createSubmissionInput') createSubmissionInput: CreateSubmissionInput,
+    @Args('file', { type: () => GraphQLUpload }) file: FileUpload
   ): Promise<Submission> {
-    return this.submissionService.create(createSubmissionInput);
+    return this.submissionService.create(file, createSubmissionInput);
   }
 
   @Query(() => [Submission], { name: 'submissions' })

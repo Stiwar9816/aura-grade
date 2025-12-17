@@ -7,10 +7,13 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { envs } from './config';
+import { graphqlUploadExpress } from 'graphql-upload-ts';
 
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
+  // Debe ir antes de cualquier middleware de GraphQL
+  app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));
   app.use(
     helmet({
       contentSecurityPolicy: false, // Permite Apollo Sandbox en /graphql
