@@ -3,16 +3,22 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
-import { CreateSubmissionInput } from './dto/inputs/create-submission.input';
-import { UpdateSubmissionInput } from './dto/inputs/update-submission.input';
-import { Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Submission } from './entities/submission.entity';
+// TypeORM
 import { Repository } from 'typeorm';
-import { Assignment } from 'src/assignment/entities/assignment.entity';
-import { SubmissionStatus } from 'src/enums';
+import { InjectRepository } from '@nestjs/typeorm';
+// Services
 import { ExtractorService } from 'src/extractor/extractor.service';
+import { EvaluationService } from 'src/evaluation/evaluation.service';
+import { AiService } from 'src/ai/ai.service';
+// DTOs
+import { CreateSubmissionInput, UpdateSubmissionInput } from './dto';
+// Entities
+import { Submission } from './entities/submission.entity';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+// Enums
+import { SubmissionStatus } from 'src/enums';
 
 @Injectable()
 export class SubmissionService {
@@ -23,7 +29,9 @@ export class SubmissionService {
     private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
-    private readonly extractorService: ExtractorService
+    private readonly extractorService: ExtractorService,
+    private readonly aiService: AiService,
+    private readonly evaluationService: EvaluationService
   ) {}
 
   async create(createSubmissionInput: CreateSubmissionInput): Promise<Submission> {
@@ -99,21 +107,45 @@ export class SubmissionService {
     try {
       this.logger.log(`Starting text extraction for submission: ${id}`);
 
+      // 1. Extracción de texto
       const text = await this.extractorService.extractTextFromUrl(url);
 
+      // 2. Actualización de estado
       await this.submissionRepository.update(id, {
         extractedText: text,
         status: SubmissionStatus.IN_PROGRESS, // Cambiamos a "En Progreso" para que la IA sepa que puede empezar
       });
 
-      this.logger.log(`Text extracted successfully for submission ${id}`);
+      // 3. Obtener la rúbrica y datos de la tarea (usamos findOne que ya trae las relaciones)
+      const submission = await this.findOne(id);
+      const { assignment } = submission;
 
-      // AQUÍ: Llamarías al siguiente paso -> IA Service (Grading)
+      this.logger.log(`Calling AI for grading submission ${id}`);
+
+      // 4. Ejecutar la Evaluación con IA
+      const aiResponse = await this.aiService.evaluateSubmission(
+        text,
+        assignment.rubric,
+        assignment.title
+      );
+
+      // 5. Guardar el resultado en la tabla Evaluation
+      // Nota: El EvaluationService que hicimos ya cambia el status a COMPLETED internamente
+      await this.evaluationService.create({
+        submissionId: id,
+        totalScore: aiResponse.totalScore,
+        generalFeedback: aiResponse.generalFeedback,
+        detailedFeedback: aiResponse.detailedFeedback,
+        aiModelUsed: 'gpt-5.2',
+      });
+
+      this.logger.log(`Grading completed successfully for submission ${id}`);
     } catch (error) {
       this.logger.error(`Failed processing submission ${id}: ${error.message}`);
       await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
     }
   }
+
   private handleDBException(error: any): never {
     if (error.code === '23503')
       throw new BadRequestException('Foreign key violation: Check student or assignment ID');

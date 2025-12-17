@@ -8,5 +8,6 @@ import { SubmissionModule } from 'src/submission/submission.module';
 @Module({
   providers: [EvaluationResolver, EvaluationService],
   imports: [TypeOrmModule.forFeature([Evaluation]), forwardRef(() => SubmissionModule)],
+  exports: [EvaluationService],
 })
 export class EvaluationModule {}

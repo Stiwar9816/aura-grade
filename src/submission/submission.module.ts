@@ -14,6 +14,7 @@ import { UserModule } from 'src/user/user.module';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
 import { ExtractorModule } from 'src/extractor/extractor.module';
+import { AiModule } from 'src/ai/ai.module';
 
 @Module({
   providers: [SubmissionResolver, SubmissionService],
@@ -24,6 +25,7 @@ import { ExtractorModule } from 'src/extractor/extractor.module';
     forwardRef(() => EvaluationModule),
     CloudinaryModule,
     ExtractorModule,
+    AiModule,
   ],
   exports: [SubmissionService, TypeOrmModule],
 })

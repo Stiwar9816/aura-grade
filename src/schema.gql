@@ -89,6 +89,21 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type Evaluation {
+  id: ID!
+  totalScore: Float!
+  generalFeedback: String!
+  detailedFeedback: JSON!
+  aiModelUsed: String
+  createdAt: DateTime!
+  submission: Submission!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
 type Submission {
   id: ID!
 
@@ -112,21 +127,6 @@ enum SubmissionStatus {
   COMPLETED
   FAILED
 }
-
-type Evaluation {
-  id: ID!
-  totalScore: Float!
-  generalFeedback: String!
-  detailedFeedback: JSON!
-  aiModelUsed: String
-  createdAt: DateTime!
-  submission: Submission!
-}
-
-"""
-The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
-"""
-scalar JSON
 
 type Query {
   """Find all users"""
