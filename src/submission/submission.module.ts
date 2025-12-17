@@ -15,6 +15,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
 import { ExtractorModule } from 'src/extractor/extractor.module';
 import { AiModule } from 'src/ai/ai.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   providers: [SubmissionResolver, SubmissionService],
@@ -26,6 +27,7 @@ import { AiModule } from 'src/ai/ai.module';
     CloudinaryModule,
     ExtractorModule,
     AiModule,
+    NotificationsModule,
   ],
   exports: [SubmissionService, TypeOrmModule],
 })

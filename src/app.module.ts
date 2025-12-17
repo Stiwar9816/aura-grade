@@ -21,6 +21,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { ExtractorModule } from './extractor/extractor.module';
 import { AiModule } from './ai/ai.module';
+import { NotificationsModule } from './notifications/notifications.module';
 // Config
 import { envs } from './config';
 
@@ -66,6 +67,7 @@ import { envs } from './config';
     EvaluationModule,
     ExtractorModule,
     AiModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

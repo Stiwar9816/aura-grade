@@ -51,7 +51,7 @@ export class AiService {
       `;
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-5.2', // O 'gpt-4-turbo'
+        model: 'gpt-4o', // O 'gpt-4-turbo'
         messages: [{ role: 'system', content: prompt }],
         response_format: { type: 'json_object' }, // Fuerza la salida en JSON
         temperature: 0.2, // Baja temperatura para mayor consistencia

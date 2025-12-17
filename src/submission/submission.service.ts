@@ -19,6 +19,8 @@ import { Submission } from './entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 // Enums
 import { SubmissionStatus } from 'src/enums';
+// Gateway
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @Injectable()
 export class SubmissionService {
@@ -31,7 +33,8 @@ export class SubmissionService {
     private readonly assignmentRepository: Repository<Assignment>,
     private readonly extractorService: ExtractorService,
     private readonly aiService: AiService,
-    private readonly evaluationService: EvaluationService
+    private readonly evaluationService: EvaluationService,
+    private readonly notificationsGateway: NotificationsGateway
   ) {}
 
   async create(createSubmissionInput: CreateSubmissionInput): Promise<Submission> {
@@ -110,39 +113,63 @@ export class SubmissionService {
       // 1. Extracción de texto
       const text = await this.extractorService.extractTextFromUrl(url);
 
-      // 2. Actualización de estado
+      // 2. Obtener datos de la entrega (necesitamos el studentId para notificar)
+      const submission = await this.findOne(id);
+
+      // 3. Actualización de estado y primera notificación
       await this.submissionRepository.update(id, {
         extractedText: text,
-        status: SubmissionStatus.IN_PROGRESS, // Cambiamos a "En Progreso" para que la IA sepa que puede empezar
+        status: SubmissionStatus.IN_PROGRESS,
       });
 
-      // 3. Obtener la rúbrica y datos de la tarea (usamos findOne que ya trae las relaciones)
-      const submission = await this.findOne(id);
-      const { assignment } = submission;
-
-      this.logger.log(`Calling AI for grading submission ${id}`);
+      this.notificationsGateway.notifyStudent(submission.student.id, {
+        submissionId: id,
+        status: SubmissionStatus.IN_PROGRESS,
+        message: 'Estamos analizando tu trabajo...',
+      });
 
       // 4. Ejecutar la Evaluación con IA
+      this.logger.log(`Calling AI for grading submission ${id}`);
       const aiResponse = await this.aiService.evaluateSubmission(
         text,
-        assignment.rubric,
-        assignment.title
+        submission.assignment.rubric,
+        submission.assignment.title
       );
 
-      // 5. Guardar el resultado en la tabla Evaluation
-      // Nota: El EvaluationService que hicimos ya cambia el status a COMPLETED internamente
-      await this.evaluationService.create({
+      // 5. Guardar la evaluación
+      // IMPORTANTE: El create de evaluation ya actualiza el status de la submission a COMPLETED
+      const evaluation = await this.evaluationService.create({
         submissionId: id,
         totalScore: aiResponse.totalScore,
         generalFeedback: aiResponse.generalFeedback,
         detailedFeedback: aiResponse.detailedFeedback,
-        aiModelUsed: 'gpt-5.2',
+        aiModelUsed: 'gpt-4o',
+      });
+
+      // 6. Notificación Final
+      this.notificationsGateway.notifyStudent(submission.student.id, {
+        submissionId: id,
+        status: SubmissionStatus.COMPLETED,
+        message: '¡Tu calificación está lista!',
+        evaluationId: evaluation.id,
       });
 
       this.logger.log(`Grading completed successfully for submission ${id}`);
     } catch (error) {
       this.logger.error(`Failed processing submission ${id}: ${error.message}`);
       await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
+      // Intentar notificar el error si tenemos el ID del estudiante
+      try {
+        const sub = await this.findOne(id);
+        await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
+        this.notificationsGateway.notifyStudent(sub.student.id, {
+          submissionId: id,
+          status: SubmissionStatus.FAILED,
+          message: 'Hubo un error al procesar el archivo o la evaluación.',
+        });
+      } catch (e) {
+        this.logger.error('Could not notify student of failure');
+      }
     }
   }
 
