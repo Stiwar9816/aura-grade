@@ -130,7 +130,7 @@ export class User {
   })
   courses?: Course[];
 
-  @OneToMany(() => Rubric, (rubric) => rubric.users)
+  @OneToMany(() => Rubric, (rubric) => rubric.user)
   @JoinColumn({ name: 'rubric_id', referencedColumnName: 'id' })
   @Field(() => [Rubric], {
     nullable: true,

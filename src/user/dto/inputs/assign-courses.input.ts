@@ -1,5 +1,8 @@
-import { Field, InputType } from '@nestjs/graphql';
+// Decorators/GraphQl
+import { Field, ID, InputType } from '@nestjs/graphql';
+// Decorators/Swagger
 import { ApiProperty } from '@nestjs/swagger';
+// Validators
 import { IsArray, IsString, IsUUID } from 'class-validator';
 
 @InputType()
@@ -11,7 +14,7 @@ export class AssignCoursesInput {
   })
   @IsString()
   @IsUUID('4')
-  @Field(() => String)
+  @Field(() => ID)
   userId: string;
 
   @ApiProperty({
@@ -23,6 +26,6 @@ export class AssignCoursesInput {
   @IsString({ each: true })
   @IsArray()
   @IsUUID('4', { each: true })
-  @Field(() => [String])
+  @Field(() => [ID])
   courseIds: string[];
 }

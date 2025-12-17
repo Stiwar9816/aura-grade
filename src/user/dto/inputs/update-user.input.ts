@@ -1,13 +1,18 @@
-import { IsArray, IsBoolean, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
-import { CreateUserInput } from './create-user.input';
-import { InputType, Field, Int, PartialType } from '@nestjs/graphql';
-import { UserRoles } from 'src/auth/enums';
+// Decorators/GraphQl
+import { InputType, Field, PartialType, ID } from '@nestjs/graphql';
+// Decorators/Swagger
 import { ApiProperty } from '@nestjs/swagger';
+// Validators
+import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
+// Dto
+import { CreateUserInput } from './create-user.input';
+// Enums
+import { UserRoles } from 'src/auth/enums';
 
 @InputType()
 export class UpdateUserInput extends PartialType(CreateUserInput) {
   @IsUUID()
-  @Field(() => String, {
+  @Field(() => ID, {
     description:
       'Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4',
   })

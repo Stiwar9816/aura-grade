@@ -4,10 +4,15 @@ import { RubricResolver } from './rubric.resolver';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Rubric } from './entities/rubric.entity';
 import { UserModule } from 'src/user/user.module';
+import { CriterionModule } from 'src/criterion/criterion.module';
 
 @Module({
   providers: [RubricResolver, RubricService],
-  imports: [TypeOrmModule.forFeature([Rubric]), forwardRef(() => UserModule)],
+  imports: [
+    TypeOrmModule.forFeature([Rubric]),
+    forwardRef(() => UserModule),
+    forwardRef(() => CriterionModule),
+  ],
   exports: [RubricService],
 })
 export class RubricModule {}

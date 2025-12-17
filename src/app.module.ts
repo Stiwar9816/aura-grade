@@ -14,6 +14,7 @@ import { UserModule } from './user/user.module';
 import { MailModule } from './mail/mail.module';
 import { CourseModule } from './course/course.module';
 import { RubricModule } from './rubric/rubric.module';
+import { CriterionModule } from './criterion/criterion.module';
 // Config
 import { envs } from './config';
 
@@ -52,6 +53,7 @@ import { envs } from './config';
     MailModule,
     CourseModule,
     RubricModule,
+    CriterionModule,
   ],
 })
 export class AppModule {}

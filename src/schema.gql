@@ -13,7 +13,8 @@ type Rubric {
   id: String!
   title: String!
   maxTotalScore: Float!
-  users: User
+  user: User!
+  criteria: [Criterion!]!
 }
 
 type User {
@@ -54,6 +55,21 @@ enum UserRoles {
   Docente
 }
 
+type CriterionLevel {
+  score: Int!
+  description: String!
+}
+
+type Criterion {
+  id: String!
+  title: String!
+  maxPoints: Int!
+
+  """Performance levels with description and score."""
+  levels: [CriterionLevel!]!
+  rubric: Rubric!
+}
+
 type Query {
   """Find all users"""
   users: [User!]!
@@ -67,6 +83,8 @@ type Query {
   course(id: String!): Course!
   rubrics: [Rubric!]!
   rubric(id: String!): Rubric!
+  criteria: [Criterion!]!
+  criterion(id: String!): Criterion!
 }
 
 type Mutation {
@@ -90,6 +108,9 @@ type Mutation {
   createRubric(createRubricInput: CreateRubricInput!): Rubric!
   updateRubric(updateRubricInput: UpdateRubricInput!): Rubric!
   removeRubric(id: String!): Rubric!
+  createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
+  updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!
+  removeCriterion(id: String!): Criterion!
 }
 
 input UpdateUserInput {
@@ -158,6 +179,31 @@ input CreateRubricInput {
 
   """Max total score of the rubric"""
   maxTotalScore: Float!
+
+  """List of criteria"""
+  criteria: [CreateCriterionInput!]
+
+  """Owner User ID"""
+  userId: ID!
+}
+
+input CreateCriterionInput {
+  """Criterion title"""
+  title: String!
+
+  """Max points"""
+  maxPoints: Int!
+
+  """Criterion levels"""
+  levels: [CreateCriterionLevelsInput!]!
+}
+
+input CreateCriterionLevelsInput {
+  """Score assigned to this level"""
+  score: Int!
+
+  """Description of this level"""
+  description: String!
 }
 
 input UpdateRubricInput {
@@ -167,8 +213,31 @@ input UpdateRubricInput {
   """Max total score of the rubric"""
   maxTotalScore: Float
 
+  """List of criteria"""
+  criteria: [CreateCriterionInput!]
+
+  """Owner User ID"""
+  userId: ID
+
   """
   Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
   """
-  id: String!
+  id: ID!
+}
+
+input UpdateCriterionInput {
+  """Criterion title"""
+  title: String
+
+  """Max points"""
+  maxPoints: Int
+
+  """Criterion levels"""
+  levels: [CreateCriterionLevelsInput!]
+
+  """
+  Id automatically generated in uuid format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
+  """
+  id: ID!
+  criteria: [UpdateCriterionInput!]
 }

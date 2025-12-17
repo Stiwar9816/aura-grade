@@ -1,11 +1,14 @@
+// Decorators/GraphQl
+import { InputType, Field, PartialType, ID } from '@nestjs/graphql';
+// Validators
+import { IsUUID } from 'class-validator';
+// Dto
 import { CreateCourseInput } from './create-course.input';
-import { InputType, Field, PartialType } from '@nestjs/graphql';
-import { IsString } from 'class-validator';
 
 @InputType()
 export class UpdateCourseInput extends PartialType(CreateCourseInput) {
-  @IsString()
-  @Field(() => String, {
+  @IsUUID()
+  @Field(() => ID, {
     description: 'Id automatically generated in uuid format',
   })
   id: string;

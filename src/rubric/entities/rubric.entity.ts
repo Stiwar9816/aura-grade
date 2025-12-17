@@ -1,12 +1,17 @@
 import { ObjectType, Field, Float } from '@nestjs/graphql';
+// Decorators/Swagger
 import { ApiProperty } from '@nestjs/swagger';
-import { User } from 'src/user/entities/user.entity';
+// Entities
+import type { Criterion } from 'src/criterion/entities/criterion.entity';
+import type { User } from 'src/user/entities/user.entity';
+// TypeORM
 import {
   Column,
   CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -53,7 +58,20 @@ export class Rubric {
   updatedAt: Date;
 
   // Relations - Many-to-Many with User
-  @ManyToOne(() => User, (user) => user.createdRubrics, { nullable: true })
-  @Field(() => User, { nullable: true })
-  users?: any;
+  @ManyToOne(
+    () => require('../../user/entities/user.entity').User,
+    (user: any) => user.createdRubrics
+  )
+  @JoinColumn({ name: 'userId' })
+  @Field(() => require('../../user/entities/user.entity').User)
+  user: User;
+
+  // Relations - Many-to-Many with Criterion
+  @OneToMany(
+    () => require('../../criterion/entities/criterion.entity').Criterion,
+    (criterion: any) => criterion.rubric,
+    { cascade: true }
+  )
+  @Field(() => [require('../../criterion/entities/criterion.entity').Criterion])
+  criteria?: Criterion[];
 }

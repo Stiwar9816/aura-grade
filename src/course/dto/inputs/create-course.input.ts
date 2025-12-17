@@ -1,4 +1,6 @@
+// Decorators/GraphQl
 import { InputType, Field } from '@nestjs/graphql';
+// Validators
 import { IsNotEmpty, IsString } from 'class-validator';
 
 @InputType()
