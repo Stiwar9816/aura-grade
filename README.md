@@ -26,22 +26,37 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![GraphQL](https://img.shields.io/badge/GraphQL-E10098?style=for-the-badge&logo=graphql&logoColor=white)](https://graphql.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Jest](https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
+[![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white)](https://cloudinary.com/)
 
-API para clasificación asistida por IA para trabajos universitarios usando NestJS con autenticación completa, recuperación de contraseña, integración de envío de emails, módulos de usuario listos usando GraphQL y PostgreSQL como base de datos. Endpoints de autenticación REST documentados con Swagger.
+API avanzada para la gestión y calificación automática de trabajos universitarios. AuraGrade utiliza Inteligencia Artificial para analizar documentos (PDF/DOCX), comparar el contenido con rúbricas dinámicas y proporcionar feedback detallado en tiempo real.
 
 ## ✨ Características
 
+### 🤖 Inteligencia Artificial & Automatización
+
+- **Evaluación Automática**: Análisis de contenido con OpenAI (GPT-4) basado en rúbricas personalizadas.
+- **Extracción de Texto**: Soporte nativo para lectura de archivos PDF y DOCX.
+- **Feedback Estructurado**: Generación de puntuaciones por criterio y retroalimentación cualitativa.
+
+### ☁️ Gestión de Archivos
+
+- **Carga Directa**: Upload de archivos a Cloudinary mediante GraphQL Streams.
+- **Validación**: Control de tipos MIME y tamaño máximo (15MB).
+
+### 🔔 Tiempo Real
+
+- **WebSocket Gateway**: Notificaciones en vivo sobre el estado de la evaluación (Procesando -> Completado).
+- **Salas Privadas**: Canales seguros por usuario para recibir actualizaciones personales.
+
 ### 🔐 Autenticación y Autorización
-- ✅ Registro de usuarios con validación de datos
-- ✅ Login con JWT (JSON Web Tokens)
-- ✅ Recuperación de contraseña vía email
-- ✅ Guards personalizados (JWT, NoAuth)
-- ✅ Decoradores personalizados para roles y usuario actual
-- ✅ Estrategia JWT con Passport
+
+- ✅ Registro, Login y Recuperación de contraseña (JWT & Emails).
+- ✅ Roles (Administrador, Docente, Estudiante).
+- ✅ Guards y Decoradores personalizados.
 
 ### 👥 Gestión de Usuarios
+
 - ✅ CRUD completo de usuarios
 - ✅ Roles de usuario (Administrador, Docente, Estudiante)
 - ✅ Activación/desactivación de usuarios
@@ -49,112 +64,104 @@ API para clasificación asistida por IA para trabajos universitarios usando Nest
 - ✅ Normalización automática de emails
 
 ### 📧 Sistema de Emails
+
 - ✅ Confirmación de registro
 - ✅ Actualización de contraseña
 - ✅ Recuperación de contraseña
 - ✅ Templates personalizables
 
-### 🧪 Testing
-- ✅ **160 tests unitarios** (98.75% pasando)
-- ✅ **66.93% cobertura de código**
-- ✅ Tests para servicios, controladores, resolvers, DTOs, guards, strategies
-- ✅ 100% cobertura en módulos críticos (Guards, Strategies, Mail Service)
-
 ### 📚 Documentación
+
 - ✅ Swagger para API REST
 - ✅ GraphQL Playground
 - ✅ Documentación de tipos con decoradores
 
+### 🛠️ Utilidades
+
+- **Database Seeding**: Poblado automático de base de datos con usuarios y rúbricas de prueba.
+- **GraphQL API**: Schema-first approach con TypeGraphQL.
+
 ## 📋 Requisitos Previos
 
 - Node.js >= 18.x
-- pnpm, npm o yarn
-- Docker Desktop
-- NestJS CLI (opcional)
+- pnpm (recomendado)
+- Docker Desktop (para base de datos local)
+- Cuenta en Cloudinary
+- Servidor de correo electrónico (SMTP) actual (Mailtrap para testing)
+- API Key de OpenAI
 
-## 🚀 Instalación
+## 🚀 Instalación y Configuración
 
-### 1. Instalar NestJS CLI (Opcional)
-
-```bash
-npm install -g @nestjs/cli
-```
-
-### 2. Clonar el repositorio
+### 1. Clonar y dependencias
 
 ```bash
 git clone <repository-url>
-cd skeleton-nest
-```
-
-### 3. Instalar dependencias
-
-```bash
-# Con pnpm (recomendado)
+cd aura-grade
 pnpm install
-
-# Con npm
-npm install
-
-# Con yarn
-yarn install
 ```
 
-### 4. Configurar variables de entorno
+### 2. Configurar Entorno
 
-```bash
-# Copiar el archivo de ejemplo
-cp .env.template .env
+Copia el archivo `.env.template` a `.env` y configura tus credenciales:
 
-# Editar el archivo .env con tus configuraciones
-```
-
-**Variables de entorno principales:**
 ```env
 # Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=aura_grade
 DB_USERNAME=postgres
-DB_PASSWORD=postgres
+DB_PASSWORD=secret
 
 # JWT
-JWT_SECRET=your-secret-key
+JWT_SECRET=super-secret-key
 
 # Mail
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
-MAIL_USER=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+MAIL_USER=tu-email@gmail.com
+MAIL_PASSWORD=tu-app-password
+
+# Cloudinary (Archivos)
+CLOUDINARY_NAME=tu-cloud-name
+CLOUDINARY_API_KEY=tu-api-key
+CLOUDINARY_API_SECRET=tu-api-secret
+
+# OpenAI (Inteligencia Artificial)
+OPENAI_API_KEY=sk-tu-api-key-openai
 
 # App
 PORT=3000
-APP_NAME=Aura Grade
 FRONTEND_URL=http://localhost:4200
 ```
 
-### 5. Levantar la base de datos con Docker
+### 3. Iniciar Servicios (Docker)
 
 ```bash
-# Modo detached (en segundo plano)
 docker-compose up -d
-
-# Con logs visibles
-docker-compose up
 ```
 
-### 6. Ejecutar el proyecto
+### 4. Ejecutar Aplicación
 
 ```bash
-# Modo desarrollo
+# Desarrollo
 pnpm start:dev
-
-# Modo producción
-pnpm start:prod
-
-# Modo debug
-pnpm start:debug
 ```
+
+## 🌱 Seeding (Datos de Prueba)
+
+Para poblar la base de datos con usuarios, cursos y rúbricas iniciales, ejecuta la siguiente mutación en el Playground de GraphQL:
+
+```graphql
+mutation ExecuteSeed {
+  executeSeed
+}
+```
+
+Esto creará:
+
+- Docentes y Estudiantes de prueba.
+- Rúbricas (Ensayo Académico, Proyecto Software).
+- Tareas de ejemplo.
 
 ## 🧪 Testing
 
@@ -186,49 +193,12 @@ Coverage:    66.93% statements | 49.38% branches | 49.53% functions | 66.51% lin
 ```
 
 **Módulos con 100% de cobertura:**
+
 - ✅ Auth Guards
 - ✅ JWT Strategy
 - ✅ Mail Service
 - ✅ Auth Enums
 - ✅ Login DTO
-
-## 🐳 Docker
-
-### Desarrollo
-
-```bash
-# Levantar servicios
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f
-
-# Detener servicios
-docker-compose down
-```
-
-### Producción
-
-```bash
-# Construir imagen
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up --build
-
-# Ejecutar imagen
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up
-
-# Ejecutar desde Docker Hub
-docker run -p 3000:3000 --env-file=.env.prod stiwar1098/skeleton
-```
-
-### Gestión de Imágenes Docker
-
-```bash
-# Etiquetar imagen
-docker tag <nombre-app> <usuario-dockerhub>/<nombre-repositorio>
-
-# Subir a Docker Hub
-docker push <usuario-dockerhub>/<nombre-repositorio>
-```
 
 ## 📖 Documentación de API
 
@@ -242,132 +212,67 @@ http://localhost:3000/api/auth
 
 ### GraphQL Playground
 
+Accede a `http://localhost:3000/graphql` para interactuar con la API.
+
+**Ejemplo de Subida de Archivo y Creación de Entrega:**
+
+```graphql
+mutation CreateSubmission($file: Upload!, $input: CreateSubmissionInput!) {
+  createSubmission(file: $file, createSubmissionInput: $input) {
+    id
+    status
+    fileUrl
+  }
+}
 ```
-http://localhost:3000/graphql
-```
-
-**Queries y Mutations disponibles:**
-
-**Auth:**
-- `register` - Registro de usuario
-- `login` - Inicio de sesión
-
-**Users:**
-- `users` - Listar usuarios
-- `user(id)` - Obtener usuario por ID
-- `userByEmail(email)` - Obtener usuario por email
-- `updateUser` - Actualizar usuario
-- `blockUser` - Bloquear/desbloquear usuario
-- `resetPassword` - Resetear contraseña
-- `resetPasswordAuth` - Resetear contraseña autenticado
 
 ## 🏗️ Estructura del Proyecto
 
 ```
-skeleton-nest/
-├── src/
-│   ├── auth/                 # Módulo de autenticación
-│   │   ├── decorators/       # Decoradores personalizados
-│   │   ├── dto/              # Data Transfer Objects
-│   │   ├── enums/            # Enumeraciones
-│   │   ├── guards/           # Guards de autenticación
-│   │   ├── strategies/       # Estrategias Passport
-│   │   └── types/            # Tipos GraphQL
-│   ├── mail/                 # Módulo de emails
-│   ├── user/                 # Módulo de usuarios
-│   │   ├── dto/              # DTOs de usuario
-│   │   ├── entities/         # Entidades TypeORM
-│   │   └── inputs/           # Inputs GraphQL
-│   ├── config/               # Configuraciones
-│   ├── app.module.ts         # Módulo principal
-│   └── main.ts               # Punto de entrada
-├── test/                     # Tests unitarios
-│   ├── auth/                 # Tests de autenticación
-│   ├── mail/                 # Tests de mail
-│   └── user/                 # Tests de usuarios
-├── docker-compose.yml        # Docker para desarrollo
-├── docker-compose.prod.yml   # Docker para producción
-└── jest.config.js            # Configuración de Jest
+src/
+├── ai/                   # Servicio de integración con OpenAI
+├── assignment/           # Gestión de tareas académicas
+├── auth/                 # Autenticación y Guards
+├── cloudinary/           # Servicio de almacenamiento de archivos
+├── config/               # Configuración de variables de entorno
+├── course/               # Gestión de cursos
+├── criterion/            # Criterios de evaluación
+├── evaluation/           # Lógica de calificaciones y feedback
+├── extractor/            # Extracción de texto (PDF/DOCX)
+├── mail/                 # Envío de correos electrónicos
+├── notifications/        # Gateway de WebSockets
+├── rubric/               # Gestión de rúbricas dinámicas
+├── seed/                 # Poblado de datos iniciales
+├── submission/           # Gestión de entregas de estudiantes
+├── user/                 # Gestión de usuarios
+└── main.ts               # Entry point
 ```
 
 ## 🛠️ Stack Tecnológico
 
-### Backend
-- **[NestJS](https://nestjs.com/)** - Framework Node.js progresivo
-- **[TypeScript](https://www.typescriptlang.org/)** - Superset tipado de JavaScript
-- **[TypeORM](https://typeorm.io/)** - ORM para TypeScript y JavaScript
-
-### Base de Datos
-- **[PostgreSQL](https://www.postgresql.org/)** - Base de datos relacional
-
-### API
-- **[GraphQL](https://graphql.org/)** - Lenguaje de consulta para APIs
-- **[Apollo Server](https://www.apollographql.com/)** - Servidor GraphQL
-- **[Swagger](https://swagger.io/)** - Documentación API REST
-
-### Autenticación
-- **[Passport](http://www.passportjs.org/)** - Middleware de autenticación
-- **[JWT](https://jwt.io/)** - JSON Web Tokens
-- **[bcryptjs](https://github.com/dcodeIO/bcrypt.js)** - Hashing de contraseñas
-
-### Email
-- **[@nestjs-modules/mailer](https://github.com/nest-modules/mailer)** - Módulo de emails para NestJS
-- **[Handlebars](https://handlebarsjs.com/)** - Motor de templates
-
-### Testing
-- **[Jest](https://jestjs.io/)** - Framework de testing
-- **[Supertest](https://github.com/visionmedia/supertest)** - Testing HTTP
-
-### DevOps
-- **[Docker](https://www.docker.com/)** - Containerización
-- **[Docker Compose](https://docs.docker.com/compose/)** - Orquestación de contenedores
-
-## 📝 Scripts Disponibles
-
-```bash
-# Desarrollo
-pnpm start:dev          # Inicia en modo desarrollo con hot-reload
-pnpm start:debug        # Inicia en modo debug
-
-# Producción
-pnpm build              # Compila el proyecto
-pnpm start:prod         # Inicia en modo producción
-
-# Testing
-pnpm test               # Ejecuta tests unitarios
-pnpm test:watch         # Tests en modo watch
-pnpm test:cov           # Tests con cobertura
-pnpm test:e2e           # Tests end-to-end
-pnpm test:clear         # Limpia caché de Jest
-
-# Linting
-pnpm lint               # Ejecuta ESLint
-pnpm format             # Formatea código con Prettier
-```
-
-## 🤝 Contribuir
-
-Las contribuciones son bienvenidas. Por favor:
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT.
+- **Framework**: **[NestJS](https://nestjs.com/)** - Framework Node.js progresivo
+- **Lenguaje**: **[TypeScript](https://www.typescriptlang.org/)** - Lenguaje de programación tipado
+- **API**: **[GraphQL](https://graphql.org/)** (Apollo Server)
+- **Base de Datos**: **[PostgreSQL](https://www.postgresql.org/)** + **[TypeORM](https://typeorm.io/)**
+- **AI**: **[OpenAI](https://openai.com/)** GPT-4
+- **Almacenamiento**: **[Cloudinary](https://cloudinary.com/)**
+- **Autenticación**: **[JWT](https://jwt.io/)**
+- **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
+- **WebSockets**: **[Socket.io](https://socket.io/)**
+- **Herramientas**: **[Docker](https://www.docker.com/)**, **[Jest](https://jestjs.io/)**, **[pdf-parse](https://github.com/teoremp/pdf-parse)**, **[mammoth](https://github.com/teoremp/mammoth)**
+- **Documentación**: **[Swagger](https://swagger.io/)**, **[GraphQL Playground](https://github.com/graphql/graphql-playground)**
+- **Testing**: **[Jest](https://jestjs.io/)**
 
 ## 👤 Autor
 
 **Stiwar Asprilla**
 
+Redes Sociales:
+
 - GitHub: [@Stiwar9816](https://github.com/Stiwar9816)
 - Docker Hub: [stiwar1098](https://hub.docker.com/u/stiwar1098)
 - LinkedIn: [Stiwar Asprilla](https://www.linkedin.com/in/stiwar-asprilla/)
 
-## 🙏 Agradecimientos
+---
 
-- [NestJS](https://nestjs.com/) por el increíble framework
-- Comunidad de código abierto por las herramientas y librerías utilizadas
+<p align="center">Hecho con ❤️ y ☕ para AuraGrade</p>
