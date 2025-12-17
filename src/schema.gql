@@ -341,6 +341,7 @@ input UpdateAssignmentInput {
 input CreateSubmissionInput {
   """URL the file uploaded"""
   fileUrl: String!
+  fileSize: Int!
 
   """ID of the assignment"""
   assignmentId: ID!
@@ -355,6 +356,7 @@ input CreateSubmissionInput {
 input UpdateSubmissionInput {
   """URL the file uploaded"""
   fileUrl: String
+  fileSize: Int
 
   """ID of the assignment"""
   assignmentId: ID

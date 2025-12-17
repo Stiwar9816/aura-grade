@@ -13,6 +13,7 @@ import { AssignmentModule } from 'src/assignment/assignment.module';
 import { UserModule } from 'src/user/user.module';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { EvaluationModule } from 'src/evaluation/evaluation.module';
+import { ExtractorModule } from 'src/extractor/extractor.module';
 
 @Module({
   providers: [SubmissionResolver, SubmissionService],
@@ -22,6 +23,7 @@ import { EvaluationModule } from 'src/evaluation/evaluation.module';
     forwardRef(() => AssignmentModule),
     forwardRef(() => EvaluationModule),
     CloudinaryModule,
+    ExtractorModule,
   ],
   exports: [SubmissionService, TypeOrmModule],
 })
