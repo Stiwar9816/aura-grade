@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+// Config
+import { ConfigService } from '@nestjs/config';
 // TypeORM
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -25,8 +21,6 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { FileUpload } from 'graphql-upload-ts';
 // Cloudinary
 import { v2 as cloudinary } from 'cloudinary';
-// Config
-import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SubmissionService {
@@ -57,48 +51,43 @@ export class SubmissionService {
     if (new Date() > assignment.dueDate)
       throw new BadRequestException('The deadline for this assignment has passed');
 
-    try {
-      // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
-      const extension = filename.split('.').pop(); // extrae pdf o docx
-      const cloudinaryResponse: any = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: 'auragrade/submissions',
-            resource_type: 'auto', // Permite PDF, DOCX, etc.
-            // USAR EL NOMBRE ORIGINAL (quitando la extensión para el public_id)
-            public_id: filename.split('.')[0],
-            // FORZAR QUE SE MANTENGA EL FORMATO ORIGINAL
-            use_filename: true,
-            unique_filename: true,
-            format: extension,
-          },
-          (error, result) => (result ? resolve(result) : reject(error))
-        );
-        createReadStream().pipe(uploadStream);
-      });
+    // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
+    const extension = filename.split('.').pop(); // extrae pdf o docx
+    const cloudinaryResponse: any = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'auragrade/submissions',
+          resource_type: 'auto', // Permite PDF, DOCX, etc.
+          // USAR EL NOMBRE ORIGINAL (quitando la extensión para el public_id)
+          public_id: filename.split('.')[0],
+          // FORZAR QUE SE MANTENGA EL FORMATO ORIGINAL
+          use_filename: true,
+          unique_filename: true,
+          format: extension,
+        },
+        (error, result) => (result ? resolve(result) : reject(error))
+      );
+      createReadStream().pipe(uploadStream);
+    });
 
-      // LOG PARA VERIFICAR LA URL GENERADA
-      this.logger.log(`File uploaded to Cloudinary: ${cloudinaryResponse.secure_url}`);
+    // LOG PARA VERIFICAR LA URL GENERADA
+    this.logger.log(`File uploaded to Cloudinary: ${cloudinaryResponse.secure_url}`);
 
-      // 3. Crear registro en base de datos con la URL de Cloudinary
-      const submission = this.submissionRepository.create({
-        ...submissionData,
-        fileUrl: cloudinaryResponse.secure_url, // URL pública de Cloudinary
-        assignment: { id: assignmentId },
-        student: { id: studentId },
-        status: SubmissionStatus.PENDING,
-      });
+    // 3. Crear registro en base de datos con la URL de Cloudinary
+    const submission = this.submissionRepository.create({
+      ...submissionData,
+      fileUrl: cloudinaryResponse.secure_url, // URL pública de Cloudinary
+      assignment: { id: assignmentId },
+      student: { id: studentId },
+      status: SubmissionStatus.PENDING,
+    });
 
-      const savedSubmission = await this.submissionRepository.save(submission);
+    const savedSubmission = await this.submissionRepository.save(submission);
 
-      // 4. Iniciar proceso asíncrono (Extracción -> IA -> Evaluación)
-      this.processExtraction(savedSubmission.id, savedSubmission.fileUrl);
+    // 4. Iniciar proceso asíncrono (Extracción -> IA -> Evaluación)
+    this.processExtraction(savedSubmission.id, savedSubmission.fileUrl);
 
-      return savedSubmission;
-    } catch (error) {
-      this.logger.error(`Error in upload/create: ${error.message}`);
-      this.handleDBException(error);
-    }
+    return savedSubmission;
   }
 
   async findAll(): Promise<Submission[]> {
@@ -127,11 +116,7 @@ export class SubmissionService {
 
     if (!submission) throw new NotFoundException(`Submission with id ${id} not found`);
 
-    try {
-      return await this.submissionRepository.save(submission);
-    } catch (error) {
-      this.handleDBException(error);
-    }
+    return await this.submissionRepository.save(submission);
   }
 
   async remove(id: string): Promise<Submission> {
@@ -205,17 +190,5 @@ export class SubmissionService {
         this.logger.error('Could not notify student of failure', e.message);
       }
     }
-  }
-
-  private handleDBException(error: any): never {
-    if (error.code === '23503')
-      throw new BadRequestException('Foreign key violation: Check student or assignment ID');
-
-    if (error.code === '23505') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    if (error.code === 'error-001') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    this.logger.error(error);
-    throw new InternalServerErrorException('Unexpected error, please check server logs');
   }
 }

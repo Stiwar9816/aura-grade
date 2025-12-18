@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 // TypeORM
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -16,8 +10,6 @@ import { Criterion } from 'src/criterion/entities/criterion.entity';
 
 @Injectable()
 export class RubricService {
-  private readonly logger = new Logger('RubricService');
-
   constructor(
     @InjectRepository(Rubric)
     private rubricRepository: Repository<Rubric>,
@@ -25,43 +17,39 @@ export class RubricService {
   ) {}
 
   async create(createRubricInput: CreateRubricInput): Promise<Rubric> {
+    const { criteria, userId, ...rubricData } = createRubricInput;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      const { criteria, userId, ...rubricData } = createRubricInput;
+      // 1. Crear la rúbrica vinculando el userId
+      const rubric = queryRunner.manager.create(Rubric, {
+        ...rubricData,
+        user: { id: userId } as any, // Asignamos el ID directamente a la relación
+      });
 
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+      const savedRubric = await queryRunner.manager.save(rubric);
 
-      try {
-        // 1. Crear la rúbrica vinculando el userId
-        const rubric = queryRunner.manager.create(Rubric, {
-          ...rubricData,
-          user: { id: userId } as any, // Asignamos el ID directamente a la relación
-        });
-
-        const savedRubric = await queryRunner.manager.save(rubric);
-
-        // 2. Crear los criterios vinculados
-        if (criteria && criteria.length > 0) {
-          const criteriaToSave = criteria.map((c) =>
-            queryRunner.manager.create(Criterion, {
-              ...c,
-              rubric: savedRubric,
-            })
-          );
-          await queryRunner.manager.save(Criterion, criteriaToSave);
-        }
-
-        await queryRunner.commitTransaction();
-        return this.findOne(savedRubric.id);
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.handleDBException(error);
-      } finally {
-        await queryRunner.release();
+      // 2. Crear los criterios vinculados
+      if (criteria && criteria.length > 0) {
+        const criteriaToSave = criteria.map((c) =>
+          queryRunner.manager.create(Criterion, {
+            ...c,
+            rubric: savedRubric,
+          })
+        );
+        await queryRunner.manager.save(Criterion, criteriaToSave);
       }
+
+      await queryRunner.commitTransaction();
+      return this.findOne(savedRubric.id);
     } catch (error) {
-      this.handleDBException(error);
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -70,14 +58,7 @@ export class RubricService {
   }
 
   async findOne(id: string): Promise<Rubric> {
-    try {
-      return await this.rubricRepository.findOneOrFail({ where: { id }, relations: ['users'] });
-    } catch (error) {
-      this.handleDBException({
-        code: 'error-001',
-        detail: `Rubric with id ${id} not found`,
-      });
-    }
+    return await this.rubricRepository.findOneOrFail({ where: { id }, relations: ['users'] });
   }
 
   async update(id: string, updateRubricInput: UpdateRubricInput): Promise<Rubric> {
@@ -118,7 +99,7 @@ export class RubricService {
       return this.findOne(id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.handleDBException(error);
+      throw error;
     } finally {
       await queryRunner.release();
     }
@@ -128,14 +109,5 @@ export class RubricService {
     const rubric = await this.findOne(id);
     await this.rubricRepository.remove(rubric);
     return { ...rubric, id };
-  }
-
-  private handleDBException(error: any): never {
-    if (error.code === '23505') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    if (error.code === 'error-001') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    this.logger.error(error);
-    throw new InternalServerErrorException('Unexpected error, please check server logs');
   }
 }

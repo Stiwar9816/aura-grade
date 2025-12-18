@@ -8,14 +8,12 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { envs } from './config';
 import { graphqlUploadExpress } from 'graphql-upload-ts';
-
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
   // Debe ir antes de cualquier middleware de GraphQL
-  app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));
   app.use(
     helmet({
       contentSecurityPolicy: false, // Permite Apollo Sandbox en /graphql
@@ -24,6 +22,7 @@ async function bootstrap() {
       crossOriginResourcePolicy: false,
     })
   );
+  app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

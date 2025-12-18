@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 // DTOs
 import { CreateEvaluationInput, UpdateEvaluationInput } from './dto';
 // TypeORM
@@ -18,8 +12,6 @@ import { SubmissionStatus } from 'src/enums';
 
 @Injectable()
 export class EvaluationService {
-  private readonly logger = new Logger('EvaluationService');
-
   constructor(
     @InjectRepository(Evaluation)
     private readonly evaluationRepository: Repository<Evaluation>,
@@ -28,30 +20,26 @@ export class EvaluationService {
   ) {}
 
   async create(createEvaluationInput: CreateEvaluationInput): Promise<Evaluation> {
-    try {
-      const { submissionId, ...evaluationData } = createEvaluationInput;
+    const { submissionId, ...evaluationData } = createEvaluationInput;
 
-      // 1. Verificar que la entrega existe
-      const submission = await this.submissionRepository.findOneBy({ id: submissionId });
-      if (!submission) throw new NotFoundException(`Submission ${submissionId} not found`);
+    // 1. Verificar que la entrega existe
+    const submission = await this.submissionRepository.findOneBy({ id: submissionId });
+    if (!submission) throw new NotFoundException(`Submission ${submissionId} not found`);
 
-      // 2. Crear la evaluación
-      const evaluation = this.evaluationRepository.create({
-        ...evaluationData,
-        submission: { id: submissionId } as any,
-      });
+    // 2. Crear la evaluación
+    const evaluation = this.evaluationRepository.create({
+      ...evaluationData,
+      submission: { id: submissionId } as any,
+    });
 
-      const savedEvaluation = await this.evaluationRepository.save(evaluation);
+    const savedEvaluation = await this.evaluationRepository.save(evaluation);
 
-      // 3. ACTUALIZACIÓN CRÍTICA: Cambiar el estado de la entrega a COMPLETED
-      await this.submissionRepository.update(submissionId, {
-        status: SubmissionStatus.COMPLETED,
-      });
+    // 3. ACTUALIZACIÓN CRÍTICA: Cambiar el estado de la entrega a COMPLETED
+    await this.submissionRepository.update(submissionId, {
+      status: SubmissionStatus.COMPLETED,
+    });
 
-      return savedEvaluation;
-    } catch (error) {
-      this.handleDBException(error);
-    }
+    return savedEvaluation;
   }
 
   async findAll(): Promise<Evaluation[]> {
@@ -90,28 +78,12 @@ export class EvaluationService {
 
     if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
 
-    try {
-      return await this.evaluationRepository.save(evaluation);
-    } catch (error) {
-      this.handleDBException(error);
-    }
+    return await this.evaluationRepository.save(evaluation);
   }
 
   async remove(id: string): Promise<boolean> {
     const evaluation = await this.findOne(id);
     await this.evaluationRepository.remove(evaluation);
     return true;
-  }
-
-  private handleDBException(error: any): never {
-    if (error.code === '23503')
-      throw new BadRequestException('Foreign key violation: Check student or assignment ID');
-
-    if (error.code === '23505') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    if (error.code === 'error-001') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    this.logger.error(error);
-    throw new InternalServerErrorException('Unexpected error, please check server logs');
   }
 }

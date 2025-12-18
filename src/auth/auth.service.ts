@@ -1,10 +1,5 @@
 // NestJS
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 // Jwt
 import { JwtService } from '@nestjs/jwt';
 // TypeORM
@@ -20,8 +15,8 @@ import { CreateUserDto, LoginUserDto } from './dto';
 import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
 import { MailService } from 'src/mail/mail.service';
+// Enums
 import { UserRoles } from './enums';
-import { Course } from 'src/course/entities/course.entity';
 
 @Injectable()
 export class AuthService {
@@ -37,40 +32,36 @@ export class AuthService {
   }
 
   async register(createAuthDto: CreateUserDto) {
-    try {
-      const { password, courses, ...userInfo } = createAuthDto;
-      const user = this.authRepository.create({
-        ...userInfo,
-        password: bcrypt.hashSync(password, 12),
-      });
+    const { password, courses, ...userInfo } = createAuthDto;
+    const user = this.authRepository.create({
+      ...userInfo,
+      password: bcrypt.hashSync(password, 12),
+    });
 
-      // Convertir IDs (string[]) → [{ id }, { id }, ...]
-      if (courses?.length) user.courses = courses.map((id) => ({ id })) as any;
+    // Convertir IDs (string[]) → [{ id }, { id }, ...]
+    if (courses?.length) user.courses = courses.map((id) => ({ id })) as any;
 
-      await this.authRepository.save(user);
+    await this.authRepository.save(user);
 
-      // Guarda una copia sin encriptar de la contraseña
-      const plainPassword = password;
-      // Envía la contraseña sin encriptar por correo electrónico
-      await this.mailService.sendUserConfirmation(user, plainPassword);
+    // Guarda una copia sin encriptar de la contraseña
+    const plainPassword = password;
+    // Envía la contraseña sin encriptar por correo electrónico
+    await this.mailService.sendUserConfirmation(user, plainPassword);
 
-      delete user.password;
+    delete user.password;
 
-      const token = this.getToken({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        last_name: user.last_name,
-        role: user.role,
-      });
+    const token = this.getToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      last_name: user.last_name,
+      role: user.role,
+    });
 
-      return {
-        ...user,
-        token,
-      };
-    } catch (error) {
-      this.handleDBErrros(error);
-    }
+    return {
+      ...user,
+      token,
+    };
   }
 
   async login(loginUserDto: LoginUserDto) {
@@ -113,12 +104,5 @@ export class AuthService {
 
     delete user.password;
     return user;
-  }
-  private handleDBErrros(errors: any): never {
-    if (errors.code === '23505') {
-      throw new BadRequestException(errors.detail);
-    }
-    console.log(errors);
-    throw new InternalServerErrorException('Please check server logs');
   }
 }

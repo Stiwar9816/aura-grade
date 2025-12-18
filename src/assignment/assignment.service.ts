@@ -1,11 +1,5 @@
 // NestJS
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 // DTO
 import { CreateAssignmentInput, UpdateAssignmentInput } from './dto';
 // TypeORM
@@ -16,26 +10,20 @@ import { Assignment } from './entities/assignment.entity';
 
 @Injectable()
 export class AssignmentService {
-  private readonly logger = new Logger('AssignmentService');
-
   constructor(
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>
   ) {}
 
   async create(createAssignmentInput: CreateAssignmentInput): Promise<Assignment> {
-    try {
-      const assignment = this.assignmentRepository.create({
-        ...createAssignmentInput,
-        rubric: { id: createAssignmentInput.rubricId } as any,
-        user: { id: createAssignmentInput.userId } as any,
-      });
+    const assignment = this.assignmentRepository.create({
+      ...createAssignmentInput,
+      rubric: { id: createAssignmentInput.rubricId } as any,
+      user: { id: createAssignmentInput.userId } as any,
+    });
 
-      const savedAssignment = await this.assignmentRepository.save(assignment);
-      return this.findOne(savedAssignment.id);
-    } catch (error) {
-      this.handleDBException(error);
-    }
+    const savedAssignment = await this.assignmentRepository.save(assignment);
+    return this.findOne(savedAssignment.id);
   }
 
   async findAll(): Promise<Assignment[]> {
@@ -66,11 +54,7 @@ export class AssignmentService {
 
     if (!assignment) throw new NotFoundException(`Assignment with id ${id} not found`);
 
-    try {
-      return await this.assignmentRepository.save(assignment);
-    } catch (error) {
-      this.handleDBException(error);
-    }
+    return await this.assignmentRepository.save(assignment);
   }
 
   async remove(id: string): Promise<Assignment> {
@@ -84,18 +68,5 @@ export class AssignmentService {
     const assignmentToBlock = await this.findOne(id);
     assignmentToBlock.isActive = false;
     return await this.assignmentRepository.save(assignmentToBlock);
-  }
-
-  private handleDBException(error: any): never {
-    if (error.code === '23503')
-      // Error de llave foránea (ej: rubricId no existe)
-      throw new BadRequestException('The referenced Rubric or Teacher does not exist.');
-
-    if (error.code === '23505') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    if (error.code === 'error-001') throw new BadRequestException(error.detail.replace('Key ', ''));
-
-    this.logger.error(error);
-    throw new InternalServerErrorException('Unexpected error, please check server logs');
   }
 }

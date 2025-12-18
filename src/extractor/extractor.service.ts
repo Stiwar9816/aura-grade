@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  InternalServerErrorException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 // Axios para descargar el archivo
 import axios from 'axios';
 // pdf-parse para extraer texto de PDF
@@ -14,8 +9,6 @@ import * as mammoth from 'mammoth';
 
 @Injectable()
 export class ExtractorService {
-  private readonly logger = new Logger('ExtractorService');
-
   async extractTextFromUrl(url: string): Promise<string> {
     try {
       // 1. Descargar el archivo como Buffer
@@ -33,7 +26,6 @@ export class ExtractorService {
         throw new Error('Unsupported file format. Only PDF and DOCX are allowed.');
       }
     } catch (error) {
-      this.logger.error(`Error extracting text: ${error.message}`);
       throw new InternalServerErrorException('Failed to extract text from document');
     }
   }

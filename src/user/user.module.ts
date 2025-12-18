@@ -16,12 +16,14 @@ import { CourseModule } from 'src/course/course.module';
 import { RubricModule } from 'src/rubric/rubric.module';
 import { AssignmentModule } from 'src/assignment/assignment.module';
 import { SubmissionModule } from 'src/submission/submission.module';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   providers: [UserResolver, UserService],
   imports: [
     TypeOrmModule.forFeature([User]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule,
     forwardRef(() => AuthModule),
     forwardRef(() => CourseModule),
     forwardRef(() => RubricModule),
