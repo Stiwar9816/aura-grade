@@ -1,5 +1,5 @@
 // NestJS
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/swagger';
 // DTO
 import { CreateUserDto } from './create-user.dto';
 // GraphQL

@@ -11,7 +11,11 @@ type Course {
 
 type Rubric {
   id: String!
+
+  """Title of the rubric"""
   title: String!
+
+  """Maximum score possible"""
   maxTotalScore: Float!
   user: User!
   criteria: [Criterion!]!
@@ -73,10 +77,19 @@ type Criterion {
 }
 
 type Assignment {
+  """Assignment ID"""
   id: ID!
+
+  """Assignment title"""
   title: String!
+
+  """Assignment detailed description"""
   description: String!
+
+  """Deadline for the assignment"""
   dueDate: DateTime!
+
+  """Is the assignment active?"""
   isActive: Boolean!
   createdAt: DateTime!
   user: User!
@@ -105,6 +118,7 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 scalar JSON
 
 type Submission {
+  """Submission ID"""
   id: ID!
 
   """URL of the file stored (Cloudinary)"""
@@ -112,6 +126,8 @@ type Submission {
 
   """Extracted text from the document for the AI"""
   extractedText: String
+
+  """Current status of the submission"""
   status: SubmissionStatus!
   createdAt: DateTime!
   updatedAt: DateTime!

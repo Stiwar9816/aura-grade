@@ -35,7 +35,7 @@ export class Rubric {
     description: 'Rubric title',
   })
   @Column({ type: 'text' })
-  @Field(() => String)
+  @Field(() => String, { description: 'Title of the rubric' })
   title: string;
 
   @ApiProperty({
@@ -48,7 +48,7 @@ export class Rubric {
     scale: 2,
     default: 0,
   })
-  @Field(() => Float)
+  @Field(() => Float, { description: 'Maximum score possible' })
   maxTotalScore: number;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })

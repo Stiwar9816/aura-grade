@@ -27,7 +27,7 @@ export class Assignment {
     format: 'uuid',
   })
   @PrimaryGeneratedColumn('uuid')
-  @Field(() => ID)
+  @Field(() => ID, { description: 'Assignment ID' })
   id: string;
 
   @ApiProperty({
@@ -35,7 +35,7 @@ export class Assignment {
     description: 'Assignment name',
   })
   @Column({ type: 'text' })
-  @Field(() => String)
+  @Field(() => String, { description: 'Assignment title' })
   title: string;
 
   @ApiProperty({
@@ -43,7 +43,7 @@ export class Assignment {
     description: 'Assignment description',
   })
   @Column({ type: 'text' })
-  @Field(() => String)
+  @Field(() => String, { description: 'Assignment detailed description' })
   description: string;
 
   @ApiProperty({
@@ -51,7 +51,7 @@ export class Assignment {
     description: 'Assignment due date',
   })
   @Column({ type: 'timestamp with time zone' })
-  @Field(() => Date)
+  @Field(() => Date, { description: 'Deadline for the assignment' })
   dueDate: Date;
 
   @ApiProperty({
@@ -59,7 +59,7 @@ export class Assignment {
     description: 'Assignment is active',
   })
   @Column({ type: 'boolean', default: true })
-  @Field(() => Boolean)
+  @Field(() => Boolean, { description: 'Is the assignment active?' })
   isActive: boolean;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })

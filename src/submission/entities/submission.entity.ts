@@ -29,7 +29,7 @@ export class Submission {
     format: 'uuid',
   })
   @PrimaryGeneratedColumn('uuid')
-  @Field(() => ID)
+  @Field(() => ID, { description: 'Submission ID' })
   id: string;
 
   @ApiProperty({
@@ -64,7 +64,7 @@ export class Submission {
     enum: SubmissionStatus,
     default: SubmissionStatus.PENDING,
   })
-  @Field(() => SubmissionStatus)
+  @Field(() => SubmissionStatus, { description: 'Current status of the submission' })
   status: SubmissionStatus;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })

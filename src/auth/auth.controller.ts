@@ -3,7 +3,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 // Services
 import { AuthService } from './auth.service';
 // Dto
-import { CreateUserDto, LoginUserDto } from './dto';
+import { CreateUserDto, LoginUserDto, AuthResponse } from './dto';
 // Entities
 import { User } from 'src/user/entities/user.entity';
 // Swagger
@@ -35,7 +35,7 @@ export class AuthController {
   //EndPoint Login users
   @Post('login')
   // Doc API - ApiResponse
-  @ApiCreatedResponse({ description: 'User successfully logged in' })
+  @ApiCreatedResponse({ description: 'User successfully logged in', type: AuthResponse })
   @ApiNotFoundResponse({ description: 'Not found' })
   @ApiBadRequestResponse({ description: 'Bad request' })
   @ApiInternalServerErrorResponse({ description: 'Internal Server Error' })
