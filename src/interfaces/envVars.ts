@@ -13,4 +13,9 @@ export interface EnvVars {
   MAIL_FROM: string;
   APP_NAME: string;
   FRONTEND_URL: string;
+  CLOUDINARY_API_KEY: string;
+  CLOUDINARY_API_SECRET: string;
+  CLOUDINARY_NAME: string;
+  AI_PROVIDER: string;
+  GEMINI_API_KEY?: string;
 }

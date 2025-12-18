@@ -18,6 +18,15 @@ const envsSchema = joi
     MAIL_FROM: joi.string().required(),
     APP_NAME: joi.string().required(),
     FRONTEND_URL: joi.string().required(),
+    CLOUDINARY_API_KEY: joi.string().required(),
+    CLOUDINARY_API_SECRET: joi.string().required(),
+    CLOUDINARY_NAME: joi.string().required(),
+    AI_PROVIDER: joi.string().valid('openai', 'gemini').required(),
+    GEMINI_API_KEY: joi.string().when('AI_PROVIDER', {
+      is: 'gemini',
+      then: joi.required(),
+      otherwise: joi.optional(),
+    }),
   })
   .unknown(true);
 
@@ -41,4 +50,9 @@ export const envs = {
   mail_from: envVars.MAIL_FROM,
   app_name: envVars.APP_NAME,
   frontend_url: envVars.FRONTEND_URL,
+  cloudinary_api_key: envVars.CLOUDINARY_API_KEY,
+  cloudinary_api_secret: envVars.CLOUDINARY_API_SECRET,
+  CLOUDINARY_NAME: envVars.CLOUDINARY_NAME,
+  ai_provider: envVars.AI_PROVIDER,
+  gemini_api_key: envVars.GEMINI_API_KEY,
 };

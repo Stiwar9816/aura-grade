@@ -21,8 +21,12 @@ import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { SubmissionStatus } from 'src/enums';
 // Gateway
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+// FileUpload
 import { FileUpload } from 'graphql-upload-ts';
+// Cloudinary
 import { v2 as cloudinary } from 'cloudinary';
+// Config
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SubmissionService {
@@ -36,7 +40,8 @@ export class SubmissionService {
     private readonly extractorService: ExtractorService,
     private readonly aiService: AiService,
     private readonly evaluationService: EvaluationService,
-    private readonly notificationsGateway: NotificationsGateway
+    private readonly notificationsGateway: NotificationsGateway,
+    private config: ConfigService
   ) {}
 
   async create(
@@ -172,7 +177,7 @@ export class SubmissionService {
         totalScore: aiResponse.totalScore,
         generalFeedback: aiResponse.generalFeedback,
         detailedFeedback: aiResponse.detailedFeedback,
-        aiModelUsed: 'gpt-4o',
+        aiModelUsed: this.config.get('AI_PROVIDER'),
       });
 
       // 6. Notificación Final
@@ -197,7 +202,7 @@ export class SubmissionService {
           message: 'Hubo un error al procesar el archivo o la evaluación.',
         });
       } catch (e) {
-        this.logger.error('Could not notify student of failure');
+        this.logger.error('Could not notify student of failure', e.message);
       }
     }
   }

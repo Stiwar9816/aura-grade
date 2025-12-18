@@ -16,6 +16,7 @@ import { EvaluationModule } from 'src/evaluation/evaluation.module';
 import { ExtractorModule } from 'src/extractor/extractor.module';
 import { AiModule } from 'src/ai/ai.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   providers: [SubmissionResolver, SubmissionService],
@@ -28,6 +29,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     ExtractorModule,
     AiModule,
     NotificationsModule,
+    ConfigModule,
   ],
   exports: [SubmissionService, TypeOrmModule],
 })

@@ -9,6 +9,8 @@ import helmet from 'helmet';
 import { envs } from './config';
 import { graphqlUploadExpress } from 'graphql-upload-ts';
 
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
@@ -29,6 +31,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     })
   );
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   app.enableCors({
     origin: process.env.HOST_CLIENT,
