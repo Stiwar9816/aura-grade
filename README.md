@@ -35,7 +35,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 ### 🤖 Inteligencia Artificial & Automatización
 
-- **Evaluación Automática**: Análisis de contenido con OpenAI (GPT-4) basado en rúbricas personalizadas.
+- **Evaluación Automática**: Análisis de contenido con OpenAI (GPT-4) o Gemini (gemini-2.5-flash) basado en rúbricas personalizadas.
 - **Extracción de Texto**: Soporte nativo para lectura de archivos PDF y DOCX.
 - **Feedback Estructurado**: Generación de puntuaciones por criterio y retroalimentación cualitativa.
 
@@ -89,6 +89,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - Cuenta en Cloudinary
 - Servidor de correo electrónico (SMTP) actual (Mailtrap para testing)
 - API Key de OpenAI
+- API Key de Gemini
 
 ## 🚀 Instalación y Configuración
 
@@ -128,6 +129,12 @@ CLOUDINARY_API_SECRET=tu-api-secret
 
 # OpenAI (Inteligencia Artificial)
 OPENAI_API_KEY=sk-tu-api-key-openai
+
+# Gemini (Inteligencia Artificial)
+GEMINI_API_KEY=sk-tu-api-key-gemini
+
+# AI Provider
+AI_PROVIDER=gemini|openai
 
 # App
 PORT=3000
@@ -254,7 +261,7 @@ src/
 - **Lenguaje**: **[TypeScript](https://www.typescriptlang.org/)** - Lenguaje de programación tipado
 - **API**: **[GraphQL](https://graphql.org/)** (Apollo Server)
 - **Base de Datos**: **[PostgreSQL](https://www.postgresql.org/)** + **[TypeORM](https://typeorm.io/)**
-- **AI**: **[OpenAI](https://openai.com/)** GPT-4
+- **AI**: **[OpenAI](https://openai.com/)** GPT-4o | **[Gemini](https://gemini.com/)** gemini-2.5-flash
 - **Almacenamiento**: **[Cloudinary](https://cloudinary.com/)**
 - **Autenticación**: **[JWT](https://jwt.io/)**
 - **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
