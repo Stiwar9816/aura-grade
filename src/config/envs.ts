@@ -32,6 +32,8 @@ const envsSchema = joi
       then: joi.required(),
       otherwise: joi.optional(),
     }),
+    REDIS_HOST: joi.string().required(),
+    REDIS_PORT: joi.number().required(),
   })
   .unknown(true);
 
@@ -61,4 +63,6 @@ export const envs = {
   ai_provider: envVars.AI_PROVIDER,
   gemini_api_key: envVars.GEMINI_API_KEY,
   openai_api_key: envVars.OPENAI_API_KEY,
+  redis_host: envVars.REDIS_HOST,
+  redis_port: envVars.REDIS_PORT,
 };

@@ -51,13 +51,17 @@ export class SubmissionService {
     if (new Date() > assignment.dueDate)
       throw new BadRequestException('The deadline for this assignment has passed');
 
+    const extension = filename.split('.').pop()?.toLowerCase();
+    if (extension !== 'docx') {
+      throw new BadRequestException('Only .docx files are allowed for submissions');
+    }
+
     // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
-    const extension = filename.split('.').pop(); // extrae pdf o docx
     const cloudinaryResponse: any = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'auragrade/submissions',
-          resource_type: 'auto', // Permite PDF, DOCX, etc.
+          resource_type: 'auto', // Permite DOCX, etc.
           // USAR EL NOMBRE ORIGINAL (quitando la extensión para el public_id)
           public_id: filename.split('.')[0],
           // FORZAR QUE SE MANTENGA EL FORMATO ORIGINAL
@@ -69,9 +73,6 @@ export class SubmissionService {
       );
       createReadStream().pipe(uploadStream);
     });
-
-    // LOG PARA VERIFICAR LA URL GENERADA
-    this.logger.log(`File uploaded to Cloudinary: ${cloudinaryResponse.secure_url}`);
 
     // 3. Crear registro en base de datos con la URL de Cloudinary
     const submission = this.submissionRepository.create({
@@ -127,8 +128,6 @@ export class SubmissionService {
 
   private async processExtraction(id: string, url: string) {
     try {
-      this.logger.log(`Starting text extraction for submission: ${id}`);
-
       // 1. Extracción de texto
       const text = await this.extractorService.extractTextFromUrl(url);
 

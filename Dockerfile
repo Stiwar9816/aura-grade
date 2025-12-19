@@ -2,7 +2,7 @@
 FROM node:22-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && apk update && apk upgrade --no-cache && apk add --no-cache dumb-init tzdata
+RUN corepack enable && apk update && apk upgrade --no-cache && apk add --no-cache dumb-init tzdata libc6-compat
 ENV TZ=America/Bogota
 WORKDIR /app
 

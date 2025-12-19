@@ -57,6 +57,8 @@ services:
       AI_PROVIDER: ${AI_PROVIDER}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
     networks:
       - aura_net
     deploy:
@@ -80,6 +82,18 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: aura_grade_redis_prod
+    restart: always
+    networks:
+      - aura_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
 
 networks:
   aura_net:

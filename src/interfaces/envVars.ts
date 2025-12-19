@@ -19,4 +19,6 @@ export interface EnvVars {
   AI_PROVIDER: string;
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  REDIS_HOST: string;
+  REDIS_PORT: number;
 }

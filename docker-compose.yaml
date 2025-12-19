@@ -54,4 +54,13 @@ services:
       AI_PROVIDER: ${AI_PROVIDER}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
     command: pnpm run start:dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: aura_grade_redis
+    ports:
+      - '${REDIS_PORT:-6379}:${REDIS_PORT:-6379}'
+    restart: always

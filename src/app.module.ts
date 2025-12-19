@@ -10,7 +10,11 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo';
 // Rate Limiting
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
+// Redis Caching
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 // Modules
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -39,6 +43,19 @@ import { SeedModule } from './seed/seed.module';
         limit: 100,
       },
     ]),
+    // Redis Caching
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => ({
+        store: await redisStore({
+          socket: {
+            host: envs.redis_host,
+            port: envs.redis_port,
+          },
+          ttl: 60 * 60, // 1 hour by default
+        }),
+      }),
+    }),
     // Configuración de credenciales de la DB
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -84,7 +101,7 @@ import { SeedModule } from './seed/seed.module';
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: GqlThrottlerGuard,
     },
   ],
 })
