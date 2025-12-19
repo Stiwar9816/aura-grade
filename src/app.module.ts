@@ -2,12 +2,15 @@ import { join } from 'path';
 // NestJS
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 // TypeORM
 import { TypeOrmModule } from '@nestjs/typeorm';
 // GraphQL
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo';
+// Rate Limiting
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 // Modules
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -29,6 +32,13 @@ import { SeedModule } from './seed/seed.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    // Rate Limiting
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     // Configuración de credenciales de la DB
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -70,6 +80,12 @@ import { SeedModule } from './seed/seed.module';
     AiModule,
     NotificationsModule,
     SeedModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

@@ -22,6 +22,11 @@ const envsSchema = joi
     CLOUDINARY_API_SECRET: joi.string().required(),
     CLOUDINARY_NAME: joi.string().required(),
     AI_PROVIDER: joi.string().valid('openai', 'gemini').required(),
+    OPENAI_API_KEY: joi.string().when('AI_PROVIDER', {
+      is: 'openai',
+      then: joi.required(),
+      otherwise: joi.optional(),
+    }),
     GEMINI_API_KEY: joi.string().when('AI_PROVIDER', {
       is: 'gemini',
       then: joi.required(),
@@ -55,4 +60,5 @@ export const envs = {
   CLOUDINARY_NAME: envVars.CLOUDINARY_NAME,
   ai_provider: envVars.AI_PROVIDER,
   gemini_api_key: envVars.GEMINI_API_KEY,
+  openai_api_key: envVars.OPENAI_API_KEY,
 };
