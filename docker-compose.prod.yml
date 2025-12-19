@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: stiwar1098/aura_grade:latest
+    image: aura_grade:latest
     container_name: aura_grade_prod
     restart: always
     depends_on:
