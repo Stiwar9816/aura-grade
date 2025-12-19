@@ -1,12 +1,57 @@
 services:
   db:
-    image: postgres:18.1-trixie
-    restart: always # reiniciar el contenedor si se detiene
+    image: postgres:17-alpine
+    restart: always
     ports:
-      - 5432:5432
+      - '${DB_PORT}:${DB_PORT}'
     environment:
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      TZ: America/Bogota
     container_name: aura_grade_db
     volumes:
-      - ./postgres:/var/lib/postgresql/data pg_upgrade --link
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aura_grade_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder # Usar la etapa de desarrollo se si definiera, pero por ahora builder es funcional
+    container_name: aura_grade_dev
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${PORT:-3000}:${PORT:-3000}'
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      STATE: dev
+      DB_HOST: db
+      DB_PORT: ${DB_PORT}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      TZ: America/Bogota
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      PORT: ${PORT}
+      FRONTEND_URL: ${FRONTEND_URL}
+      APP_NAME: ${APP_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_NAME: ${CLOUDINARY_NAME}
+      AI_PROVIDER: ${AI_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    command: pnpm run start:dev

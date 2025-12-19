@@ -1,21 +1,89 @@
 services:
-  aura_grade:
+  db:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      TZ: America/Bogota
+    container_name: aura_grade_db_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aura_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aura_grade_api:
     build:
       context: .
       dockerfile: Dockerfile
-    image: stiwar1098/aura_grade
-    container_name: aura_grade_app
+    image: stiwar1098/aura_grade:latest
+    container_name: aura_grade_prod
     restart: always
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - '${PORT}:${PORT}'
-
     environment:
+      STATE: ${STATE:-prod}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
+      TZ: America/Bogota
       JWT_SECRET: ${JWT_SECRET}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
       PORT: ${PORT}
-      STATE: ${STATE}
-      HOST_CLIENT: ${HOST_CLIENT}
+      FRONTEND_URL: ${FRONTEND_URL}
+      APP_NAME: ${APP_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_NAME: ${CLOUDINARY_NAME}
+      AI_PROVIDER: ${AI_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    networks:
+      - aura_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:${PORT}/api/health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); })",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  aura_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
