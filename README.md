@@ -29,14 +29,14 @@
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 [![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white)](https://cloudinary.com/)
 
-API avanzada para la gestión y calificación automática de trabajos universitarios. AuraGrade utiliza Inteligencia Artificial para analizar documentos (PDF/DOCX), comparar el contenido con rúbricas dinámicas y proporcionar feedback detallado en tiempo real.
+API avanzada para la gestión y calificación automática de trabajos universitarios. AuraGrade utiliza Inteligencia Artificial para analizar documentos (.docx), comparar el contenido con rúbricas dinámicas y proporcionar feedback detallado en tiempo real.
 
 ## ✨ Características
 
 ### 🤖 Inteligencia Artificial & Automatización
 
 - **Evaluación Automática**: Análisis de contenido con OpenAI (GPT-4) o Gemini (gemini-2.5-flash) basado en rúbricas personalizadas.
-- **Extracción de Texto**: Soporte nativo para lectura de archivos PDF y DOCX.
+- **Extracción de Texto**: Soporte nativo para lectura de archivos DOCX.
 - **Feedback Estructurado**: Generación de puntuaciones por criterio y retroalimentación cualitativa.
 
 ### ☁️ Gestión de Archivos
@@ -48,6 +48,13 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 - **WebSocket Gateway**: Notificaciones en vivo sobre el estado de la evaluación (Procesando -> Completado).
 - **Salas Privadas**: Canales seguros por usuario para recibir actualizaciones personales.
+
+### 🛡️ Seguridad y Rendimiento
+
+- **Rate Limiting**: Protección global contra abusos mediante `@nestjs/throttler` (100 req/min).
+- **Caché con Redis**: Optimización de costos y velocidad en evaluaciones de IA usando `CACHE_MANAGER`.
+- **Validación de Entorno**: Esquemas de validación con Joi para asegurar que la App no arranque con variables faltantes.
+- **Docker Hardening**: Imagen basada en Alpine (Node 22 LTS), Multi-stage builds y ejecución segura con usuario no-root.
 
 ### 🔐 Autenticación y Autorización
 
@@ -83,13 +90,12 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 ## 📋 Requisitos Previos
 
-- Node.js >= 18.x
-- pnpm (recomendado)
-- Docker Desktop (para base de datos local)
+- Node.js >= 22.x (LTS)
+- pnpm >= 10.x
+- Docker & Docker Compose (para DB y Redis)
 - Cuenta en Cloudinary
-- Servidor de correo electrónico (SMTP) actual (Mailtrap para testing)
-- API Key de OpenAI
-- API Key de Gemini
+- Servidor de correo electrónico (SMTP)
+- API Key de OpenAI o Gemini
 
 ## 🚀 Instalación y Configuración
 
@@ -135,6 +141,10 @@ GEMINI_API_KEY=sk-tu-api-key-gemini
 
 # AI Provider
 AI_PROVIDER=gemini|openai
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
 
 # App
 PORT=3000
@@ -207,6 +217,12 @@ Coverage:    66.93% statements | 49.38% branches | 49.53% functions | 66.51% lin
 - ✅ Auth Enums
 - ✅ Login DTO
 
+## 🔄 CI/CD
+
+El proyecto incluye un pipeline automatizado con **GitHub Actions** (`.github/workflows/main.yml`) que realiza:
+
+- **Build & Push**: Construcción de la imagen Docker y subida automática a Docker Hub.
+
 ## 📖 Documentación de API
 
 ### Swagger (REST API)
@@ -241,11 +257,12 @@ src/
 ├── assignment/           # Gestión de tareas académicas
 ├── auth/                 # Autenticación y Guards
 ├── cloudinary/           # Servicio de almacenamiento de archivos
+├── common/               # Configuración Compartida
 ├── config/               # Configuración de variables de entorno
 ├── course/               # Gestión de cursos
 ├── criterion/            # Criterios de evaluación
 ├── evaluation/           # Lógica de calificaciones y feedback
-├── extractor/            # Extracción de texto (PDF/DOCX)
+├── extractor/            # Extracción de texto (DOCX)
 ├── mail/                 # Envío de correos electrónicos
 ├── notifications/        # Gateway de WebSockets
 ├── rubric/               # Gestión de rúbricas dinámicas
@@ -261,14 +278,15 @@ src/
 - **Lenguaje**: **[TypeScript](https://www.typescriptlang.org/)** - Lenguaje de programación tipado
 - **API**: **[GraphQL](https://graphql.org/)** (Apollo Server)
 - **Base de Datos**: **[PostgreSQL](https://www.postgresql.org/)** + **[TypeORM](https://typeorm.io/)**
+- **Caché**: **[Redis](https://redis.io/)** + **[Cache Manager](https://github.com/node-cache-manager/node-cache-manager)**
 - **AI**: **[OpenAI](https://openai.com/)** GPT-4o | **[Gemini](https://gemini.com/)** gemini-2.5-flash
 - **Almacenamiento**: **[Cloudinary](https://cloudinary.com/)**
-- **Autenticación**: **[JWT](https://jwt.io/)**
+- **Autenticación**: **[JWT](https://jwt.io/)** + **[Passport](https://www.passportjs.org/)**
+- **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
+- **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**
+- **Testing**: **[Jest](https://jestjs.io/)**
 - **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
 - **WebSockets**: **[Socket.io](https://socket.io/)**
-- **Herramientas**: **[Docker](https://www.docker.com/)**, **[Jest](https://jestjs.io/)**, **[pdf-parse](https://github.com/teoremp/pdf-parse)**, **[mammoth](https://github.com/teoremp/mammoth)**
-- **Documentación**: **[Swagger](https://swagger.io/)**, **[GraphQL Playground](https://github.com/graphql/graphql-playground)**
-- **Testing**: **[Jest](https://jestjs.io/)**
 
 ## 👤 Autor
 
