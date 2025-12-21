@@ -1,7 +1,9 @@
 // NestJS
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 // Services
 import { SubmissionService } from './submission.service';
+import { SubmissionProcessor } from './submission.processor';
 // Resolvers
 import { SubmissionResolver } from './submission.resolver';
 // TypeORM
@@ -19,9 +21,12 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  providers: [SubmissionResolver, SubmissionService],
+  providers: [SubmissionResolver, SubmissionService, SubmissionProcessor],
   imports: [
     TypeOrmModule.forFeature([Submission]),
+    BullModule.registerQueue({
+      name: 'grading',
+    }),
     forwardRef(() => UserModule),
     forwardRef(() => AssignmentModule),
     forwardRef(() => EvaluationModule),

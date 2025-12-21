@@ -15,6 +15,8 @@ import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
 // Redis Caching
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+// BullMQ
+import { BullModule } from '@nestjs/bullmq';
 // Modules
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -55,6 +57,13 @@ import { SeedModule } from './seed/seed.module';
           ttl: 60 * 60, // 1 hour by default
         }),
       }),
+    }),
+    // BullMQ
+    BullModule.forRoot({
+      connection: {
+        host: envs.redis_host,
+        port: envs.redis_port,
+      },
     }),
     // Configuración de credenciales de la DB
     TypeOrmModule.forRoot({
