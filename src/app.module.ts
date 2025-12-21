@@ -15,6 +15,11 @@ import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
 // Redis Caching
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+// BullMQ
+import { BullModule } from '@nestjs/bullmq';
+// BullBoard
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
 // Modules
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -29,9 +34,11 @@ import { EvaluationModule } from './evaluation/evaluation.module';
 import { ExtractorModule } from './extractor/extractor.module';
 import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { HealthModule } from './health/health.module';
 // Config
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
+import { dataSourceOptions } from './config/datasource.config';
 
 @Module({
   imports: [
@@ -39,8 +46,14 @@ import { SeedModule } from './seed/seed.module';
     // Rate Limiting
     ThrottlerModule.forRoot([
       {
+        name: 'short',
         ttl: 60000,
         limit: 100,
+      },
+      {
+        name: 'submission',
+        ttl: 3600000, // 1 hora
+        limit: 5,
       },
     ]),
     // Redis Caching
@@ -56,26 +69,31 @@ import { SeedModule } from './seed/seed.module';
         }),
       }),
     }),
-    // Configuración de credenciales de la DB
+    // BullMQ
+    BullModule.forRoot({
+      connection: {
+        host: envs.redis_host,
+        port: envs.redis_port,
+      },
+    }),
+    BullBoardModule.forRoot({
+      adapter: ExpressAdapter,
+      route: '/queues',
+      boardOptions: {
+        uiConfig: {
+          boardTitle: 'Aura Grade - Colas',
+        },
+      },
+    }),
+    // Configuración de la DB
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      ssl:
-        envs.state === 'prod'
-          ? {
-              rejectUnauthorized: false,
-              sslmode: 'require',
-            }
-          : (false as any),
-      host: envs.db_host,
-      port: +envs.db_port,
-      database: envs.db_name,
-      username: envs.db_username,
-      password: envs.db_password,
+      ...dataSourceOptions,
+      entities: [], // Usar autoLoadEntities
+      migrations: [], // Evitar que el glob falle en runtime
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: envs.state === 'dev',
     }),
     // GraphQL
-    // TODO: Configuración básica
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
@@ -97,6 +115,7 @@ import { SeedModule } from './seed/seed.module';
     AiModule,
     NotificationsModule,
     SeedModule,
+    HealthModule,
   ],
   providers: [
     {

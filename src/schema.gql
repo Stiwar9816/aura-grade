@@ -102,21 +102,6 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
-type Evaluation {
-  id: ID!
-  totalScore: Float!
-  generalFeedback: String!
-  detailedFeedback: JSON!
-  aiModelUsed: String
-  createdAt: DateTime!
-  submission: Submission!
-}
-
-"""
-The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
-"""
-scalar JSON
-
 type Submission {
   """Submission ID"""
   id: ID!
@@ -140,8 +125,31 @@ type Submission {
 enum SubmissionStatus {
   PENDING
   IN_PROGRESS
-  COMPLETED
+  REVIEW_PENDING
+  PUBLISHED
   FAILED
+}
+
+type Evaluation {
+  id: ID!
+  totalScore: Float!
+  generalFeedback: String!
+  detailedFeedback: JSON!
+  aiModelUsed: String
+  status: EvaluationStatus!
+  createdAt: DateTime!
+  submission: Submission!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+"""Publicaton status of an evaluation"""
+enum EvaluationStatus {
+  DRAFT
+  PUBLISHED
 }
 
 type Query {
@@ -200,6 +208,7 @@ type Mutation {
   removeCriterion(id: String!): Criterion!
   createEvaluation(createEvaluationInput: CreateEvaluationInput!): Evaluation!
   updateEvaluation(updateEvaluationInput: UpdateEvaluationInput!): Evaluation!
+  publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
   removeEvaluation(id: ID!): Boolean!
   executeSeed: String!
 }

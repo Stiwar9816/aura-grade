@@ -8,7 +8,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Evaluation } from './entities/evaluation.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 // Enums
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationStatus, SubmissionStatus } from 'src/enums';
+// Gateways
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @Injectable()
 export class EvaluationService {
@@ -16,7 +18,8 @@ export class EvaluationService {
     @InjectRepository(Evaluation)
     private readonly evaluationRepository: Repository<Evaluation>,
     @InjectRepository(Submission)
-    private readonly submissionRepository: Repository<Submission>
+    private readonly submissionRepository: Repository<Submission>,
+    private readonly notificationsGateway: NotificationsGateway
   ) {}
 
   async create(createEvaluationInput: CreateEvaluationInput): Promise<Evaluation> {
@@ -26,17 +29,53 @@ export class EvaluationService {
     const submission = await this.submissionRepository.findOneBy({ id: submissionId });
     if (!submission) throw new NotFoundException(`Submission ${submissionId} not found`);
 
-    // 2. Crear la evaluación
+    // 2. Crear la evaluación (por defecto en DRAFT según la entidad)
     const evaluation = this.evaluationRepository.create({
       ...evaluationData,
       submission: { id: submissionId } as any,
+      status: EvaluationStatus.DRAFT,
     });
 
     const savedEvaluation = await this.evaluationRepository.save(evaluation);
 
-    // 3. ACTUALIZACIÓN CRÍTICA: Cambiar el estado de la entrega a COMPLETED
+    // 3. ACTUALIZACIÓN: Cambiar el estado de la entrega a REVIEW_PENDING
     await this.submissionRepository.update(submissionId, {
-      status: SubmissionStatus.COMPLETED,
+      status: SubmissionStatus.REVIEW_PENDING,
+    });
+
+    return savedEvaluation;
+  }
+
+  async publish(id: string, updateEvaluationInput?: UpdateEvaluationInput): Promise<Evaluation> {
+    // 1. Cargar evaluación con relaciones
+    const evaluation = await this.evaluationRepository.findOne({
+      where: { id },
+      relations: ['submission', 'submission.student'],
+    });
+
+    if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
+
+    // 2. Aplicar actualizaciones si vienen (ajustes del docente)
+    if (updateEvaluationInput) {
+      const { id: _, submissionId: __, ...toUpdate } = updateEvaluationInput;
+      Object.assign(evaluation, toUpdate);
+    }
+
+    // 3. Cambiar a PUBLISHED
+    evaluation.status = EvaluationStatus.PUBLISHED;
+    const savedEvaluation = await this.evaluationRepository.save(evaluation);
+
+    // 4. Actualizar estado de la entrega a PUBLISHED
+    await this.submissionRepository.update(evaluation.submission.id, {
+      status: SubmissionStatus.PUBLISHED,
+    });
+
+    // 5. Notificar al estudiante ahora que la nota es oficial
+    this.notificationsGateway.notifyStudent(evaluation.submission.student.id, {
+      submissionId: evaluation.submission.id,
+      status: SubmissionStatus.PUBLISHED,
+      message: '¡Tu calificación ha sido revisada y publicada!',
+      evaluationId: evaluation.id,
     });
 
     return savedEvaluation;

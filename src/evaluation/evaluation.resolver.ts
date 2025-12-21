@@ -64,6 +64,17 @@ export class EvaluationResolver {
     return this.evaluationService.update(updateEvaluationInput.id, updateEvaluationInput);
   }
 
+  @Mutation(() => Evaluation, { name: 'publishEvaluation' })
+  @UseGuards(JwtAuthGuard)
+  publishEvaluation(
+    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
+    @Args('updateEvaluationInput', { nullable: true })
+    updateEvaluationInput: UpdateEvaluationInput,
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+  ): Promise<Evaluation> {
+    return this.evaluationService.publish(id, updateEvaluationInput);
+  }
+
   @Mutation(() => Boolean, { name: 'removeEvaluation' })
   @UseGuards(JwtAuthGuard)
   removeEvaluation(

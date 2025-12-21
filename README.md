@@ -27,7 +27,11 @@
 [![GraphQL](https://img.shields.io/badge/GraphQL-E10098?style=for-the-badge&logo=graphql&logoColor=white)](https://graphql.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
+[![Gemini](https://img.shields.io/badge/Gemini-412991?style=for-the-badge&logo=gemini-ai&logoColor=white)](https://gemini.google.com/)
 [![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white)](https://cloudinary.com/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Redis](https://img.shields.io/badge/Redis-DC3814?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![CI/CD](https://img.shields.io/badge/CI/CD-412991?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
 API avanzada para la gestión y calificación automática de trabajos universitarios. AuraGrade utiliza Inteligencia Artificial para analizar documentos (.docx), comparar el contenido con rúbricas dinámicas y proporcionar feedback detallado en tiempo real.
 
@@ -164,6 +168,37 @@ docker-compose up -d
 pnpm start:dev
 ```
 
+### 5. Gestión de Base de Datos (Migraciones)
+
+AuraGrade utiliza **TypeORM Migrations** para gestionar el esquema de la base de datos de forma segura y versionada.
+
+#### Mantenimiento de Entidades (Desarrollo)
+
+Cada vez que realices un cambio en un archivo `.entity.ts`, sigue este flujo:
+
+1. **Generar la migración**:
+   ```bash
+   pnpm run migration:generate -- src/migrations/NombreDeMiCambio
+   ```
+2. **Aplicar los cambios localmente**:
+   ```bash
+   pnpm run migration:run
+   ```
+
+#### Despliegue (Producción)
+
+En entornos de producción (Docker), las migraciones se ejecutan **automáticamente** antes de iniciar el servidor:
+
+- El pipeline utiliza `pnpm run migration:run:prod` para aplicar los archivos `.js` compilados.
+- Si una migración falla, el servidor no arrancará, previniendo estados inconsistentes.
+
+| Comando                       | Descripción                                       | Entorno     |
+| :---------------------------- | :------------------------------------------------ | :---------- |
+| `pnpm run migration:generate` | Crea un archivo `.ts` con los cambios detectados. | Local       |
+| `pnpm run migration:run`      | Sincroniza la DB local con las migraciones `.ts`. | Local       |
+| `pnpm run migration:revert`   | Deshace la última migración aplicada.             | Local       |
+| `pnpm run migration:run:prod` | Aplica las migraciones compiladas (`dist/`).      | Prod (Auto) |
+
 ## 🌱 Seeding (Datos de Prueba)
 
 Para poblar la base de datos con usuarios, cursos y rúbricas iniciales, ejecuta la siguiente mutación en el Playground de GraphQL:
@@ -287,10 +322,11 @@ src/
 - **Testing**: **[Jest](https://jestjs.io/)**
 - **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
 - **WebSockets**: **[Socket.io](https://socket.io/)**
+- **BullMQ**: **[BullMQ](https://docs.bullmq.io/)**
 
 ## 👤 Autor
 
-**Stiwar Asprilla**
+### **Stiwar Asprilla**
 
 Redes Sociales:
 

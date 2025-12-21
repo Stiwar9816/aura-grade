@@ -21,4 +21,5 @@ export interface EnvVars {
   GEMINI_API_KEY?: string;
   REDIS_HOST: string;
   REDIS_PORT: number;
+  BASIC_AUTH_PASSWORD: string;
 }

@@ -1,13 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
-// Config
-import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 // TypeORM
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-// Services
-import { ExtractorService } from 'src/extractor/extractor.service';
-import { EvaluationService } from 'src/evaluation/evaluation.service';
-import { AiService } from 'src/ai/ai.service';
 // DTOs
 import { CreateSubmissionInput, UpdateSubmissionInput } from './dto';
 // Entities
@@ -15,8 +11,6 @@ import { Submission } from './entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 // Enums
 import { SubmissionStatus } from 'src/enums';
-// Gateway
-import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 // FileUpload
 import { FileUpload } from 'graphql-upload-ts';
 // Cloudinary
@@ -31,11 +25,7 @@ export class SubmissionService {
     private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
-    private readonly extractorService: ExtractorService,
-    private readonly aiService: AiService,
-    private readonly evaluationService: EvaluationService,
-    private readonly notificationsGateway: NotificationsGateway,
-    private config: ConfigService
+    @InjectQueue('grading') private readonly gradingQueue: Queue
   ) {}
 
   async create(
@@ -85,8 +75,12 @@ export class SubmissionService {
 
     const savedSubmission = await this.submissionRepository.save(submission);
 
-    // 4. Iniciar proceso asíncrono (Extracción -> IA -> Evaluación)
-    this.processExtraction(savedSubmission.id, savedSubmission.fileUrl);
+    // 4. Iniciar proceso asíncrono mediante BullMQ (Extracción -> IA -> Evaluación)
+    await this.gradingQueue.add(
+      'grade-submission',
+      { id: savedSubmission.id, url: savedSubmission.fileUrl },
+      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+    );
 
     return savedSubmission;
   }
@@ -124,70 +118,5 @@ export class SubmissionService {
     const submission = await this.findOne(id);
     await this.submissionRepository.remove(submission);
     return { ...submission, id };
-  }
-
-  private async processExtraction(id: string, url: string) {
-    try {
-      // 1. Extracción de texto
-      const text = await this.extractorService.extractTextFromUrl(url);
-
-      // 2. Obtener datos de la entrega (necesitamos el studentId para notificar)
-      const submission = await this.findOne(id);
-
-      // 3. Actualización de estado y primera notificación
-      await this.submissionRepository.update(id, {
-        extractedText: text,
-        status: SubmissionStatus.IN_PROGRESS,
-      });
-
-      this.notificationsGateway.notifyStudent(submission.student.id, {
-        submissionId: id,
-        status: SubmissionStatus.IN_PROGRESS,
-        message: 'Estamos analizando tu trabajo...',
-      });
-
-      // 4. Ejecutar la Evaluación con IA
-      this.logger.log(`Calling AI for grading submission ${id}`);
-      const aiResponse = await this.aiService.evaluateSubmission(
-        text,
-        submission.assignment.rubric,
-        submission.assignment.title
-      );
-
-      // 5. Guardar la evaluación
-      // IMPORTANTE: El create de evaluation ya actualiza el status de la submission a COMPLETED
-      const evaluation = await this.evaluationService.create({
-        submissionId: id,
-        totalScore: aiResponse.totalScore,
-        generalFeedback: aiResponse.generalFeedback,
-        detailedFeedback: aiResponse.detailedFeedback,
-        aiModelUsed: this.config.get('AI_PROVIDER'),
-      });
-
-      // 6. Notificación Final
-      this.notificationsGateway.notifyStudent(submission.student.id, {
-        submissionId: id,
-        status: SubmissionStatus.COMPLETED,
-        message: '¡Tu calificación está lista!',
-        evaluationId: evaluation.id,
-      });
-
-      this.logger.log(`Grading completed successfully for submission ${id}`);
-    } catch (error) {
-      this.logger.error(`Failed processing submission ${id}: ${error.message}`);
-      await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
-      // Intentar notificar el error si tenemos el ID del estudiante
-      try {
-        const sub = await this.findOne(id);
-        await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
-        this.notificationsGateway.notifyStudent(sub.student.id, {
-          submissionId: id,
-          status: SubmissionStatus.FAILED,
-          message: 'Hubo un error al procesar el archivo o la evaluación.',
-        });
-      } catch (e) {
-        this.logger.error('Could not notify student of failure', e.message);
-      }
-    }
   }
 }
