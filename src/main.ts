@@ -5,10 +5,16 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 // App
 import { AppModule } from './app.module';
+// Helmet
 import helmet from 'helmet';
+// Envs
 import { envs } from './config';
+// GraphQL
 import { graphqlUploadExpress } from 'graphql-upload-ts';
+// Filters
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+// Basic Auth
+import basicAuth from 'express-basic-auth';
 
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
@@ -26,6 +32,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api', {
     exclude: ['queues', 'queues/*path'],
   });
+  app.use(
+    ['/queues', '/queues/*path'],
+    basicAuth({
+      users: { admin: envs.basic_auth_password },
+      challenge: true,
+    })
+  );
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

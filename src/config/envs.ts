@@ -34,6 +34,7 @@ const envsSchema = joi
     }),
     REDIS_HOST: joi.string().required(),
     REDIS_PORT: joi.number().required(),
+    BASIC_AUTH_PASSWORD: joi.string().required(),
   })
   .unknown(true);
 
@@ -65,4 +66,5 @@ export const envs = {
   openai_api_key: envVars.OPENAI_API_KEY,
   redis_host: envVars.REDIS_HOST,
   redis_port: envVars.REDIS_PORT,
+  basic_auth_password: envVars.BASIC_AUTH_PASSWORD,
 };
