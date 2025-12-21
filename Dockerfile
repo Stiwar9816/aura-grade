@@ -39,4 +39,4 @@ USER nestjs
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["node", "dist/main"]
+CMD ["pnpm", "run", "start:prod"]

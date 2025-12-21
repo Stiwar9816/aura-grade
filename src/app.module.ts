@@ -38,6 +38,7 @@ import { HealthModule } from './health/health.module';
 // Config
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
+import { dataSourceOptions } from './config/datasource.config';
 
 @Module({
   imports: [
@@ -84,26 +85,15 @@ import { SeedModule } from './seed/seed.module';
         },
       },
     }),
-    // Configuración de credenciales de la DB
+    // Configuración de la DB
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      ssl:
-        envs.state === 'prod'
-          ? {
-              rejectUnauthorized: false,
-              sslmode: 'require',
-            }
-          : (false as any),
-      host: envs.db_host,
-      port: +envs.db_port,
-      database: envs.db_name,
-      username: envs.db_username,
-      password: envs.db_password,
+      ...dataSourceOptions,
+      entities: [], // Usar autoLoadEntities
+      migrations: [], // Evitar que el glob falle en runtime
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: envs.state === 'dev',
     }),
     // GraphQL
-    // TODO: Configuración básica
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),

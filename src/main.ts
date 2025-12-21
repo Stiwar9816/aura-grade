@@ -19,13 +19,14 @@ import basicAuth from 'express-basic-auth';
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
-  // Debe ir antes de cualquier middleware de GraphQL
+  // Helmet: Security headers
+  const isDev = envs.state === 'dev';
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Permite Apollo Sandbox en /graphql
-      crossOriginEmbedderPolicy: false,
-      crossOriginOpenerPolicy: false,
-      crossOriginResourcePolicy: false,
+      contentSecurityPolicy: isDev ? false : undefined, // Allow Playground in dev
+      crossOriginEmbedderPolicy: isDev ? false : true,
+      crossOriginOpenerPolicy: isDev ? false : true,
+      crossOriginResourcePolicy: isDev ? false : true,
     })
   );
   app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));

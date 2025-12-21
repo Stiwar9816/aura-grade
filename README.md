@@ -168,6 +168,37 @@ docker-compose up -d
 pnpm start:dev
 ```
 
+### 5. Gestión de Base de Datos (Migraciones)
+
+AuraGrade utiliza **TypeORM Migrations** para gestionar el esquema de la base de datos de forma segura y versionada.
+
+#### Mantenimiento de Entidades (Desarrollo)
+
+Cada vez que realices un cambio en un archivo `.entity.ts`, sigue este flujo:
+
+1. **Generar la migración**:
+   ```bash
+   pnpm run migration:generate -- src/migrations/NombreDeMiCambio
+   ```
+2. **Aplicar los cambios localmente**:
+   ```bash
+   pnpm run migration:run
+   ```
+
+#### Despliegue (Producción)
+
+En entornos de producción (Docker), las migraciones se ejecutan **automáticamente** antes de iniciar el servidor:
+
+- El pipeline utiliza `pnpm run migration:run:prod` para aplicar los archivos `.js` compilados.
+- Si una migración falla, el servidor no arrancará, previniendo estados inconsistentes.
+
+| Comando                       | Descripción                                       | Entorno     |
+| :---------------------------- | :------------------------------------------------ | :---------- |
+| `pnpm run migration:generate` | Crea un archivo `.ts` con los cambios detectados. | Local       |
+| `pnpm run migration:run`      | Sincroniza la DB local con las migraciones `.ts`. | Local       |
+| `pnpm run migration:revert`   | Deshace la última migración aplicada.             | Local       |
+| `pnpm run migration:run:prod` | Aplica las migraciones compiladas (`dist/`).      | Prod (Auto) |
+
 ## 🌱 Seeding (Datos de Prueba)
 
 Para poblar la base de datos con usuarios, cursos y rúbricas iniciales, ejecuta la siguiente mutación en el Playground de GraphQL:
