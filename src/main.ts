@@ -23,7 +23,9 @@ async function bootstrap() {
     })
   );
   app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['queues', 'queues/*path'],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

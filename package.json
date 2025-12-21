@@ -23,6 +23,9 @@
   "dependencies": {
     "@apollo/server": "^5.2.0",
     "@as-integrations/express5": "^1.1.2",
+    "@bull-board/api": "^6.15.0",
+    "@bull-board/express": "^6.15.0",
+    "@bull-board/nestjs": "^6.15.0",
     "@google/genai": "^1.34.0",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/apollo": "^13.2.1",

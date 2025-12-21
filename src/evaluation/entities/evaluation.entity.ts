@@ -14,6 +14,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { GraphQLJSON } from 'graphql-type-json';
 // Entities
 import type { Submission } from 'src/submission/entities/submission.entity';
+// Enums
+import { EvaluationStatus } from 'src/enums';
 
 @Entity({ name: 'evaluations' })
 @ObjectType()
@@ -63,6 +65,19 @@ export class Evaluation {
   @Column({ type: 'text', nullable: true })
   @Field(() => String, { nullable: true })
   aiModelUsed?: string;
+
+  @ApiProperty({
+    example: 'DRAFT',
+    description: 'Evaluation Status',
+    enum: EvaluationStatus,
+  })
+  @Column({
+    type: 'enum',
+    enum: EvaluationStatus,
+    default: EvaluationStatus.DRAFT,
+  })
+  @Field(() => EvaluationStatus)
+  status: EvaluationStatus;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   @Field(() => Date)

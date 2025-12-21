@@ -16,8 +16,10 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { Submission } from './entities/submission.entity';
 // Enums
 import { SubmissionStatus } from 'src/enums';
+// Helpers
+import { AiSanitizer } from 'src/common/helpers/ai-sanitizer.helper';
 
-@Processor('grading')
+@Processor('grading', { concurrency: 2 })
 export class SubmissionProcessor extends WorkerHost {
   private readonly logger = new Logger(SubmissionProcessor.name);
 
@@ -39,7 +41,9 @@ export class SubmissionProcessor extends WorkerHost {
 
     try {
       // 1. Extracción de texto
+      await job.updateProgress(10);
       const text = await this.extractorService.extractTextFromUrl(url);
+      await job.updateProgress(30);
 
       // 2. Obtener datos de la entrega
       const submission = await this.submissionRepository.findOne({
@@ -52,25 +56,24 @@ export class SubmissionProcessor extends WorkerHost {
         return;
       }
 
-      // 3. Actualización de estado y primera notificación
+      // 3. Actualización de estado
       await this.submissionRepository.update(id, {
         extractedText: text,
         status: SubmissionStatus.IN_PROGRESS,
       });
 
-      this.notificationsGateway.notifyStudent(submission.student.id, {
-        submissionId: id,
-        status: SubmissionStatus.IN_PROGRESS,
-        message: 'Estamos analizando tu trabajo...',
-      });
+      await job.updateProgress(40);
 
       // 4. Ejecutar la Evaluación con IA
       this.logger.log(`Calling AI for grading submission ${id}`);
+      const cleanText = AiSanitizer.clean(text);
+
       const aiResponse = await this.aiService.evaluateSubmission(
-        text,
+        cleanText,
         submission.assignment.rubric,
         submission.assignment.title
       );
+      await job.updateProgress(80);
 
       // 5. Guardar la evaluación
       const evaluation = await this.evaluationService.create({
@@ -80,36 +83,27 @@ export class SubmissionProcessor extends WorkerHost {
         detailedFeedback: aiResponse.detailedFeedback,
         aiModelUsed: this.config.get('AI_PROVIDER'),
       });
+      await job.updateProgress(90);
 
-      // 6. Notificación Final
-      this.notificationsGateway.notifyStudent(submission.student.id, {
+      // 6. Notificación y progreso final
+      await job.updateProgress(100);
+      this.logger.log(
+        `AI grading draft saved with ID ${evaluation.id}. Waiting for teacher review.`
+      );
+
+      this.notificationsGateway.notifyStudent('gradingCompleted', {
         submissionId: id,
-        status: SubmissionStatus.COMPLETED,
-        message: '¡Tu calificación está lista!',
-        evaluationId: evaluation.id,
+        status: 'DRAFT_SAVED',
       });
 
-      this.logger.log(`Grading completed successfully for submission ${id}`);
+      return {
+        evaluationId: evaluation.id,
+        score: evaluation.totalScore,
+        status: 'DRAFT_SAVED',
+      };
     } catch (error) {
       this.logger.error(`Failed processing submission ${id}: ${error.message}`);
       await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
-
-      // Intentar notificar el error si tenemos el ID del estudiante
-      try {
-        const sub = await this.submissionRepository.findOne({
-          where: { id },
-          relations: ['student'],
-        });
-        if (sub) {
-          this.notificationsGateway.notifyStudent(sub.student.id, {
-            submissionId: id,
-            status: SubmissionStatus.FAILED,
-            message: 'Hubo un error al procesar el archivo o la evaluación.',
-          });
-        }
-      } catch (e) {
-        this.logger.error('Could not notify student of failure', e.message);
-      }
 
       // Lanza el error para que BullMQ registre el fallo y pueda reintentar según la configuración
       throw error;

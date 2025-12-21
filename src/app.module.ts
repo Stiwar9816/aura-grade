@@ -17,6 +17,9 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 // BullMQ
 import { BullModule } from '@nestjs/bullmq';
+// BullBoard
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
 // Modules
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -41,8 +44,14 @@ import { SeedModule } from './seed/seed.module';
     // Rate Limiting
     ThrottlerModule.forRoot([
       {
+        name: 'short',
         ttl: 60000,
         limit: 100,
+      },
+      {
+        name: 'submission',
+        ttl: 3600000, // 1 hora
+        limit: 5,
       },
     ]),
     // Redis Caching
@@ -63,6 +72,15 @@ import { SeedModule } from './seed/seed.module';
       connection: {
         host: envs.redis_host,
         port: envs.redis_port,
+      },
+    }),
+    BullBoardModule.forRoot({
+      adapter: ExpressAdapter,
+      route: '/queues',
+      boardOptions: {
+        uiConfig: {
+          boardTitle: 'Aura Grade - Colas',
+        },
       },
     }),
     // Configuración de credenciales de la DB
