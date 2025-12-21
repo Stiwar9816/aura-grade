@@ -34,6 +34,7 @@ import { EvaluationModule } from './evaluation/evaluation.module';
 import { ExtractorModule } from './extractor/extractor.module';
 import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { HealthModule } from './health/health.module';
 // Config
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
@@ -124,6 +125,7 @@ import { SeedModule } from './seed/seed.module';
     AiModule,
     NotificationsModule,
     SeedModule,
+    HealthModule,
   ],
   providers: [
     {
