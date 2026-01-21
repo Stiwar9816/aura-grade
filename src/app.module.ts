@@ -53,7 +53,7 @@ import { dataSourceOptions } from './config/datasource.config';
       {
         name: 'submission',
         ttl: 3600000, // 1 hora
-        limit: 5,
+        limit: 100,
       },
     ]),
     // Redis Caching

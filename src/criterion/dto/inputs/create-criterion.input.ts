@@ -1,7 +1,7 @@
 // Decorators/GraphQl
 import { Field, Int, InputType } from '@nestjs/graphql';
 // Validators
-import { IsNotEmpty, IsInt, IsString, Min, ValidateNested, IsArray } from 'class-validator';
+import { IsNotEmpty, IsInt, IsString, Min, ValidateNested, IsArray, IsUUID } from 'class-validator';
 // Transform
 import { Type } from 'class-transformer';
 // Dto
@@ -24,4 +24,9 @@ export class CreateCriterionInput {
   @ValidateNested({ each: true })
   @Type(() => CreateCriterionLevelsInput)
   levels: CreateCriterionLevelsInput[];
+
+  @Field(() => String, { description: 'Rubric ID' })
+  @IsNotEmpty({ message: 'Rubric ID is required.' })
+  @IsUUID('4', { message: 'Rubric ID must be a valid UUID.' })
+  rubric: string;
 }

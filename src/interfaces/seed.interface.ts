@@ -13,6 +13,7 @@ export interface SeedCriterion {
 
 export interface SeedRubric {
   title: string;
+  description: string;
   maxTotalScore: number;
   criteria: SeedCriterion[];
 }

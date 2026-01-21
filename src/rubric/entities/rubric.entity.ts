@@ -39,6 +39,14 @@ export class Rubric {
   title: string;
 
   @ApiProperty({
+    example: 'Description of the rubric',
+    description: 'Description of the rubric',
+  })
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { description: 'Description of the rubric', nullable: true })
+  description?: string;
+
+  @ApiProperty({
     example: '5.00',
     description: 'Max Total score',
   })

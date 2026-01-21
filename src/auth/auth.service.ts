@@ -56,6 +56,8 @@ export class AuthService {
       name: user.name,
       last_name: user.last_name,
       role: user.role,
+      phone: user.phone,
+      document_num: user.document_num,
     });
 
     return {
@@ -69,7 +71,16 @@ export class AuthService {
     //TODO: Chague authRepository for UserService
     const user = await this.authRepository.findOne({
       where: { email },
-      select: { email: true, password: true, id: true, name: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        last_name: true,
+        document_num: true,
+        password: true,
+        phone: true,
+        email: true,
+        role: true,
+      },
     });
 
     if (!user) throw new UnauthorizedException('Credentials are not valid');
@@ -84,9 +95,11 @@ export class AuthService {
 
     const token = this.getToken({
       id: user.id,
-      email: user.email,
       name: user.name,
       last_name: user.last_name,
+      document_num: user.document_num,
+      email: user.email,
+      phone: user.phone,
       role: user.role,
     });
 

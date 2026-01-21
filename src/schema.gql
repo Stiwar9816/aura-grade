@@ -15,6 +15,9 @@ type Rubric {
   """Title of the rubric"""
   title: String!
 
+  """Description of the rubric"""
+  description: String
+
   """Maximum score possible"""
   maxTotalScore: Float!
   user: User!
@@ -277,6 +280,9 @@ input CreateRubricInput {
   """Title of the rubric"""
   title: String!
 
+  """Description of the rubric"""
+  description: String
+
   """Max total score of the rubric"""
   maxTotalScore: Float!
 
@@ -296,6 +302,9 @@ input CreateCriterionInput {
 
   """Criterion levels"""
   levels: [CreateCriterionLevelsInput!]!
+
+  """Rubric ID"""
+  rubric: String!
 }
 
 input CreateCriterionLevelsInput {
@@ -309,6 +318,9 @@ input CreateCriterionLevelsInput {
 input UpdateRubricInput {
   """Title of the rubric"""
   title: String
+
+  """Description of the rubric"""
+  description: String
 
   """Max total score of the rubric"""
   maxTotalScore: Float
@@ -405,6 +417,9 @@ input UpdateCriterionInput {
 
   """Criterion levels"""
   levels: [CreateCriterionLevelsInput!]
+
+  """Rubric ID"""
+  rubric: String
 
   """
   Id automatically generated in uuid format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4

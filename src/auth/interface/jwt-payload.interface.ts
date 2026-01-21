@@ -7,4 +7,6 @@ export interface JwtPayload {
   last_name: string;
   email: string;
   role: UserRoles;
+  phone: number;
+  document_num: number;
 }

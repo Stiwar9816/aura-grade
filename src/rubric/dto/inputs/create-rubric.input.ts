@@ -11,6 +11,11 @@ export class CreateRubricInput {
   @Field(() => String, { description: 'Title of the rubric' })
   title: string;
 
+  @IsString()
+  @IsOptional()
+  @Field(() => String, { description: 'Description of the rubric', nullable: true })
+  description?: string;
+
   @IsNumber({ maxDecimalPlaces: 2 })
   @Field(() => Float, { description: 'Max total score of the rubric' })
   maxTotalScore: number;
