@@ -60,9 +60,11 @@ export class Rubric {
   maxTotalScore: number;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
+  @Field(() => Date, { description: 'Creation date of the rubric' })
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp with time zone' })
+  @Field(() => Date, { description: 'Last update date of the rubric' })
   updatedAt: Date;
 
   // Relations - Many-to-Many with User

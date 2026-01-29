@@ -20,9 +20,20 @@ type Rubric {
 
   """Maximum score possible"""
   maxTotalScore: Float!
+
+  """Creation date of the rubric"""
+  createdAt: DateTime!
+
+  """Last update date of the rubric"""
+  updatedAt: DateTime!
   user: User!
   criteria: [Criterion!]!
 }
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
 
 type User {
   id: String!
@@ -99,11 +110,6 @@ type Assignment {
   rubric: Rubric!
   submissions: [Submission!]
 }
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
 
 type Submission {
   """Submission ID"""
@@ -274,6 +280,7 @@ input UpdateCourseInput {
 
   """Id automatically generated in uuid format"""
   id: ID!
+  studentsIds: [ID!]
 }
 
 input CreateRubricInput {
