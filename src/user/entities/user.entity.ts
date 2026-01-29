@@ -17,7 +17,7 @@ import { ApiProperty } from '@nestjs/swagger';
 // Enums
 import { UserRoles, DocumentType } from 'src/auth/enums';
 // Entities
-import { Course } from 'src/course/entities/course.entity';
+import type { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
@@ -122,8 +122,11 @@ export class User {
   role: UserRoles;
 
   // Relations - Many-to-Many with Course
-  @ManyToMany(() => Course, (course) => course.users)
-  @Field(() => [Course], {
+  @ManyToMany(
+    () => require('../../course/entities/course.entity').Course,
+    (course: Course) => course.users
+  )
+  @Field(() => [require('../../course/entities/course.entity').Course], {
     nullable: true,
     description: 'Many-to-many relationship with course table',
   })

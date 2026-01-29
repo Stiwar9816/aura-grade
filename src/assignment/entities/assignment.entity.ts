@@ -16,6 +16,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { User } from 'src/user/entities/user.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
+import { Course } from 'src/course/entities/course.entity';
 
 @Entity({ name: 'assignments' })
 @ObjectType()
@@ -78,6 +79,15 @@ export class Assignment {
   @JoinColumn({ name: 'user_id' })
   @Field(() => require('../../user/entities/user.entity').User)
   user: User;
+
+  @ManyToOne(
+    () => require('../../course/entities/course.entity').Course,
+    (course: Course) => course.assignments,
+    { nullable: false }
+  )
+  @JoinColumn({ name: 'course_id' })
+  @Field(() => require('../../course/entities/course.entity').Course)
+  course: Course;
 
   @ManyToOne(() => require('../../rubric/entities/rubric.entity').Rubric, { nullable: false })
   @JoinColumn({ name: 'rubric_id' })

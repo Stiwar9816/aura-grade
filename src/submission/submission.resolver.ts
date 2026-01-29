@@ -40,7 +40,12 @@ export class SubmissionResolver {
   findAll(
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Submission[]> {
-    return this.submissionService.findAll();
+    // Administradores ven todas las entregas
+    if (user.role === UserRoles.Administrador) {
+      return this.submissionService.findAll();
+    }
+    // Docentes y estudiantes solo ven entregas de sus tareas
+    return this.submissionService.findAllByTeacher(user.id);
   }
 
   @Query(() => Submission, { name: 'submission' })

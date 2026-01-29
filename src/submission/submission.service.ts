@@ -87,14 +87,26 @@ export class SubmissionService {
 
   async findAll(): Promise<Submission[]> {
     return await this.submissionRepository.find({
-      relations: ['student', 'assignment'],
+      relations: [
+        'assignment.course.user',
+        'assignment.course',
+        'assignment.rubric',
+        'assignment',
+        'student',
+      ],
     });
   }
 
   async findOne(id: string): Promise<Submission> {
     const submission = await this.submissionRepository.findOne({
       where: { id },
-      relations: ['student', 'assignment', 'assignment.rubric'],
+      relations: [
+        'assignment.course.user',
+        'assignment.course',
+        'assignment.rubric',
+        'assignment',
+        'student',
+      ],
     });
 
     if (!submission) throw new NotFoundException(`Submission with id ${id} not found`);
@@ -118,5 +130,24 @@ export class SubmissionService {
     const submission = await this.findOne(id);
     await this.submissionRepository.remove(submission);
     return { ...submission, id };
+  }
+
+  async findAllByTeacher(teacherId: string): Promise<Submission[]> {
+    return await this.submissionRepository.find({
+      where: {
+        assignment: {
+          course: {
+            user: { id: teacherId },
+          },
+        },
+      },
+      relations: [
+        'assignment.course.user',
+        'assignment.course',
+        'assignment.rubric',
+        'assignment',
+        'student',
+      ],
+    });
   }
 }

@@ -18,7 +18,11 @@ export class CourseService {
   ) {}
 
   async create(createCourseInput: CreateCourseInput): Promise<Course> {
-    const course = this.courseRepository.create(createCourseInput);
+    const { userId, ...courseData } = createCourseInput;
+    const course = this.courseRepository.create({
+      ...courseData,
+      user: { id: userId } as User,
+    });
     return await this.courseRepository.save(course);
   }
 

@@ -2,13 +2,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type Course {
-  id: String!
-  course_name: String!
-  code_course: String!
-  users: [User!]
-}
-
 type Rubric {
   id: String!
 
@@ -75,6 +68,15 @@ enum UserRoles {
   Docente
 }
 
+type Course {
+  id: String!
+  course_name: String!
+  code_course: String!
+  user: User!
+  users: [User!]
+  assignments: [Assignment!]
+}
+
 type CriterionLevel {
   score: Int!
   description: String!
@@ -107,6 +109,7 @@ type Assignment {
   isActive: Boolean!
   createdAt: DateTime!
   user: User!
+  course: Course!
   rubric: Rubric!
   submissions: [Submission!]
 }
@@ -269,6 +272,9 @@ input CreateCourseInput {
 
   """Code of the course"""
   code_course: String!
+
+  """ID of the teacher/professor who created the course"""
+  userId: String!
 }
 
 input UpdateCourseInput {
@@ -277,6 +283,9 @@ input UpdateCourseInput {
 
   """Code of the course"""
   code_course: String
+
+  """ID of the teacher/professor who created the course"""
+  userId: String
 
   """Id automatically generated in uuid format"""
   id: ID!
@@ -357,6 +366,9 @@ input CreateAssignmentInput {
   """Rubric ID"""
   rubricId: ID!
 
+  """Course ID"""
+  courseId: ID!
+
   """Teacher ID"""
   userId: ID!
   isActive: Boolean = true
@@ -374,6 +386,9 @@ input UpdateAssignmentInput {
 
   """Rubric ID"""
   rubricId: ID
+
+  """Course ID"""
+  courseId: ID
 
   """Teacher ID"""
   userId: ID

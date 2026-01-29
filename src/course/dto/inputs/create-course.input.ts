@@ -18,4 +18,11 @@ export class CreateCourseInput {
     description: 'Code of the course',
   })
   code_course: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Field(() => String, {
+    description: 'ID of the teacher/professor who created the course',
+  })
+  userId: string;
 }
