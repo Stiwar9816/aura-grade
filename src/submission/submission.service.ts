@@ -93,6 +93,7 @@ export class SubmissionService {
         'assignment.rubric',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
   }
@@ -106,6 +107,7 @@ export class SubmissionService {
         'assignment.rubric',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
 
@@ -147,6 +149,7 @@ export class SubmissionService {
         'assignment.rubric',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
   }
