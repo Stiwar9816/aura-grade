@@ -52,14 +52,26 @@ export class UserService {
       where: {
         role: In(allowedRoles),
       },
-      relations: ['courses'],
+      relations: [
+        'courses',
+        'submissions',
+        'submissions.evaluation',
+        'submissions.assignment',
+        'submissions.assignment.rubric',
+      ],
     });
   }
 
   async findOneById(id: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { id },
-      relations: ['courses'],
+      relations: [
+        'courses',
+        'submissions',
+        'submissions.evaluation',
+        'submissions.assignment',
+        'submissions.assignment.rubric',
+      ],
     });
     if (!user) throw new NotFoundException(`${id} not found`);
     return user;

@@ -91,8 +91,10 @@ export class SubmissionService {
         'assignment.course.user',
         'assignment.course',
         'assignment.rubric',
+        'assignment.rubric.criteria',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
   }
@@ -104,8 +106,10 @@ export class SubmissionService {
         'assignment.course.user',
         'assignment.course',
         'assignment.rubric',
+        'assignment.rubric.criteria',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
 
@@ -147,6 +151,7 @@ export class SubmissionService {
         'assignment.rubric',
         'assignment',
         'student',
+        'evaluation',
       ],
     });
   }
