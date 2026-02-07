@@ -3,13 +3,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
   JoinTable,
   ManyToMany,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { User } from 'src/user/entities/user.entity';
+import type { User } from 'src/user/entities/user.entity';
+import type { Assignment } from 'src/assignment/entities/assignment.entity';
 
 @Entity({ name: 'courses' })
 @ObjectType()
@@ -41,15 +45,31 @@ export class Course {
   @Field(() => String)
   code_course: string;
 
-  // Relations - Many-to-Many with User
-  @ManyToMany(() => User, (user) => user.courses)
+  // Relations - Many-to-One with User (Profesor creador del curso)
+  @ManyToOne(() => require('../../user/entities/user.entity').User, { nullable: false })
+  @JoinColumn({ name: 'user_id' })
+  @Field(() => require('../../user/entities/user.entity').User)
+  user: User;
+
+  // Relations - Many-to-Many with User (Estudiantes del curso)
+  @ManyToMany(() => require('../../user/entities/user.entity').User, (user: User) => user.courses)
   @JoinTable({
     name: 'course_users', // Nombre de la tabla intermedia
     joinColumn: { name: 'courseId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'userId', referencedColumnName: 'id' },
   })
-  @Field(() => [User], { nullable: true })
+  @Field(() => [require('../../user/entities/user.entity').User], { nullable: true })
   users?: User[];
+
+  // Relations - One-to-Many with Assignment
+  @OneToMany(
+    () => require('../../assignment/entities/assignment.entity').Assignment,
+    (assignment: Assignment) => assignment.course
+  )
+  @Field(() => [require('../../assignment/entities/assignment.entity').Assignment], {
+    nullable: true,
+  })
+  assignments?: Assignment[];
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;

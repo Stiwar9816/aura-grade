@@ -11,9 +11,10 @@ import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
+import { Course } from 'src/course/entities/course.entity';
 
 @Module({
   providers: [SeedService, SeedResolver],
-  imports: [TypeOrmModule.forFeature([User, Rubric, Assignment, Submission, Evaluation])],
+  imports: [TypeOrmModule.forFeature([User, Rubric, Assignment, Submission, Evaluation, Course])],
 })
 export class SeedModule {}

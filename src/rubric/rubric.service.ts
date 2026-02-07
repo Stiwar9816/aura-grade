@@ -54,11 +54,14 @@ export class RubricService {
   }
 
   async findAll(): Promise<Rubric[]> {
-    return await this.rubricRepository.find({ relations: ['users'] });
+    return await this.rubricRepository.find({ relations: ['user', 'criteria'] });
   }
 
   async findOne(id: string): Promise<Rubric> {
-    return await this.rubricRepository.findOneOrFail({ where: { id }, relations: ['users'] });
+    return await this.rubricRepository.findOneOrFail({
+      where: { id },
+      relations: ['user', 'criteria'],
+    });
   }
 
   async update(id: string, updateRubricInput: UpdateRubricInput): Promise<Rubric> {
@@ -67,7 +70,7 @@ export class RubricService {
     // 1. Buscamos la rúbrica existente con sus criterios
     const rubric = await this.rubricRepository.findOne({
       where: { id },
-      relations: ['criteria'],
+      relations: ['user', 'criteria'],
     });
 
     if (!rubric) throw new NotFoundException(`Rubric with id ${id} not found`);

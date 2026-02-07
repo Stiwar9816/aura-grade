@@ -39,6 +39,14 @@ export class Rubric {
   title: string;
 
   @ApiProperty({
+    example: 'Description of the rubric',
+    description: 'Description of the rubric',
+  })
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { description: 'Description of the rubric', nullable: true })
+  description?: string;
+
+  @ApiProperty({
     example: '5.00',
     description: 'Max Total score',
   })
@@ -52,9 +60,11 @@ export class Rubric {
   maxTotalScore: number;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
+  @Field(() => Date, { description: 'Creation date of the rubric' })
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp with time zone' })
+  @Field(() => Date, { description: 'Last update date of the rubric' })
   updatedAt: Date;
 
   // Relations - Many-to-Many with User

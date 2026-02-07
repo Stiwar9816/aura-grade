@@ -2,24 +2,31 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type Course {
-  id: String!
-  course_name: String!
-  code_course: String!
-  users: [User!]
-}
-
 type Rubric {
   id: String!
 
   """Title of the rubric"""
   title: String!
 
+  """Description of the rubric"""
+  description: String
+
   """Maximum score possible"""
   maxTotalScore: Float!
+
+  """Creation date of the rubric"""
+  createdAt: DateTime!
+
+  """Last update date of the rubric"""
+  updatedAt: DateTime!
   user: User!
   criteria: [Criterion!]!
 }
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
 
 type User {
   id: String!
@@ -61,6 +68,15 @@ enum UserRoles {
   Docente
 }
 
+type Course {
+  id: String!
+  course_name: String!
+  code_course: String!
+  user: User!
+  users: [User!]
+  assignments: [Assignment!]
+}
+
 type CriterionLevel {
   score: Int!
   description: String!
@@ -93,14 +109,10 @@ type Assignment {
   isActive: Boolean!
   createdAt: DateTime!
   user: User!
+  course: Course!
   rubric: Rubric!
   submissions: [Submission!]
 }
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
 
 type Submission {
   """Submission ID"""
@@ -260,6 +272,9 @@ input CreateCourseInput {
 
   """Code of the course"""
   code_course: String!
+
+  """ID of the teacher/professor who created the course"""
+  userId: String!
 }
 
 input UpdateCourseInput {
@@ -269,13 +284,20 @@ input UpdateCourseInput {
   """Code of the course"""
   code_course: String
 
+  """ID of the teacher/professor who created the course"""
+  userId: String
+
   """Id automatically generated in uuid format"""
   id: ID!
+  studentsIds: [ID!]
 }
 
 input CreateRubricInput {
   """Title of the rubric"""
   title: String!
+
+  """Description of the rubric"""
+  description: String
 
   """Max total score of the rubric"""
   maxTotalScore: Float!
@@ -296,6 +318,9 @@ input CreateCriterionInput {
 
   """Criterion levels"""
   levels: [CreateCriterionLevelsInput!]!
+
+  """Rubric ID"""
+  rubric: String!
 }
 
 input CreateCriterionLevelsInput {
@@ -309,6 +334,9 @@ input CreateCriterionLevelsInput {
 input UpdateRubricInput {
   """Title of the rubric"""
   title: String
+
+  """Description of the rubric"""
+  description: String
 
   """Max total score of the rubric"""
   maxTotalScore: Float
@@ -338,6 +366,9 @@ input CreateAssignmentInput {
   """Rubric ID"""
   rubricId: ID!
 
+  """Course ID"""
+  courseId: ID!
+
   """Teacher ID"""
   userId: ID!
   isActive: Boolean = true
@@ -355,6 +386,9 @@ input UpdateAssignmentInput {
 
   """Rubric ID"""
   rubricId: ID
+
+  """Course ID"""
+  courseId: ID
 
   """Teacher ID"""
   userId: ID
@@ -405,6 +439,9 @@ input UpdateCriterionInput {
 
   """Criterion levels"""
   levels: [CreateCriterionLevelsInput!]
+
+  """Rubric ID"""
+  rubric: String
 
   """
   Id automatically generated in uuid format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4

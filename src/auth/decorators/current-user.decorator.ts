@@ -48,4 +48,6 @@ export const CurrentUser = createParamDecorator((role: UserRoles[], ctx: Executi
   if (role && !role.includes(user.role)) {
     throw new ForbiddenException(`User ${user.name} ${user.last_name} You do not have permission`);
   }
+
+  return user;
 });

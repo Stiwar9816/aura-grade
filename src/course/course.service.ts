@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 // TypeORM
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 // Dto
 import { CreateCourseInput, UpdateCourseInput } from './dto';
@@ -12,11 +12,17 @@ import { User } from 'src/user/entities/user.entity';
 export class CourseService {
   constructor(
     @InjectRepository(Course)
-    private readonly courseRepository: Repository<Course>
+    private readonly courseRepository: Repository<Course>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>
   ) {}
 
   async create(createCourseInput: CreateCourseInput): Promise<Course> {
-    const course = this.courseRepository.create(createCourseInput);
+    const { userId, ...courseData } = createCourseInput;
+    const course = this.courseRepository.create({
+      ...courseData,
+      user: { id: userId } as User,
+    });
     return await this.courseRepository.save(course);
   }
 
@@ -33,12 +39,18 @@ export class CourseService {
   }
 
   async update(id: string, updateCourseInput: UpdateCourseInput): Promise<Course> {
+    const { studentsIds, ...toUpdate } = updateCourseInput;
+
     const course = await this.courseRepository.preload({
       id,
-      ...updateCourseInput,
+      ...toUpdate,
     });
 
     if (!course) throw new NotFoundException(`Course with id ${id} not found`);
+
+    if (studentsIds) {
+      course.users = await this.userRepository.findBy({ id: In(studentsIds) });
+    }
 
     return await this.courseRepository.save(course);
   }

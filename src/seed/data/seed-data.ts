@@ -5,6 +5,7 @@ export const SEED_DATA: SeedData = {
   rubrics: [
     {
       title: 'Rúbrica de Ensayo Académico',
+      description: 'Rúbrica para evaluar ensayos académicos',
       maxTotalScore: 15, // 5 + 5 + 5
       criteria: [
         {
@@ -38,6 +39,7 @@ export const SEED_DATA: SeedData = {
     },
     {
       title: 'Rúbrica de Proyecto de Software',
+      description: 'Rúbrica para evaluar proyectos de software',
       maxTotalScore: 15,
       criteria: [
         {
