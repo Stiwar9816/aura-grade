@@ -31,7 +31,9 @@ export class CourseResolver {
 
   @Query(() => [Course], { name: 'courses' })
   @UseGuards(JwtAuthGuard)
-  findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
+  findAll(
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
+  ) {
     return this.courseService.findAll(user);
   }
 
@@ -39,7 +41,7 @@ export class CourseResolver {
   @UseGuards(JwtAuthGuard)
   findOne(
     @Args('id', { type: () => String }) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
     return this.courseService.findOne(id);
   }

@@ -32,7 +32,7 @@ export class SubmissionResolver {
     @Args('file', { type: () => GraphQLUpload }) file: FileUpload,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Submission> {
-    return this.submissionService.create(file, createSubmissionInput);
+    return this.submissionService.create(file, createSubmissionInput, user);
   }
 
   @Query(() => [Submission], { name: 'submissions' })
@@ -44,8 +44,11 @@ export class SubmissionResolver {
     if (user.role === UserRoles.Administrador) {
       return this.submissionService.findAll();
     }
-    // Docentes y estudiantes solo ven entregas de sus tareas
-    return this.submissionService.findAllByTeacher(user.id);
+    if (user.role === UserRoles.Docente) {
+      return this.submissionService.findAllByTeacher(user.id);
+    }
+
+    return this.submissionService.findAllByStudent(user.id);
   }
 
   @Query(() => Submission, { name: 'submission' })

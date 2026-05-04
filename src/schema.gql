@@ -405,7 +405,7 @@ input CreateSubmissionInput {
   assignmentId: ID!
 
   """ID of the student"""
-  studentId: ID!
+  studentId: ID
 }
 
 """The `Upload` scalar type represents a file upload."""

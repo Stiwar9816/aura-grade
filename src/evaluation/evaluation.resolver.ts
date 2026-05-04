@@ -34,7 +34,15 @@ export class EvaluationResolver {
   findAll(
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Evaluation[]> {
-    return this.evaluationService.findAll();
+    if (user.role === UserRoles.Administrador) {
+      return this.evaluationService.findAll();
+    }
+
+    if (user.role === UserRoles.Docente) {
+      return this.evaluationService.findAllByTeacher(user.id);
+    }
+
+    return this.evaluationService.findAllByStudent(user.id);
   }
 
   @Query(() => Evaluation, { name: 'Evaluation' })

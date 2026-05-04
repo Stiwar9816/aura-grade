@@ -54,7 +54,14 @@ async function bootstrap() {
     preflightContinue: false,
     optionsSuccessStatus: 204,
     credentials: true,
-    allowedHeaders: 'Content-Type, Authorization, X-Requested-With',
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Apollo-Require-Preflight',
+      'apollo-require-preflight',
+      'X-Apollo-Operation-Name',
+    ],
   });
 
   const config = new DocumentBuilder()

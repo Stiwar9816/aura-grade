@@ -14,6 +14,17 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @Injectable()
 export class EvaluationService {
+  private readonly evaluationRelations = [
+    'submission',
+    'submission.student',
+    'submission.assignment',
+    'submission.assignment.user',
+    'submission.assignment.course',
+    'submission.assignment.course.user',
+    'submission.assignment.rubric',
+    'submission.assignment.rubric.criteria',
+  ];
+
   constructor(
     @InjectRepository(Evaluation)
     private readonly evaluationRepository: Repository<Evaluation>,
@@ -83,14 +94,49 @@ export class EvaluationService {
 
   async findAll(): Promise<Evaluation[]> {
     return await this.evaluationRepository.find({
-      relations: ['submission'],
+      relations: this.evaluationRelations,
+    });
+  }
+
+  async findAllByTeacher(teacherId: string): Promise<Evaluation[]> {
+    return await this.evaluationRepository.find({
+      where: [
+        {
+          submission: {
+            assignment: {
+              user: { id: teacherId },
+            },
+          },
+        },
+        {
+          submission: {
+            assignment: {
+              course: {
+                user: { id: teacherId },
+              },
+            },
+          },
+        },
+      ],
+      relations: this.evaluationRelations,
+    });
+  }
+
+  async findAllByStudent(studentId: string): Promise<Evaluation[]> {
+    return await this.evaluationRepository.find({
+      where: {
+        submission: {
+          student: { id: studentId },
+        },
+      },
+      relations: this.evaluationRelations,
     });
   }
 
   async findOne(id: string): Promise<Evaluation> {
     const evaluation = await this.evaluationRepository.findOne({
       where: { id },
-      relations: ['submission', 'submission.student'], // Traemos datos del estudiante para el reporte
+      relations: this.evaluationRelations,
     });
 
     if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
@@ -100,7 +146,7 @@ export class EvaluationService {
   async findBySubmission(submissionId: string): Promise<Evaluation> {
     const evaluation = await this.evaluationRepository.findOne({
       where: { submission: { id: submissionId } },
-      relations: ['submission'],
+      relations: this.evaluationRelations,
     });
     if (!evaluation) throw new NotFoundException('Evaluation not found for this submission');
     return evaluation;

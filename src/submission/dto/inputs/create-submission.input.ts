@@ -15,7 +15,8 @@ export class CreateSubmissionInput {
   @IsUUID('4')
   assignmentId: string;
 
-  @Field(() => ID, { description: 'ID of the student' })
+  @Field(() => ID, { nullable: true, description: 'ID of the student' })
   @IsUUID('4')
-  studentId: string;
+  @IsOptional()
+  studentId?: string;
 }
