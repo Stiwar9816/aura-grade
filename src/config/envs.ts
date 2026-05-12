@@ -33,8 +33,17 @@ const envsSchema = joi
       then: joi.required(),
       otherwise: joi.optional(),
     }),
-    REDIS_HOST: joi.string().required(),
-    REDIS_PORT: joi.number().required(),
+    REDIS_URL: joi.string().uri({ scheme: ['redis', 'rediss'] }).optional(),
+    REDIS_HOST: joi.when('REDIS_URL', {
+      is: joi.exist(),
+      then: joi.string().optional(),
+      otherwise: joi.string().required(),
+    }),
+    REDIS_PORT: joi.when('REDIS_URL', {
+      is: joi.exist(),
+      then: joi.number().optional(),
+      otherwise: joi.number().required(),
+    }),
     BASIC_AUTH_PASSWORD: joi.string().required(),
   })
   .unknown(true);
@@ -66,6 +75,7 @@ export const envs = {
   ai_provider: envVars.AI_PROVIDER,
   gemini_api_key: envVars.GEMINI_API_KEY,
   openai_api_key: envVars.OPENAI_API_KEY,
+  redis_url: envVars.REDIS_URL,
   redis_host: envVars.REDIS_HOST,
   redis_port: envVars.REDIS_PORT,
   basic_auth_password: envVars.BASIC_AUTH_PASSWORD,
