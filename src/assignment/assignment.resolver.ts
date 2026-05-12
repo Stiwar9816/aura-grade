@@ -30,7 +30,9 @@ export class AssignmentResolver {
 
   @Query(() => [Assignment], { name: 'assignments' })
   @UseGuards(JwtAuthGuard)
-  findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
+  findAll(
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
+  ) {
     return this.assignmentService.findAll();
   }
 
@@ -38,7 +40,7 @@ export class AssignmentResolver {
   @UseGuards(JwtAuthGuard)
   findOne(
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
     return this.assignmentService.findOne(id);
   }

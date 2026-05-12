@@ -14,6 +14,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { GraphQLJSON } from 'graphql-type-json';
 // Entities
 import type { Submission } from 'src/submission/entities/submission.entity';
+import type { ReEvaluationRequest } from 'src/reevaluation/entities/reevaluation-request.entity';
 // Enums
 import { EvaluationStatus } from 'src/enums';
 
@@ -92,4 +93,16 @@ export class Evaluation {
   @JoinColumn({ name: 'submission_id' })
   @Field(() => require('../../submission/entities/submission.entity').Submission)
   submission: Submission;
+
+  @OneToOne(
+    () => require('../../reevaluation/entities/reevaluation-request.entity').ReEvaluationRequest,
+    (reevaluationRequest: ReEvaluationRequest) => reevaluationRequest.evaluation
+  )
+  @Field(
+    () => require('../../reevaluation/entities/reevaluation-request.entity').ReEvaluationRequest,
+    {
+      nullable: true,
+    }
+  )
+  reevaluationRequest?: ReEvaluationRequest;
 }

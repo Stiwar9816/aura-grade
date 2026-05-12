@@ -11,14 +11,29 @@ import { Submission } from './entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 // Enums
 import { SubmissionStatus } from 'src/enums';
+import { UserRoles } from 'src/auth/enums';
 // FileUpload
 import { FileUpload } from 'graphql-upload-ts';
 // Cloudinary
 import { v2 as cloudinary } from 'cloudinary';
+import { User } from 'src/user/entities/user.entity';
 
 @Injectable()
 export class SubmissionService {
   private readonly logger = new Logger('SubmissionService');
+  private readonly submissionRelations = [
+    'assignment',
+    'assignment.user',
+    'assignment.course',
+    'assignment.course.user',
+    'assignment.rubric',
+    'assignment.rubric.criteria',
+    'student',
+    'evaluation',
+    'evaluation.reevaluationRequest',
+    'evaluation.reevaluationRequest.student',
+    'evaluation.reevaluationRequest.teacher',
+  ];
 
   constructor(
     @InjectRepository(Submission)
@@ -30,11 +45,16 @@ export class SubmissionService {
 
   async create(
     file: FileUpload,
-    createSubmissionInput: CreateSubmissionInput
+    createSubmissionInput: CreateSubmissionInput,
+    user: User
   ): Promise<Submission> {
     const { createReadStream, filename } = file;
     const { assignmentId, studentId, ...submissionData } = createSubmissionInput;
-
+    const effectiveStudentId =
+      user.role === UserRoles.Estudiante ? user.id : (studentId ?? user.id);
+    if (!effectiveStudentId) {
+      throw new BadRequestException('Student id is required');
+    }
     // 1. Validaciones previas
     const assignment = await this.assignmentRepository.findOneBy({ id: assignmentId });
     if (!assignment) throw new NotFoundException(`Assignment with id ${assignmentId} not found`);
@@ -69,7 +89,7 @@ export class SubmissionService {
       ...submissionData,
       fileUrl: cloudinaryResponse.secure_url, // URL pública de Cloudinary
       assignment: { id: assignmentId },
-      student: { id: studentId },
+      student: { id: effectiveStudentId },
       status: SubmissionStatus.PENDING,
     });
 
@@ -87,30 +107,14 @@ export class SubmissionService {
 
   async findAll(): Promise<Submission[]> {
     return await this.submissionRepository.find({
-      relations: [
-        'assignment.course.user',
-        'assignment.course',
-        'assignment.rubric',
-        'assignment.rubric.criteria',
-        'assignment',
-        'student',
-        'evaluation',
-      ],
+      relations: this.submissionRelations,
     });
   }
 
   async findOne(id: string): Promise<Submission> {
     const submission = await this.submissionRepository.findOne({
       where: { id },
-      relations: [
-        'assignment.course.user',
-        'assignment.course',
-        'assignment.rubric',
-        'assignment.rubric.criteria',
-        'assignment',
-        'student',
-        'evaluation',
-      ],
+      relations: this.submissionRelations,
     });
 
     if (!submission) throw new NotFoundException(`Submission with id ${id} not found`);
@@ -138,21 +142,30 @@ export class SubmissionService {
 
   async findAllByTeacher(teacherId: string): Promise<Submission[]> {
     return await this.submissionRepository.find({
-      where: {
-        assignment: {
-          course: {
+      where: [
+        {
+          assignment: {
             user: { id: teacherId },
           },
         },
-      },
-      relations: [
-        'assignment.course.user',
-        'assignment.course',
-        'assignment.rubric',
-        'assignment',
-        'student',
-        'evaluation',
+        {
+          assignment: {
+            course: {
+              user: { id: teacherId },
+            },
+          },
+        },
       ],
+      relations: this.submissionRelations,
+    });
+  }
+
+  async findAllByStudent(studentId: string): Promise<Submission[]> {
+    return await this.submissionRepository.find({
+      where: {
+        student: { id: studentId },
+      },
+      relations: this.submissionRelations,
     });
   }
 }

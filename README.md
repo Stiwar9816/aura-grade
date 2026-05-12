@@ -1,23 +1,5 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
+  <a href="http://nestjs.com/" target="blank"><img src="https://res.cloudinary.com/dwtf5ftav/image/upload/v1778560040/1_ujpdg5.png" width="500" alt="AuraGrade Logo" /></a>
 </p>
 
 # 🚀 AuraGrade - NestJS (Clasificación asistida por IA)
@@ -60,11 +42,17 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - **Validación de Entorno**: Esquemas de validación con Joi para asegurar que la App no arranque con variables faltantes.
 - **Docker Hardening**: Imagen basada en Alpine (Node 22 LTS), Multi-stage builds y ejecución segura con usuario no-root.
 
+### ⚙️ Procesamiento Asíncrono y Colas
+
+- **BullMQ**: Procesamiento asíncrono en segundo plano para tareas pesadas como las evaluaciones con IA.
+- **Bull Board**: Panel de control interactivo para monitorizar el estado de los trabajos (jobs) en tiempo real.
+
 ### 🔐 Autenticación y Autorización
 
 - ✅ Registro, Login y Recuperación de contraseña (JWT & Emails).
 - ✅ Roles (Administrador, Docente, Estudiante).
 - ✅ Guards y Decoradores personalizados.
+- ✅ Basic Auth para proteger el panel de monitoreo de Bull Board.
 
 ### 👥 Gestión de Usuarios
 
@@ -98,7 +86,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - pnpm >= 10.x
 - Docker & Docker Compose (para DB y Redis)
 - Cuenta en Cloudinary
-- Servidor de correo electrónico (SMTP)
+- Cuenta y API key de Resend
 - API Key de OpenAI o Gemini
 
 ## 🚀 Instalación y Configuración
@@ -127,10 +115,11 @@ DB_PASSWORD=secret
 JWT_SECRET=super-secret-key
 
 # Mail
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USER=tu-email@gmail.com
-MAIL_PASSWORD=tu-app-password
+MAIL_FROM="Aura Grade <noreply@tu-dominio-verificado.com>"
+RESEND_API_KEY=re_tu_api_key
+RESEND_CONFIRMATION_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_UPDATE_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_RESET_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
 
 # Cloudinary (Archivos)
 CLOUDINARY_NAME=tu-cloud-name
@@ -150,9 +139,13 @@ AI_PROVIDER=gemini|openai
 REDIS_HOST=redis
 REDIS_PORT=6379
 
+# Seguridad (Bull Board Monitoring)
+BASIC_AUTH_PASSWORD=tu-password-seguro
+
 # App
+APP_NAME='Aura Grade'
 PORT=3000
-FRONTEND_URL=http://localhost:4200
+FRONTEND_URL=http://localhost:3000
 ```
 
 ### 3. Iniciar Servicios (Docker)
@@ -320,7 +313,7 @@ src/
 - **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
 - **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**
 - **Testing**: **[Jest](https://jestjs.io/)**
-- **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
+- **Mail**: **[Resend](https://resend.com/)**
 - **WebSockets**: **[Socket.io](https://socket.io/)**
 - **BullMQ**: **[BullMQ](https://docs.bullmq.io/)**
 

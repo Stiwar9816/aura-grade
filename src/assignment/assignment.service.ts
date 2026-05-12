@@ -28,18 +28,38 @@ export class AssignmentService {
   }
 
   async findAll(): Promise<Assignment[]> {
-    return await this.assignmentRepository.find({
-      relations: ['rubric', 'user', 'course'],
-      where: { isActive: true }, // Opcional: solo traer activas por defecto
+    return this.assignmentRepository.find({
+      where: { isActive: true },
+      relations: [
+        'rubric',
+        'rubric.criteria',
+        'user',
+        'course',
+        'submissions',
+        'submissions.student',
+        'submissions.evaluation',
+      ],
     });
   }
 
   async findOne(id: string): Promise<Assignment> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id },
-      relations: ['rubric', 'user', 'course', 'rubric.criteria'], // Cargamos todo para la IA
+      relations: [
+        'rubric',
+        'rubric.criteria',
+        'user',
+        'course',
+        'submissions',
+        'submissions.student',
+        'submissions.evaluation',
+      ],
     });
-    if (!assignment) throw new BadRequestException(`Assignment with id ${id} not found`);
+
+    if (!assignment) {
+      throw new BadRequestException(`Assignment with id ${id} not found`);
+    }
+
     return assignment;
   }
 

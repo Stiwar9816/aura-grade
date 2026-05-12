@@ -35,6 +35,7 @@ import { ExtractorModule } from './extractor/extractor.module';
 import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
+import { ReEvaluationModule } from './reevaluation/reevaluation.module';
 // Config
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
@@ -50,11 +51,11 @@ import { dataSourceOptions } from './config/datasource.config';
         ttl: 60000,
         limit: 100,
       },
-      {
-        name: 'submission',
-        ttl: 3600000, // 1 hora
-        limit: 100,
-      },
+      // {
+      //   name: 'submission',
+      //   ttl: 3600000, // 1 hora
+      //   limit: 100,
+      // },
     ]),
     // Redis Caching
     CacheModule.registerAsync({
@@ -114,6 +115,7 @@ import { dataSourceOptions } from './config/datasource.config';
     ExtractorModule,
     AiModule,
     NotificationsModule,
+    ReEvaluationModule,
     SeedModule,
     HealthModule,
   ],
