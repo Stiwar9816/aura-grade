@@ -4,6 +4,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -43,7 +44,11 @@ export class UserService {
     await this.mailService.sendUpdatePassword(user, plainPassword);
     // Encrypt password
     user.password = bcrypt.hashSync(user.password, 10);
-    return this.userRepository.save(user);
+    try {
+      return await this.userRepository.save(user);
+    } catch (error) {
+      this.handleDBException(error);
+    }
   }
 
   async findAll(user: User): Promise<User[]> {
@@ -142,5 +147,11 @@ export class UserService {
     user.courses = courses;
 
     return await this.userRepository.save(user);
+  }
+
+  private handleDBException(error: any): never {
+    if (error.code === '23505') throw new BadRequestException(error.detail);
+
+    throw new InternalServerErrorException('Unexpected error, check server logs');
   }
 }

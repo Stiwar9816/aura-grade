@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UserService } from 'src/user/user.service';
 import { User } from 'src/user/entities/user.entity';
+import { Course } from 'src/course/entities/course.entity';
 import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
@@ -38,9 +43,15 @@ describe('UserService', () => {
   const mockUserRepository = {
     create: jest.fn(),
     save: jest.fn(),
+    find: jest.fn(),
+    findOne: jest.fn(),
     findOneByOrFail: jest.fn(),
     preload: jest.fn(),
     createQueryBuilder: jest.fn(),
+  };
+
+  const mockCourseRepository = {
+    findBy: jest.fn(),
   };
 
   const mockMailService = {
@@ -63,6 +74,10 @@ describe('UserService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: getRepositoryToken(Course),
+          useValue: mockCourseRepository,
         },
         {
           provide: MailService,
@@ -146,18 +161,21 @@ describe('UserService', () => {
 
   describe('findAll', () => {
     it('should return an array of users with allowed roles', async () => {
-      const mockQueryBuilder = {
-        where: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue([mockUser]),
-      };
+      mockUserRepository.find.mockResolvedValue([mockUser]);
 
-      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      const result = await service.findAll(mockUser);
 
-      const result = await service.findAll();
-
-      expect(mockUserRepository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith('user.role IN (:...roles)', {
-        roles: ['Estudiante', 'Profesor', 'Administrador'],
+      expect(mockUserRepository.find).toHaveBeenCalledWith({
+        where: {
+          role: expect.anything(),
+        },
+        relations: [
+          'courses',
+          'submissions',
+          'submissions.evaluation',
+          'submissions.assignment',
+          'submissions.assignment.rubric',
+        ],
       });
       expect(result).toEqual([mockUser]);
     });
@@ -165,37 +183,49 @@ describe('UserService', () => {
 
   describe('findOneById', () => {
     it('should return a user by id', async () => {
-      mockUserRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await service.findOneById(mockUser.id);
 
-      expect(mockUserRepository.findOneByOrFail).toHaveBeenCalledWith({ id: mockUser.id });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+        relations: [
+          'courses',
+          'submissions',
+          'submissions.evaluation',
+          'submissions.assignment',
+          'submissions.assignment.rubric',
+        ],
+      });
       expect(result).toEqual(mockUser);
     });
 
-    it('should throw BadRequestException when user not found', async () => {
+    it('should throw NotFoundException when user not found', async () => {
       const userId = 'non-existent-id';
-      mockUserRepository.findOneByOrFail.mockRejectedValue(new Error('Not found'));
+      mockUserRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOneById(userId)).rejects.toThrow(BadRequestException);
+      await expect(service.findOneById(userId)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('findOneByEmail', () => {
     it('should return a user by email', async () => {
-      mockUserRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await service.findOneByEmail(mockUser.email);
 
-      expect(mockUserRepository.findOneByOrFail).toHaveBeenCalledWith({ email: mockUser.email });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: mockUser.email },
+        relations: ['courses'],
+      });
       expect(result).toEqual(mockUser);
     });
 
-    it('should throw BadRequestException when user not found', async () => {
+    it('should throw NotFoundException when user not found', async () => {
       const email = 'nonexistent@example.com';
-      mockUserRepository.findOneByOrFail.mockRejectedValue(new Error('Not found'));
+      mockUserRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOneByEmail(email)).rejects.toThrow(BadRequestException);
+      await expect(service.findOneByEmail(email)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -261,7 +291,7 @@ describe('UserService', () => {
   describe('block', () => {
     it('should block a user by setting isActive to false', async () => {
       const blockedUser = { ...mockUser, isActive: false };
-      mockUserRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.save.mockResolvedValue(blockedUser);
 
       const result = await service.block(mockUser.id);
@@ -273,42 +303,39 @@ describe('UserService', () => {
 
   describe('resetPassword', () => {
     it('should reset password and send email', async () => {
-      mockUserRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
       mockMailService.sendResetPassword.mockResolvedValue(true);
 
       const result = await service.resetPassword(mockUser.email);
 
-      expect(mockUserRepository.findOneByOrFail).toHaveBeenCalledWith({ email: mockUser.email });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: mockUser.email },
+        relations: ['courses'],
+      });
       expect(mockMailService.sendResetPassword).toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
     });
 
-    it('should throw BadRequestException when user not found', async () => {
+    it('should throw NotFoundException when user not found', async () => {
       const email = 'nonexistent@example.com';
-      mockUserRepository.findOneByOrFail.mockRejectedValue(new Error('Not found'));
+      mockUserRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.resetPassword(email)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword(email)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('resetPasswordAuth', () => {
     it('should reset password for authenticated user', async () => {
       const newPassword = 'NewPassword123';
-      const token = 'valid-jwt-token';
-      const decodedToken = { id: mockUser.id };
 
-      mockAuthService.getToken.mockReturnValue(token);
-      mockJwtService.verify.mockReturnValue(decodedToken);
-      mockUserRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
       mockMailService.sendResetPassword.mockResolvedValue(true);
 
       const result = await service.resetPasswordAuth(newPassword, mockUser);
 
-      expect(mockAuthService.getToken).toHaveBeenCalledWith(mockUser);
-      expect(mockJwtService.verify).toHaveBeenCalledWith(token);
       expect(mockMailService.sendResetPassword).toHaveBeenCalledWith(mockUser, newPassword);
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);

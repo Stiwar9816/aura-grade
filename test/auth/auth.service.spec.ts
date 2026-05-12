@@ -50,6 +50,16 @@ describe('AuthService', () => {
     sign: jest.fn(),
   };
 
+  const mockPayload = () => ({
+    id: mockUser.id,
+    email: mockUser.email,
+    name: mockUser.name,
+    last_name: mockUser.last_name,
+    role: mockUser.role,
+    phone: mockUser.phone,
+    document_num: mockUser.document_num,
+  });
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,13 +93,7 @@ describe('AuthService', () => {
 
   describe('getToken', () => {
     it('should generate a JWT token', () => {
-      const payload = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        last_name: mockUser.last_name,
-        role: mockUser.role,
-      };
+      const payload = mockPayload();
       const token = 'mock-jwt-token';
       mockJwtService.sign.mockReturnValue(token);
 
@@ -100,7 +104,7 @@ describe('AuthService', () => {
     });
   });
 
-  describe('create', () => {
+  describe('register', () => {
     it('should create a new user and return user with token', async () => {
       const createUserDto: CreateUserDto = {
         name: 'John',
@@ -122,7 +126,7 @@ describe('AuthService', () => {
       mockMailService.sendUserConfirmation.mockResolvedValue(true);
       mockJwtService.sign.mockReturnValue('mock-token');
 
-      const result = await service.create(createUserDto);
+      const result = await service.register(createUserDto);
 
       expect(mockAuthRepository.create).toHaveBeenCalledWith({
         ...createUserDto,
@@ -155,7 +159,7 @@ describe('AuthService', () => {
         detail: 'Key (email)=(john.doe@example.com) already exists.',
       });
 
-      await expect(service.create(createUserDto)).rejects.toThrow(BadRequestException);
+      await expect(service.register(createUserDto)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw InternalServerErrorException for unexpected errors', async () => {
@@ -176,7 +180,7 @@ describe('AuthService', () => {
         detail: 'Some unexpected error',
       });
 
-      await expect(service.create(createUserDto)).rejects.toThrow(InternalServerErrorException);
+      await expect(service.register(createUserDto)).rejects.toThrow(InternalServerErrorException);
     });
   });
 
@@ -197,7 +201,16 @@ describe('AuthService', () => {
 
       expect(mockAuthRepository.findOne).toHaveBeenCalledWith({
         where: { email: loginUserDto.email },
-        select: { email: true, password: true, id: true, name: true, role: true },
+        select: {
+          id: true,
+          name: true,
+          last_name: true,
+          document_num: true,
+          password: true,
+          phone: true,
+          email: true,
+          role: true,
+        },
       });
       expect(result).toHaveProperty('token');
       expect(result.password).toBeUndefined();

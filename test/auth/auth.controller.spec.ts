@@ -9,7 +9,7 @@ describe('AuthController', () => {
   let authService: AuthService;
 
   const mockAuthService = {
-    create: jest.fn(),
+    register: jest.fn(),
     login: jest.fn(),
   };
 
@@ -47,7 +47,7 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('craate (register)', () => {
+  describe('register', () => {
     it('should register a new user', async () => {
       const createUserDto: CreateUserDto = {
         name: 'John',
@@ -60,11 +60,11 @@ describe('AuthController', () => {
         role: UserRoles.Estudiante,
       };
 
-      mockAuthService.create.mockResolvedValue(mockUserResponse);
+      mockAuthService.register.mockResolvedValue(mockUserResponse);
 
-      const result = await controller.craate(createUserDto);
+      const result = await controller.register(createUserDto);
 
-      expect(mockAuthService.create).toHaveBeenCalledWith(createUserDto);
+      expect(mockAuthService.register).toHaveBeenCalledWith(createUserDto);
       expect(result).toEqual(mockUserResponse);
       expect(result).toHaveProperty('token');
     });
@@ -81,9 +81,9 @@ describe('AuthController', () => {
         role: UserRoles.Estudiante,
       };
 
-      mockAuthService.create.mockResolvedValue(mockUserResponse);
+      mockAuthService.register.mockResolvedValue(mockUserResponse);
 
-      const result = await controller.craate(createUserDto);
+      const result = await controller.register(createUserDto);
 
       expect(result).not.toHaveProperty('password');
     });
