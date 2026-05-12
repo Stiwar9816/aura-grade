@@ -107,7 +107,7 @@ const redisQueueConnection = envs.redis_url
     // GraphQL
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      autoSchemaFile: envs.state === 'dev' ? join(process.cwd(), 'src/schema.gql') : true,
       playground: false,
       csrfPrevention: false,
       plugins: [ApolloServerPluginLandingPageLocalDefault()],
