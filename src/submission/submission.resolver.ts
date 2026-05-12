@@ -25,7 +25,7 @@ export class SubmissionResolver {
   constructor(private readonly submissionService: SubmissionService) {}
 
   @Mutation(() => Submission, { name: 'createSubmission' })
-  @Throttle({ submission: { limit: 5, ttl: 3600000 } })
+  // @Throttle({ submission: { limit: 5, ttl: 3600000 } })
   @UseGuards(JwtAuthGuard)
   async createSubmission(
     @Args('createSubmissionInput') createSubmissionInput: CreateSubmissionInput,

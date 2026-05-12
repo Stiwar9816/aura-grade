@@ -50,11 +50,11 @@ import { dataSourceOptions } from './config/datasource.config';
         ttl: 60000,
         limit: 100,
       },
-      {
-        name: 'submission',
-        ttl: 3600000, // 1 hora
-        limit: 100,
-      },
+      // {
+      //   name: 'submission',
+      //   ttl: 3600000, // 1 hora
+      //   limit: 100,
+      // },
     ]),
     // Redis Caching
     CacheModule.registerAsync({
