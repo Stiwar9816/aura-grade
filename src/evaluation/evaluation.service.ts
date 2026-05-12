@@ -23,6 +23,9 @@ export class EvaluationService {
     'submission.assignment.course.user',
     'submission.assignment.rubric',
     'submission.assignment.rubric.criteria',
+    'reevaluationRequest',
+    'reevaluationRequest.student',
+    'reevaluationRequest.teacher',
   ];
 
   constructor(

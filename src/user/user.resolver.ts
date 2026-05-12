@@ -93,7 +93,7 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   resetPasswordAuth(
     @Args('newPassword', { type: () => String }) password: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser() user: User
   ): Promise<User> {
     return this.userService.resetPasswordAuth(password, user);
   }

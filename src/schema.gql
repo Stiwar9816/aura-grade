@@ -151,6 +151,7 @@ type Evaluation {
   status: EvaluationStatus!
   createdAt: DateTime!
   submission: Submission!
+  reevaluationRequest: ReEvaluationRequest
 }
 
 """
@@ -162,6 +163,26 @@ scalar JSON
 enum EvaluationStatus {
   DRAFT
   PUBLISHED
+}
+
+type ReEvaluationRequest {
+  id: ID!
+  reason: String!
+  status: ReEvaluationStatus!
+  teacherResponse: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  reviewedAt: DateTime
+  evaluation: Evaluation!
+  student: User!
+  teacher: User!
+}
+
+"""Status of a re-evaluation request"""
+enum ReEvaluationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 type Query {
@@ -186,6 +207,8 @@ type Query {
   evaluations: [Evaluation!]!
   Evaluation(id: ID!): Evaluation!
   evaluationBySubmission(submissionId: ID!): Evaluation!
+  reEvaluationRequests: [ReEvaluationRequest!]!
+  reEvaluationRequest(id: ID!): ReEvaluationRequest!
 }
 
 type Mutation {
@@ -222,6 +245,8 @@ type Mutation {
   updateEvaluation(updateEvaluationInput: UpdateEvaluationInput!): Evaluation!
   publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
   removeEvaluation(id: ID!): Boolean!
+  createReEvaluationRequest(createReEvaluationRequestInput: CreateReEvaluationRequestInput!): ReEvaluationRequest!
+  resolveReEvaluationRequest(resolveReEvaluationRequestInput: ResolveReEvaluationRequestInput!): ReEvaluationRequest!
   executeSeed: String!
 }
 
@@ -485,4 +510,23 @@ input UpdateEvaluationInput {
 
   """ID de la evaluación a actualizar"""
   id: ID!
+}
+
+input CreateReEvaluationRequestInput {
+  """Evaluation ID"""
+  evaluationId: ID!
+
+  """Reason for requesting a re-evaluation"""
+  reason: String!
+}
+
+input ResolveReEvaluationRequestInput {
+  """Re-evaluation request ID"""
+  id: ID!
+
+  """Teacher decision"""
+  status: ReEvaluationStatus!
+
+  """Teacher response"""
+  teacherResponse: String
 }

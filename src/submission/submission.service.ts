@@ -30,6 +30,9 @@ export class SubmissionService {
     'assignment.rubric.criteria',
     'student',
     'evaluation',
+    'evaluation.reevaluationRequest',
+    'evaluation.reevaluationRequest.student',
+    'evaluation.reevaluationRequest.teacher',
   ];
 
   constructor(

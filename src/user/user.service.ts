@@ -117,14 +117,9 @@ export class UserService {
   }
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
-    const token = this.authService.getToken(user);
-    const decodedToken = this.jwtService.verify(token); // Decodifica el token
-    const id = decodedToken.id; // Obtiene el ID del usuario del token decodificado
-
-    const userFound = await this.findOneById(id);
-    const newPassword = password;
-    this.mailService.sendResetPassword(userFound, newPassword);
-    userFound.password = bcrypt.hashSync(newPassword, 10);
+    const userFound = await this.findOneById(user.id);
+    this.mailService.sendResetPassword(userFound, password);
+    userFound.password = bcrypt.hashSync(password, 10);
     return await this.userRepository.save(userFound);
   }
 

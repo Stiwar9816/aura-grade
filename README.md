@@ -98,7 +98,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - pnpm >= 10.x
 - Docker & Docker Compose (para DB y Redis)
 - Cuenta en Cloudinary
-- Servidor de correo electrónico (SMTP)
+- Cuenta y API key de Resend
 - API Key de OpenAI o Gemini
 
 ## 🚀 Instalación y Configuración
@@ -127,10 +127,11 @@ DB_PASSWORD=secret
 JWT_SECRET=super-secret-key
 
 # Mail
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USER=tu-email@gmail.com
-MAIL_PASSWORD=tu-app-password
+MAIL_FROM="Aura Grade <noreply@tu-dominio-verificado.com>"
+RESEND_API_KEY=re_tu_api_key
+RESEND_CONFIRMATION_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_UPDATE_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_RESET_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
 
 # Cloudinary (Archivos)
 CLOUDINARY_NAME=tu-cloud-name
@@ -320,7 +321,7 @@ src/
 - **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
 - **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**
 - **Testing**: **[Jest](https://jestjs.io/)**
-- **Mail**: **[Mailtrap](https://www.mailtrap.io/)**
+- **Mail**: **[Resend](https://resend.com/)**
 - **WebSockets**: **[Socket.io](https://socket.io/)**
 - **BullMQ**: **[BullMQ](https://docs.bullmq.io/)**
 
