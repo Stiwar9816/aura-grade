@@ -44,9 +44,6 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       TZ: America/Bogota
       JWT_SECRET: ${JWT_SECRET}
-      MAIL_HOST: ${MAIL_HOST}
-      MAIL_USER: ${MAIL_USER}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
       PORT: ${PORT}
       FRONTEND_URL: ${FRONTEND_URL}

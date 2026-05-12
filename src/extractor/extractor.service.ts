@@ -41,7 +41,11 @@ export class ExtractorService {
 
   async validateAndExtract(url: string): Promise<string> {
     const check = await axios.head(url);
-    const contentLength = parseInt(check.headers['content-length'], 10);
+    const contentLengthHeader = check.headers['content-length'];
+    const contentLength =
+      typeof contentLengthHeader === 'number'
+        ? contentLengthHeader
+        : parseInt(String(contentLengthHeader ?? '0'), 10);
     const LIMIT_15MB = 15 * 1024 * 1024;
 
     if (contentLength > LIMIT_15MB) {
