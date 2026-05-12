@@ -1,5 +1,6 @@
 dist/
 node_modules/
 postgres/
+docker-scout-*.sarif.json
 
 .git/

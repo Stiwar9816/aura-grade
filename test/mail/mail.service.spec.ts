@@ -55,19 +55,23 @@ describe('MailService', () => {
 
       await service.sendUserConfirmation(mockUser, plainPassword);
 
-      expect(mockResend.emails.send).toHaveBeenCalledWith({
-        from: expect.any(String),
-        to: mockUser.email,
-        subject: expect.stringContaining('Welcome'),
-        template: {
-          id: expect.any(String),
-          variables: expect.objectContaining({
-            name: `${mockUser.name} ${mockUser.last_name}`,
-            password: plainPassword,
-            email: mockUser.email,
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.any(String),
+          to: mockUser.email,
+          subject: expect.stringContaining('Bienvenid@'),
+          template: expect.objectContaining({
+            id: expect.any(String),
+            variables: expect.objectContaining({
+              name: `${mockUser.name} ${mockUser.last_name}`,
+              password: plainPassword,
+              email: mockUser.email,
+              app_name: expect.any(String),
+              url_app: expect.any(String),
+            }),
           }),
-        },
-      });
+        })
+      );
     });
 
     it('should include user full name in email context', async () => {
@@ -88,19 +92,23 @@ describe('MailService', () => {
 
       await service.sendUpdatePassword(mockUser, plainPassword);
 
-      expect(mockResend.emails.send).toHaveBeenCalledWith({
-        from: expect.any(String),
-        to: mockUser.email,
-        subject: expect.stringContaining('credentials updated'),
-        template: {
-          id: expect.any(String),
-          variables: expect.objectContaining({
-            name: `${mockUser.name} ${mockUser.last_name}`,
-            password: plainPassword,
-            email: mockUser.email,
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.any(String),
+          to: mockUser.email,
+          subject: expect.stringContaining('credenciales actualizadas'),
+          template: expect.objectContaining({
+            id: expect.any(String),
+            variables: expect.objectContaining({
+              name: `${mockUser.name} ${mockUser.last_name}`,
+              password: plainPassword,
+              email: mockUser.email,
+              app_name: expect.any(String),
+              url_app: expect.any(String),
+            }),
           }),
-        },
-      });
+        })
+      );
     });
 
     it('should include updated password in email context', async () => {
@@ -121,20 +129,24 @@ describe('MailService', () => {
 
       await service.sendResetPassword(mockUser, plainPassword);
 
-      expect(mockResend.emails.send).toHaveBeenCalledWith({
-        from: expect.any(String),
-        to: mockUser.email,
-        subject: 'Password Reset Request 🔐',
-        template: {
-          id: expect.any(String),
-          variables: expect.objectContaining({
-            name: `${mockUser.name} ${mockUser.last_name}`,
-            password: plainPassword,
-            email: mockUser.email,
-            support_email: 'support@mail.com',
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.any(String),
+          to: mockUser.email,
+          subject: '¡Solicitud de restablecimiento de contraseña 🔐!',
+          template: expect.objectContaining({
+            id: expect.any(String),
+            variables: expect.objectContaining({
+              name: `${mockUser.name} ${mockUser.last_name}`,
+              password: plainPassword,
+              email: mockUser.email,
+              app_name: expect.any(String),
+              url_app: expect.any(String),
+              support_email: 'support@auragrade.com',
+            }),
           }),
-        },
-      });
+        })
+      );
     });
 
     it('should use reset password template id', async () => {
@@ -154,7 +166,7 @@ describe('MailService', () => {
       await service.sendResetPassword(mockUser, plainPassword);
 
       const callArgs = mockResend.emails.send.mock.calls[0][0];
-      expect(callArgs.template.variables.support_email).toBe('support@mail.com');
+      expect(callArgs.template.variables.support_email).toBe('support@auragrade.com');
     });
   });
 });

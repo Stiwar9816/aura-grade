@@ -1,5 +1,10 @@
 // NestJS
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 // Jwt
 import { JwtService } from '@nestjs/jwt';
 // TypeORM
@@ -41,7 +46,11 @@ export class AuthService {
     // Convertir IDs (string[]) → [{ id }, { id }, ...]
     if (courses?.length) user.courses = courses.map((id) => ({ id })) as any;
 
-    await this.authRepository.save(user);
+    try {
+      await this.authRepository.save(user);
+    } catch (error) {
+      this.handleDBException(error);
+    }
 
     // Guarda una copia sin encriptar de la contraseña
     const plainPassword = password;
@@ -117,5 +126,11 @@ export class AuthService {
 
     delete user.password;
     return user;
+  }
+
+  private handleDBException(error: any): never {
+    if (error.code === '23505') throw new BadRequestException(error.detail);
+
+    throw new InternalServerErrorException('Unexpected error, check server logs');
   }
 }

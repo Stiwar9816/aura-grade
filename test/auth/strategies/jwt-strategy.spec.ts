@@ -31,6 +31,17 @@ describe('JwtStrategy', () => {
     findOneBy: jest.fn(),
   };
 
+  const mockPayload = (overrides: Partial<JwtPayload> = {}): JwtPayload => ({
+    id: mockUser.id,
+    email: mockUser.email,
+    name: mockUser.name,
+    last_name: mockUser.last_name,
+    role: mockUser.role,
+    phone: mockUser.phone,
+    document_num: mockUser.document_num,
+    ...overrides,
+  });
+
   const mockConfigService = {
     get: jest.fn().mockReturnValue('test-secret-key'),
   };
@@ -62,13 +73,7 @@ describe('JwtStrategy', () => {
 
   describe('validate', () => {
     it('should return user when token is valid and user is active', async () => {
-      const payload: JwtPayload = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        last_name: mockUser.last_name,
-        role: UserRoles.Administrador,
-      };
+      const payload = mockPayload({ role: UserRoles.Administrador });
 
       mockUserRepository.findOneBy.mockResolvedValue(mockUser);
 
@@ -82,13 +87,13 @@ describe('JwtStrategy', () => {
     });
 
     it('should throw UnauthorizedException when user not found', async () => {
-      const payload: JwtPayload = {
+      const payload = mockPayload({
         id: 'non-existent-id',
         email: 'test@example.com',
         name: 'Test',
         last_name: 'User',
         role: UserRoles.Estudiante,
-      };
+      });
 
       mockUserRepository.findOneBy.mockResolvedValue(null);
 
@@ -97,13 +102,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should throw UnauthorizedException when user is inactive', async () => {
-      const payload: JwtPayload = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        last_name: mockUser.last_name,
-        role: UserRoles.Estudiante,
-      };
+      const payload = mockPayload({ role: UserRoles.Estudiante });
 
       const inactiveUser = { ...mockUser, isActive: false };
       mockUserRepository.findOneBy.mockResolvedValue(inactiveUser);
@@ -115,13 +114,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should update user role from payload', async () => {
-      const payload: JwtPayload = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        last_name: mockUser.last_name,
-        role: UserRoles.Docente,
-      };
+      const payload = mockPayload({ role: UserRoles.Docente });
 
       const userWithDifferentRole = { ...mockUser, role: UserRoles.Estudiante };
       mockUserRepository.findOneBy.mockResolvedValue(userWithDifferentRole);
@@ -132,13 +125,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should remove password from returned user', async () => {
-      const payload: JwtPayload = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        last_name: mockUser.last_name,
-        role: UserRoles.Estudiante,
-      };
+      const payload = mockPayload({ role: UserRoles.Estudiante });
 
       mockUserRepository.findOneBy.mockResolvedValue(mockUser);
 

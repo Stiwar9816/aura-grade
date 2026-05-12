@@ -1,6 +1,6 @@
 import { ExecutionContext, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { resolveCurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 
@@ -29,7 +29,7 @@ describe('CurrentUser Decorator', () => {
         }),
       } as unknown as ExecutionContext;
 
-      const result = CurrentUser(undefined, mockExecutionContext);
+      const result = resolveCurrentUser(undefined, mockExecutionContext);
 
       expect(result).toEqual(mockUser);
     });
@@ -42,7 +42,7 @@ describe('CurrentUser Decorator', () => {
         }),
       } as unknown as ExecutionContext;
 
-      const result = CurrentUser(UserRoles.Administrador, mockExecutionContext);
+      const result = resolveCurrentUser([UserRoles.Administrador], mockExecutionContext);
 
       expect(result).toEqual(mockUser);
     });
@@ -55,11 +55,11 @@ describe('CurrentUser Decorator', () => {
         }),
       } as unknown as ExecutionContext;
 
-      expect(() => CurrentUser(UserRoles.Estudiante, mockExecutionContext)).toThrow(
+      expect(() => resolveCurrentUser([UserRoles.Estudiante], mockExecutionContext)).toThrow(
         ForbiddenException
       );
-      expect(() => CurrentUser(UserRoles.Estudiante, mockExecutionContext)).toThrow(
-        `User ${mockUser.name} ${mockUser.last_name} need an role valid ${UserRoles.Estudiante}`
+      expect(() => resolveCurrentUser([UserRoles.Estudiante], mockExecutionContext)).toThrow(
+        `User ${mockUser.name} ${mockUser.last_name} You do not have permission`
       );
     });
 
@@ -71,10 +71,10 @@ describe('CurrentUser Decorator', () => {
         }),
       } as unknown as ExecutionContext;
 
-      expect(() => CurrentUser(undefined, mockExecutionContext)).toThrow(
+      expect(() => resolveCurrentUser(undefined, mockExecutionContext)).toThrow(
         InternalServerErrorException
       );
-      expect(() => CurrentUser(undefined, mockExecutionContext)).toThrow(
+      expect(() => resolveCurrentUser(undefined, mockExecutionContext)).toThrow(
         'There is no user inside the request - make sure you have used AuthGuard'
       );
     });
@@ -92,7 +92,7 @@ describe('CurrentUser Decorator', () => {
         getType: jest.fn().mockReturnValue('graphql'),
       } as unknown as ExecutionContext;
 
-      const result = CurrentUser(undefined, mockExecutionContext);
+      const result = resolveCurrentUser(undefined, mockExecutionContext);
 
       expect(result).toEqual(mockUser);
     });
@@ -108,7 +108,7 @@ describe('CurrentUser Decorator', () => {
         getType: jest.fn().mockReturnValue('graphql'),
       } as unknown as ExecutionContext;
 
-      const result = CurrentUser(UserRoles.Administrador, mockExecutionContext);
+      const result = resolveCurrentUser([UserRoles.Administrador], mockExecutionContext);
 
       expect(result).toEqual(mockUser);
     });
@@ -124,7 +124,7 @@ describe('CurrentUser Decorator', () => {
         getType: jest.fn().mockReturnValue('graphql'),
       } as unknown as ExecutionContext;
 
-      expect(() => CurrentUser(UserRoles.Docente, mockExecutionContext)).toThrow(
+      expect(() => resolveCurrentUser([UserRoles.Docente], mockExecutionContext)).toThrow(
         ForbiddenException
       );
     });
@@ -139,7 +139,7 @@ describe('CurrentUser Decorator', () => {
         }),
       } as unknown as ExecutionContext;
 
-      const result = CurrentUser(undefined, mockExecutionContext);
+      const result = resolveCurrentUser(undefined, mockExecutionContext);
 
       expect(result).toEqual(mockUser);
     });
@@ -156,7 +156,7 @@ describe('CurrentUser Decorator', () => {
           }),
         } as unknown as ExecutionContext;
 
-        const result = CurrentUser(role, mockExecutionContext);
+        const result = resolveCurrentUser([role], mockExecutionContext);
         expect(result.role).toBe(role);
       });
     });

@@ -29,7 +29,18 @@ ENV NODE_ENV=production
 
 # Security: non-root user
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nestjs
+    adduser --system --uid 1001 nestjs && \
+    rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/lib/node_modules/corepack \
+           /opt/yarn-* \
+           /pnpm && \
+    rm -f /usr/local/bin/npm \
+          /usr/local/bin/npx \
+          /usr/local/bin/yarn \
+          /usr/local/bin/yarnpkg \
+          /usr/local/bin/corepack \
+          /usr/local/bin/pnpm \
+          /usr/local/bin/pnpx
 
 COPY --from=builder /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
@@ -39,4 +50,4 @@ USER nestjs
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["pnpm", "run", "start:prod"]
+CMD ["sh", "-c", "node_modules/.bin/typeorm migration:run -d dist/config/datasource.config.js && node dist/main"]

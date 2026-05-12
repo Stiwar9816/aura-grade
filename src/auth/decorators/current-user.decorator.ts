@@ -12,8 +12,7 @@ import { User } from '../../user/entities/user.entity';
 // Enums
 import { UserRoles } from '../enums';
 
-//Validation of user with roles required for EndPoint
-export const CurrentUser = createParamDecorator((role: UserRoles[], ctx: ExecutionContext) => {
+export const resolveCurrentUser = (role: UserRoles[] | undefined, ctx: ExecutionContext): User => {
   // Validation with HTTP request
   const getUserFromHttpContext = (context: ExecutionContext): User => {
     const request = context.switchToHttp().getRequest();
@@ -50,4 +49,7 @@ export const CurrentUser = createParamDecorator((role: UserRoles[], ctx: Executi
   }
 
   return user;
-});
+};
+
+//Validation of user with roles required for EndPoint
+export const CurrentUser = createParamDecorator(resolveCurrentUser);
