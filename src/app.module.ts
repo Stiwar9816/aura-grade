@@ -41,6 +41,22 @@ import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
 import { dataSourceOptions } from './config/datasource.config';
 
+const redisCacheOptions = envs.redis_url
+  ? { url: envs.redis_url }
+  : {
+      socket: {
+        host: envs.redis_host,
+        port: envs.redis_port,
+      },
+    };
+
+const redisQueueConnection = envs.redis_url
+  ? { url: envs.redis_url }
+  : {
+      host: envs.redis_host,
+      port: envs.redis_port,
+    };
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -62,20 +78,14 @@ import { dataSourceOptions } from './config/datasource.config';
       isGlobal: true,
       useFactory: async () => ({
         store: await redisStore({
-          socket: {
-            host: envs.redis_host,
-            port: envs.redis_port,
-          },
+          ...redisCacheOptions,
           ttl: 60 * 60, // 1 hour by default
         }),
       }),
     }),
     // BullMQ
     BullModule.forRoot({
-      connection: {
-        host: envs.redis_host,
-        port: envs.redis_port,
-      },
+      connection: redisQueueConnection,
     }),
     BullBoardModule.forRoot({
       adapter: ExpressAdapter,
