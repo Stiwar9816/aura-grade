@@ -72,7 +72,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('API', app, document);
 
-  await app.listen(`${envs.port}`);
-  logger.log(`App runnig on port ${envs.port}`);
+  await app.listen(envs.port, '0.0.0.0');
+  logger.log(`App running on 0.0.0.0:${envs.port}`);
 }
 bootstrap();
