@@ -41,7 +41,7 @@ export class UserService {
     // Guarda una copia sin encriptar de la contraseña
     const plainPassword = createUserInput.password;
     // Envía la contraseña sin encriptar por correo electrónico
-    await this.mailService.sendUpdatePassword(user, plainPassword);
+    // await this.mailService.sendUpdatePassword(user, plainPassword);
     // Encrypt password
     user.password = bcrypt.hashSync(user.password, 10);
     try {
@@ -100,7 +100,7 @@ export class UserService {
       // Guarda una copia sin encriptar de la contraseña
       const plainPassword = updateUserInput.password;
       // Envía la contraseña sin encriptar por correo electrónico
-      await this.mailService.sendUpdatePassword(user, plainPassword);
+      // await this.mailService.sendUpdatePassword(user, plainPassword);
       // Encrypt password
       user.password = bcrypt.hashSync(updateUserInput.password, 10);
     }
@@ -116,14 +116,14 @@ export class UserService {
   async resetPassword(email: string): Promise<User> {
     const userReset = await this.findOneByEmail(email);
     const newPassword = randomPassword();
-    this.mailService.sendResetPassword(userReset, newPassword);
+    // this.mailService.sendResetPassword(userReset, newPassword);
     userReset.password = bcrypt.hashSync(newPassword, 10);
     return await this.userRepository.save(userReset);
   }
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
     const userFound = await this.findOneById(user.id);
-    this.mailService.sendResetPassword(userFound, password);
+    // this.mailService.sendResetPassword(userFound, password);
     userFound.password = bcrypt.hashSync(password, 10);
     return await this.userRepository.save(userFound);
   }

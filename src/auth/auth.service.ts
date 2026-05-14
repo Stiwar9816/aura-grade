@@ -55,7 +55,7 @@ export class AuthService {
     // Guarda una copia sin encriptar de la contraseña
     const plainPassword = password;
     // Envía la contraseña sin encriptar por correo electrónico
-    await this.mailService.sendUserConfirmation(user, plainPassword);
+    // await this.mailService.sendUserConfirmation(user, plainPassword);
 
     delete user.password;
 
