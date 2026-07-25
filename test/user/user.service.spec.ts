@@ -36,6 +36,7 @@ describe('UserService', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };
@@ -129,10 +130,7 @@ describe('UserService', () => {
       const result = await service.create(createUserInput);
 
       expect(mockUserRepository.create).toHaveBeenCalledWith(createUserInput);
-      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(
-        createdUser,
-        createUserInput.password
-      );
+      expect(mockMailService.sendUpdatePassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
     });
@@ -244,6 +242,7 @@ describe('UserService', () => {
       };
 
       const updatedUser = { ...mockUser, name: 'Jane' };
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.preload.mockResolvedValue(updatedUser);
       mockUserRepository.save.mockResolvedValue(updatedUser);
 
@@ -273,16 +272,14 @@ describe('UserService', () => {
       };
 
       const updatedUser = { ...mockUser, name: 'Jane' };
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.preload.mockResolvedValue(updatedUser);
       mockUserRepository.save.mockResolvedValue(updatedUser);
       mockMailService.sendUpdatePassword.mockResolvedValue(true);
 
       const result = await service.update(mockUser.id, updateUserInput);
 
-      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(
-        updatedUser,
-        updateUserInput.password
-      );
+      expect(mockMailService.sendUpdatePassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(updatedUser);
     });
@@ -313,7 +310,7 @@ describe('UserService', () => {
         where: { email: mockUser.email },
         relations: ['courses'],
       });
-      expect(mockMailService.sendResetPassword).toHaveBeenCalled();
+      expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
     });
@@ -336,7 +333,7 @@ describe('UserService', () => {
 
       const result = await service.resetPasswordAuth(newPassword, mockUser);
 
-      expect(mockMailService.sendResetPassword).toHaveBeenCalledWith(mockUser, newPassword);
+      expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
     });

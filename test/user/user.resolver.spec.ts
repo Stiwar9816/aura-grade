@@ -5,6 +5,7 @@ import { User } from 'src/user/entities/user.entity';
 import { UpdateUserInput } from 'src/user/dto';
 import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { UserRoles } from 'src/auth/enums';
+import { JwtAuthGuard } from 'src/auth/guards';
 
 describe('UserResolver', () => {
   let resolver: UserResolver;
@@ -21,6 +22,7 @@ describe('UserResolver', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Administrador,
+    authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };
@@ -44,7 +46,10 @@ describe('UserResolver', () => {
           useValue: mockUserService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     resolver = module.get<UserResolver>(UserResolver);
     userService = module.get<UserService>(UserService);

@@ -6,9 +6,7 @@ import {
   BeforeUpdate,
   Column,
   Entity,
-  JoinColumn,
   ManyToMany,
-  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -120,6 +118,9 @@ export class User {
   @Column({ type: 'enum', enum: UserRoles, default: UserRoles.Estudiante })
   @Field(() => UserRoles)
   role: UserRoles;
+
+  @Column({ type: 'int', default: 1 })
+  authVersion: number;
 
   // Relations - Many-to-Many with Course
   @ManyToMany(

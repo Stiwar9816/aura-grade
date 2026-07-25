@@ -13,6 +13,9 @@ import { User } from 'src/user/entities/user.entity';
 import { MailService } from 'src/mail/mail.service';
 import { CreateUserDto, LoginUserDto } from 'src/auth/dto';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { SessionService } from 'src/auth/session';
+import { AuthAttemptService } from 'src/auth/security';
+import { AuthMetricsService } from 'src/observability';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -31,6 +34,7 @@ describe('AuthService', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };
@@ -48,6 +52,19 @@ describe('AuthService', () => {
 
   const mockJwtService = {
     sign: jest.fn(),
+  };
+
+  const mockSessionService = {
+    create: jest.fn(),
+    revoke: jest.fn(),
+    revokeAll: jest.fn(),
+  };
+  const mockAuthAttempts = {
+    registerFailure: jest.fn(),
+    clear: jest.fn(),
+  };
+  const mockMetrics = {
+    increment: jest.fn(),
   };
 
   const mockPayload = () => ({
@@ -75,6 +92,18 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: mockJwtService,
+        },
+        {
+          provide: SessionService,
+          useValue: mockSessionService,
+        },
+        {
+          provide: AuthAttemptService,
+          useValue: mockAuthAttempts,
+        },
+        {
+          provide: AuthMetricsService,
+          useValue: mockMetrics,
         },
       ],
     }).compile();
@@ -124,7 +153,10 @@ describe('AuthService', () => {
       mockAuthRepository.create.mockReturnValue(createdUser);
       mockAuthRepository.save.mockResolvedValue(createdUser);
       mockMailService.sendUserConfirmation.mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mock-token');
+      mockSessionService.create.mockResolvedValue({
+        sessionToken: 'opaque-token',
+        expiresAt: '2026-07-26T00:00:00.000Z',
+      });
 
       const result = await service.register(createUserDto);
 
@@ -133,12 +165,9 @@ describe('AuthService', () => {
         password: hashedPassword,
       });
       expect(mockAuthRepository.save).toHaveBeenCalled();
-      expect(mockMailService.sendUserConfirmation).toHaveBeenCalledWith(
-        createdUser,
-        createUserDto.password
-      );
       expect(result).toHaveProperty('token');
-      expect(result.password).toBeUndefined();
+      expect(result.sessionToken).toBe('opaque-token');
+      expect(result.user.password).toBeUndefined();
     });
 
     it('should throw BadRequestException on duplicate email', async () => {
@@ -193,9 +222,11 @@ describe('AuthService', () => {
 
       const userWithPassword = { ...mockUser, password: bcrypt.hashSync('Password123', 12) };
       mockAuthRepository.findOne.mockResolvedValue(userWithPassword);
-      mockAuthRepository.findOneByOrFail.mockResolvedValue(mockUser);
       jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
-      mockJwtService.sign.mockReturnValue('mock-token');
+      mockSessionService.create.mockResolvedValue({
+        sessionToken: 'opaque-token',
+        expiresAt: '2026-07-26T00:00:00.000Z',
+      });
 
       const result = await service.login(loginUserDto);
 
@@ -210,10 +241,15 @@ describe('AuthService', () => {
           phone: true,
           email: true,
           role: true,
+          document_type: true,
+          isActive: true,
+          authVersion: true,
         },
+        relations: ['courses', 'assignments'],
       });
       expect(result).toHaveProperty('token');
-      expect(result.password).toBeUndefined();
+      expect(result.token).toBe(result.sessionToken);
+      expect(result.user.password).toBeUndefined();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -239,7 +275,7 @@ describe('AuthService', () => {
       await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw BadRequestException if password does not match', async () => {
+    it('should throw UnauthorizedException if password does not match', async () => {
       const loginUserDto: LoginUserDto = {
         email: 'john.doe@example.com',
         password: 'WrongPassword',
@@ -247,10 +283,9 @@ describe('AuthService', () => {
 
       const userWithPassword = { ...mockUser, password: bcrypt.hashSync('Password123', 12) };
       mockAuthRepository.findOne.mockResolvedValue(userWithPassword);
-      mockAuthRepository.findOneByOrFail.mockResolvedValue(mockUser);
       jest.spyOn(bcrypt, 'compareSync').mockReturnValue(false as never);
 
-      await expect(service.login(loginUserDto)).rejects.toThrow(BadRequestException);
+      await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException if user is inactive', async () => {
@@ -265,7 +300,7 @@ describe('AuthService', () => {
         password: bcrypt.hashSync('Password123', 12),
       };
       mockAuthRepository.findOne.mockResolvedValue(inactiveUser);
-      mockAuthRepository.findOneByOrFail.mockResolvedValue(inactiveUser);
+      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
 
       await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
@@ -275,10 +310,10 @@ describe('AuthService', () => {
     it('should return user if active', async () => {
       mockAuthRepository.findOneByOrFail.mockResolvedValue(mockUser);
 
-      const result = await service.validateUser(UserRoles.Estudiante);
+      const result = await service.validateUser(mockUser.id);
 
       expect(mockAuthRepository.findOneByOrFail).toHaveBeenCalledWith({
-        role: UserRoles.Estudiante,
+        id: mockUser.id,
       });
       expect(result).toEqual(mockUser);
       expect(result.password).toBeUndefined();
@@ -288,9 +323,7 @@ describe('AuthService', () => {
       const inactiveUser = { ...mockUser, isActive: false };
       mockAuthRepository.findOneByOrFail.mockResolvedValue(inactiveUser);
 
-      await expect(service.validateUser(UserRoles.Estudiante)).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(service.validateUser(mockUser.id)).rejects.toThrow(UnauthorizedException);
     });
   });
 });

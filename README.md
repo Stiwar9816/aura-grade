@@ -139,8 +139,28 @@ AI_PROVIDER=gemini|openai
 REDIS_HOST=redis
 REDIS_PORT=6379
 
+# Sesiones opacas respaldadas por Redis
+SESSION_IDLE_SECONDS=1800
+SESSION_ABSOLUTE_SECONDS=28800
+SESSION_REMEMBER_IDLE_SECONDS=604800
+SESSION_REMEMBER_ABSOLUTE_SECONDS=2592000
+SESSION_ADMIN_IDLE_SECONDS=900
+SESSION_ADMIN_ABSOLUTE_SECONDS=14400
+SESSION_REFRESH_INTERVAL_SECONDS=60
+SESSION_MAX_PER_USER=5
+
 # Seguridad (Bull Board Monitoring)
 BASIC_AUTH_PASSWORD=tu-password-seguro
+
+# Comunicación confiable Next.js BFF -> Backend
+BFF_SHARED_SECRET=un-secreto-aleatorio-de-al-menos-32-caracteres
+TRUST_PROXY_HOPS=1
+
+# Scraping interno de /api/metrics
+METRICS_TOKEN=un-token-aleatorio-de-al-menos-32-caracteres
+
+# Ventana temporal de migración; cambiar a false al retirar JWT
+AUTH_ACCEPT_LEGACY_JWT=true
 
 # App
 APP_NAME='Aura Grade'

@@ -23,6 +23,7 @@ describe('JwtStrategy', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };

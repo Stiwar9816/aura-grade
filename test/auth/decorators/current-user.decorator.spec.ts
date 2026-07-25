@@ -16,6 +16,7 @@ describe('CurrentUser Decorator', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Administrador,
+    authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };

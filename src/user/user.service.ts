@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -26,6 +27,8 @@ import { randomPassword } from 'src/auth/common';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -38,10 +41,6 @@ export class UserService {
   ) {}
   async create(createUserInput: CreateUserInput): Promise<User> {
     const user = this.userRepository.create(createUserInput);
-    // Guarda una copia sin encriptar de la contraseña
-    const plainPassword = createUserInput.password;
-    // Envía la contraseña sin encriptar por correo electrónico
-    // await this.mailService.sendUpdatePassword(user, plainPassword);
     // Encrypt password
     user.password = bcrypt.hashSync(user.password, 10);
     try {
@@ -51,7 +50,7 @@ export class UserService {
     }
   }
 
-  async findAll(user: User): Promise<User[]> {
+  async findAll(_user: User): Promise<User[]> {
     const allowedRoles = ['Estudiante', 'Docente', 'Administrador'];
     return this.userRepository.find({
       where: {
@@ -92,25 +91,34 @@ export class UserService {
   }
 
   async update(id: string, updateUserInput: UpdateUserInput): Promise<User> {
+    const currentUser = await this.findOneById(id);
     const user = await this.userRepository.preload({
       id,
       ...updateUserInput,
     });
+    if (!user) throw new NotFoundException(`${id} not found`);
+    const mustInvalidateSessions =
+      Boolean(updateUserInput.password) ||
+      (updateUserInput.role !== undefined && updateUserInput.role !== currentUser.role) ||
+      (updateUserInput.isActive !== undefined && updateUserInput.isActive !== currentUser.isActive);
+    if (mustInvalidateSessions) user.authVersion = (currentUser.authVersion ?? 1) + 1;
     if (updateUserInput.password) {
-      // Guarda una copia sin encriptar de la contraseña
-      const plainPassword = updateUserInput.password;
-      // Envía la contraseña sin encriptar por correo electrónico
-      // await this.mailService.sendUpdatePassword(user, plainPassword);
       // Encrypt password
       user.password = bcrypt.hashSync(updateUserInput.password, 10);
     }
-    return await this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
+    if (mustInvalidateSessions)
+      this.logger.log(`Authentication version changed for user ${id} to ${savedUser.authVersion}`);
+    return savedUser;
   }
 
   async block(id: string): Promise<User> {
     const userToBlock = await this.findOneById(id);
     userToBlock.isActive = false;
-    return await this.userRepository.save(userToBlock);
+    userToBlock.authVersion = (userToBlock.authVersion ?? 1) + 1;
+    const savedUser = await this.userRepository.save(userToBlock);
+    this.logger.log(`User ${id} deactivated; authentication version is ${savedUser.authVersion}`);
+    return savedUser;
   }
 
   async resetPassword(email: string): Promise<User> {
@@ -118,14 +126,20 @@ export class UserService {
     const newPassword = randomPassword();
     // this.mailService.sendResetPassword(userReset, newPassword);
     userReset.password = bcrypt.hashSync(newPassword, 10);
-    return await this.userRepository.save(userReset);
+    userReset.authVersion = (userReset.authVersion ?? 1) + 1;
+    const savedUser = await this.userRepository.save(userReset);
+    this.logger.log(`Password reset invalidated sessions for user ${savedUser.id}`);
+    return savedUser;
   }
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
     const userFound = await this.findOneById(user.id);
     // this.mailService.sendResetPassword(userFound, password);
     userFound.password = bcrypt.hashSync(password, 10);
-    return await this.userRepository.save(userFound);
+    userFound.authVersion = (userFound.authVersion ?? 1) + 1;
+    const savedUser = await this.userRepository.save(userFound);
+    this.logger.log(`Password change invalidated sessions for user ${savedUser.id}`);
+    return savedUser;
   }
 
   async assignCourses({ userId, courseIds }: AssignCoursesInput): Promise<User> {

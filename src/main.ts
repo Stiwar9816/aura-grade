@@ -15,12 +15,17 @@ import { graphqlUploadExpress } from 'graphql-upload-ts';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 // Basic Auth
 import basicAuth from 'express-basic-auth';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 
 async function bootstrap() {
   const logger = new Logger('AuraGrade API');
   const app = await NestFactory.create(AppModule);
+  const requestContext = app.get(RequestContextMiddleware);
+  app.use(requestContext.use.bind(requestContext));
   // Helmet: Security headers
   const isDev = envs.state === 'dev';
+  if (envs.trust_proxy_hops > 0)
+    app.getHttpAdapter().getInstance().set('trust proxy', envs.trust_proxy_hops);
   app.use(
     helmet({
       contentSecurityPolicy: isDev ? false : undefined, // Allow Playground in dev
@@ -49,7 +54,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: isDev ? envs.frontend_url : false,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     preflightContinue: false,
     optionsSuccessStatus: 204,

@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class LoginUserDto {
   @ApiProperty({
@@ -24,4 +32,13 @@ export class LoginUserDto {
     message: 'The password must have a Uppercase, lowercase and a number',
   })
   password: string;
+
+  @ApiProperty({
+    description: 'Keep the session active between browser restarts',
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean = false;
 }

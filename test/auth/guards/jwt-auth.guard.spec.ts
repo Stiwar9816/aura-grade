@@ -6,7 +6,12 @@ describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
 
   beforeEach(() => {
-    guard = new JwtAuthGuard();
+    guard = new JwtAuthGuard(
+      {} as any,
+      {} as any,
+      { get: jest.fn().mockReturnValue(true) } as any,
+      {} as any
+    );
   });
 
   it('should be defined', () => {
@@ -28,7 +33,7 @@ describe('JwtAuthGuard', () => {
 
       jest.spyOn(GqlExecutionContext, 'create').mockReturnValue(mockContext as any);
 
-      const executionContext = {} as ExecutionContext;
+      const executionContext = { getType: jest.fn().mockReturnValue('graphql') } as any;
       const result = guard.getRequest(executionContext);
 
       expect(GqlExecutionContext.create).toHaveBeenCalledWith(executionContext);
@@ -49,7 +54,7 @@ describe('JwtAuthGuard', () => {
 
       jest.spyOn(GqlExecutionContext, 'create').mockReturnValue(mockContext as any);
 
-      const executionContext = {} as ExecutionContext;
+      const executionContext = { getType: jest.fn().mockReturnValue('graphql') } as any;
       const result = guard.getRequest(executionContext);
 
       expect(result.headers.authorization).toBe('Bearer test-token-123');

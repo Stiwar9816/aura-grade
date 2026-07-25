@@ -2,7 +2,7 @@ import { join } from 'path';
 // NestJS
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 // TypeORM
 import { TypeOrmModule } from '@nestjs/typeorm';
 // GraphQL
@@ -12,9 +12,7 @@ import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo';
 // Rate Limiting
 import { ThrottlerModule } from '@nestjs/throttler';
 import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
-// Redis Caching
-import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-yet';
+import { RedisThrottlerStorage } from './common/throttler';
 // BullMQ
 import { BullModule } from '@nestjs/bullmq';
 // BullBoard
@@ -40,15 +38,11 @@ import { ReEvaluationModule } from './reevaluation/reevaluation.module';
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
 import { dataSourceOptions } from './config/datasource.config';
-
-const redisCacheOptions = envs.redis_url
-  ? { url: envs.redis_url }
-  : {
-      socket: {
-        host: envs.redis_host,
-        port: envs.redis_port,
-      },
-    };
+import { RedisModule, RedisService } from './redis';
+import { BffAuthGuard } from './common/guards/bff-auth.guard';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
+import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
+import { AuthMetricsService, ObservabilityModule } from './observability';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -59,28 +53,21 @@ const redisQueueConnection = envs.redis_url
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }),
     // Rate Limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 60000,
-        limit: 100,
-      },
-      // {
-      //   name: 'submission',
-      //   ttl: 3600000, // 1 hora
-      //   limit: 100,
-      // },
-    ]),
-    // Redis Caching
-    CacheModule.registerAsync({
-      isGlobal: true,
-      useFactory: async () => ({
-        store: await redisStore({
-          ...redisCacheOptions,
-          ttl: 60 * 60, // 1 hour by default
-        }),
+    RedisModule,
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule, ObservabilityModule],
+      inject: [RedisService, AuthMetricsService],
+      useFactory: (redis: RedisService, metrics: AuthMetricsService) => ({
+        storage: new RedisThrottlerStorage(redis, metrics),
+        throttlers: [
+          {
+            name: 'short',
+            ttl: 60000,
+            limit: 100,
+          },
+        ],
       }),
     }),
     // BullMQ
@@ -128,12 +115,22 @@ const redisQueueConnection = envs.redis_url
     ReEvaluationModule,
     SeedModule,
     HealthModule,
+    ObservabilityModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
+      useClass: BffAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
       useClass: GqlThrottlerGuard,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestLoggingInterceptor,
+    },
+    RequestContextMiddleware,
   ],
 })
 export class AppModule {}

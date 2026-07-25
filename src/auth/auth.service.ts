@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 // Jwt
@@ -20,16 +21,25 @@ import { CreateUserDto, LoginUserDto } from './dto';
 import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
 import { MailService } from 'src/mail/mail.service';
-// Enums
-import { UserRoles } from './enums';
+import { SessionService } from './session';
+import { Logger } from '@nestjs/common';
+import { AuthMetricsService } from '../observability';
+import { AuthAttemptService } from './security';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private static readonly DUMMY_PASSWORD_HASH =
+    '$2b$12$KaYTPi.r79aQ5ET0li.9SeLMWjBkBYMuW.nX5PuAtlEeXkkTlPg/.';
+
   constructor(
     @InjectRepository(User)
     private readonly authRepository: Repository<User>,
     private readonly mailService: MailService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly sessionService: SessionService,
+    private readonly authAttempts: AuthAttemptService,
+    private readonly metrics: AuthMetricsService
   ) {}
 
   getToken(payload: JwtPayload) {
@@ -52,32 +62,14 @@ export class AuthService {
       this.handleDBException(error);
     }
 
-    // Guarda una copia sin encriptar de la contraseña
-    const plainPassword = password;
-    // Envía la contraseña sin encriptar por correo electrónico
-    // await this.mailService.sendUserConfirmation(user, plainPassword);
-
     delete user.password;
-
-    const token = this.getToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      last_name: user.last_name,
-      role: user.role,
-      phone: user.phone,
-      document_num: user.document_num,
-    });
-
-    return {
-      ...user,
-      token,
-    };
+    const session = await this.sessionService.create(user);
+    return this.authResponse(user, session);
   }
 
-  async login(loginUserDto: LoginUserDto) {
-    const { password, email } = loginUserDto;
-    //TODO: Chague authRepository for UserService
+  async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown') {
+    const { password, rememberMe = false } = loginUserDto;
+    const email = loginUserDto.email.toLowerCase().trim();
     const user = await this.authRepository.findOne({
       where: { email },
       select: {
@@ -89,43 +81,83 @@ export class AuthService {
         phone: true,
         email: true,
         role: true,
+        document_type: true,
+        isActive: true,
+        authVersion: true,
       },
+      relations: ['courses', 'assignments'],
     });
 
-    if (!user) throw new UnauthorizedException('Credentials are not valid');
-    if (user.email !== email) throw new UnauthorizedException('Credentials are not valid (Email)');
-
-    await this.validateUser(user.role);
-
-    if (!bcrypt.compareSync(password, user.password)) {
-      throw new BadRequestException('Password not match');
+    const passwordMatches = bcrypt.compareSync(
+      password,
+      user?.password ?? AuthService.DUMMY_PASSWORD_HASH
+    );
+    if (!user || user.email !== email || !passwordMatches) {
+      this.metrics.increment('auth_login_failure_total');
+      this.logger.warn('Authentication failed');
+      await this.authAttempts.registerFailure(clientIdentity);
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
+    if (!user.isActive) {
+      this.metrics.increment('auth_login_failure_total');
+      this.logger.warn('Authentication rejected for an inactive user');
+      await this.authAttempts.registerFailure(clientIdentity);
+      throw new UnauthorizedException('Credenciales inválidas.');
     }
     delete user.password;
 
-    const token = this.getToken({
-      id: user.id,
-      name: user.name,
-      last_name: user.last_name,
-      document_num: user.document_num,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-    });
-
-    return {
-      ...user,
-      token,
-    };
+    await this.authAttempts.clear(clientIdentity);
+    const session = await this.sessionService.create(user, rememberMe);
+    this.metrics.increment('auth_login_success_total');
+    this.logger.log(`Authentication succeeded for user ${user.id}`);
+    return this.authResponse(user, session);
   }
 
-  async validateUser(role: UserRoles): Promise<User> {
-    //TODO: Chague authRepository for UserService
-    const user = await this.authRepository.findOneByOrFail({ role });
+  async validateUser(id: string): Promise<User> {
+    const user = await this.authRepository.findOneByOrFail({ id });
     if (!user.isActive)
       throw new UnauthorizedException(`The user is inactive, please speak to an administrator.`);
 
     delete user.password;
     return user;
+  }
+
+  async me(user: User): Promise<{ user: User }> {
+    const currentUser = await this.authRepository.findOne({
+      where: { id: user.id },
+      relations: ['courses', 'assignments'],
+    });
+    if (!currentUser || !currentUser.isActive)
+      throw new UnauthorizedException('Sesión inválida o expirada.');
+    delete currentUser.password;
+    return { user: currentUser };
+  }
+
+  async logout(sessionToken?: string): Promise<{ success: true }> {
+    if (sessionToken) await this.sessionService.revoke(sessionToken);
+    return { success: true };
+  }
+
+  async logoutAll(user: User): Promise<{ success: true; revokedSessions: number }> {
+    return this.logoutAllForUser(user.id);
+  }
+
+  async logoutAllForUser(userId: string): Promise<{ success: true; revokedSessions: number }> {
+    const target = await this.authRepository.findOneBy({ id: userId });
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+    await this.authRepository.increment({ id: userId }, 'authVersion', 1);
+    const revokedSessions = await this.sessionService.revokeAll(userId);
+    this.logger.log(`All sessions revoked for user ${userId}`);
+    return { success: true, revokedSessions };
+  }
+
+  private authResponse(user: User, session: { sessionToken: string; expiresAt: string }) {
+    return {
+      user,
+      sessionToken: session.sessionToken,
+      token: session.sessionToken,
+      expiresAt: session.expiresAt,
+    };
   }
 
   private handleDBException(error: any): never {

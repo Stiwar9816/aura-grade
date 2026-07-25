@@ -3,6 +3,7 @@ import { AuthController } from 'src/auth/auth.controller';
 import { AuthService } from 'src/auth/auth.service';
 import { CreateUserDto, LoginUserDto } from 'src/auth/dto';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { JwtAuthGuard } from 'src/auth/guards';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -35,7 +36,10 @@ describe('AuthController', () => {
           useValue: mockAuthService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
@@ -98,9 +102,13 @@ describe('AuthController', () => {
 
       mockAuthService.login.mockResolvedValue(mockUserResponse);
 
-      const result = await controller.login(loginUserDto);
+      const request = { ip: '127.0.0.1' } as any;
+      const result = await controller.login(loginUserDto, request);
 
-      expect(mockAuthService.login).toHaveBeenCalledWith(loginUserDto);
+      expect(mockAuthService.login).toHaveBeenCalledWith(
+        loginUserDto,
+        '127.0.0.1:john.doe@example.com'
+      );
       expect(result).toEqual(mockUserResponse);
       expect(result).toHaveProperty('token');
     });
@@ -113,7 +121,9 @@ describe('AuthController', () => {
 
       mockAuthService.login.mockResolvedValue(mockUserResponse);
 
-      const result = await controller.login(loginUserDto);
+      const result = await controller.login(loginUserDto, {
+        ip: '127.0.0.1',
+      } as any);
 
       expect(result).not.toHaveProperty('password');
     });

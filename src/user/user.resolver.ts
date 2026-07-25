@@ -15,6 +15,7 @@ import { User } from './entities/user.entity';
 // Enums
 import { UserRoles } from '../auth/enums';
 import { NoAuthAuthGuard } from 'src/auth/guards';
+import { Throttle } from '@nestjs/throttler';
 
 @Resolver(() => User)
 export class UserResolver {
@@ -82,6 +83,7 @@ export class UserResolver {
     description: 'Reset password user',
   })
   @UseGuards(NoAuthAuthGuard)
+  @Throttle({ short: { limit: 3, ttl: 15 * 60 * 1000 } })
   resetPassword(@Args('resetPassword', { type: () => String }) email: string): Promise<User> {
     return this.userService.resetPassword(email);
   }

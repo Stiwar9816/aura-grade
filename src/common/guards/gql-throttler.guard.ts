@@ -1,9 +1,33 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class GqlThrottlerGuard extends ThrottlerGuard {
+  protected async getTracker(
+    req: Record<string, any>,
+    context?: ExecutionContext
+  ): Promise<string> {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const email =
+      typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : undefined;
+    if (context?.getHandler().name === 'login' && email) return `${ip}:${email}`;
+    const recoveryEmail = req.body?.variables?.resetPassword;
+    if (context?.getHandler().name === 'resetPassword' && typeof recoveryEmail === 'string')
+      return `${ip}:${recoveryEmail.toLowerCase().trim()}`;
+
+    const authorization = req.headers?.authorization;
+    if (typeof authorization === 'string') {
+      const [scheme, token] = authorization.trim().split(/\s+/, 2);
+      if (scheme?.toLowerCase() === 'bearer' && token) {
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        return `${ip}:${tokenHash}`;
+      }
+    }
+    return ip;
+  }
+
   getRequestResponse(context: ExecutionContext) {
     const gqlCtx = GqlExecutionContext.create(context);
     const ctx = gqlCtx.getContext();

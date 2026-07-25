@@ -33,7 +33,10 @@ const envsSchema = joi
       then: joi.required(),
       otherwise: joi.optional(),
     }),
-    REDIS_URL: joi.string().uri({ scheme: ['redis', 'rediss'] }).optional(),
+    REDIS_URL: joi
+      .string()
+      .uri({ scheme: ['redis', 'rediss'] })
+      .optional(),
     REDIS_HOST: joi.when('REDIS_URL', {
       is: joi.exist(),
       then: joi.string().optional(),
@@ -45,6 +48,26 @@ const envsSchema = joi
       otherwise: joi.number().required(),
     }),
     BASIC_AUTH_PASSWORD: joi.string().required(),
+    BFF_SHARED_SECRET: joi.string().empty('').min(32).when('STATE', {
+      is: 'prod',
+      then: joi.required(),
+      otherwise: joi.optional(),
+    }),
+    METRICS_TOKEN: joi.string().empty('').min(32).when('STATE', {
+      is: 'prod',
+      then: joi.required(),
+      otherwise: joi.optional(),
+    }),
+    TRUST_PROXY_HOPS: joi.number().integer().min(0).default(0),
+    AUTH_ACCEPT_LEGACY_JWT: joi.boolean().default(true),
+    SESSION_IDLE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_ABSOLUTE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_REMEMBER_IDLE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_REMEMBER_ABSOLUTE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_ADMIN_IDLE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_ADMIN_ABSOLUTE_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_REFRESH_INTERVAL_SECONDS: joi.number().integer().positive().optional(),
+    SESSION_MAX_PER_USER: joi.number().integer().positive().optional(),
   })
   .unknown(true);
 
@@ -79,4 +102,16 @@ export const envs = {
   redis_host: envVars.REDIS_HOST,
   redis_port: envVars.REDIS_PORT,
   basic_auth_password: envVars.BASIC_AUTH_PASSWORD,
+  bff_shared_secret: envVars.BFF_SHARED_SECRET,
+  metrics_token: envVars.METRICS_TOKEN,
+  trust_proxy_hops: envVars.TRUST_PROXY_HOPS,
+  auth_accept_legacy_jwt: envVars.AUTH_ACCEPT_LEGACY_JWT,
+  session_idle_seconds: envVars.SESSION_IDLE_SECONDS,
+  session_absolute_seconds: envVars.SESSION_ABSOLUTE_SECONDS,
+  session_remember_idle_seconds: envVars.SESSION_REMEMBER_IDLE_SECONDS,
+  session_remember_absolute_seconds: envVars.SESSION_REMEMBER_ABSOLUTE_SECONDS,
+  session_admin_idle_seconds: envVars.SESSION_ADMIN_IDLE_SECONDS,
+  session_admin_absolute_seconds: envVars.SESSION_ADMIN_ABSOLUTE_SECONDS,
+  session_refresh_interval_seconds: envVars.SESSION_REFRESH_INTERVAL_SECONDS,
+  session_max_per_user: envVars.SESSION_MAX_PER_USER,
 };

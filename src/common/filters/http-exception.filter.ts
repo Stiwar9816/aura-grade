@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { GraphQLError } from 'graphql';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -52,15 +53,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message: typeof message === 'string' ? message : (message as any).message || message,
       });
     } else if ((host.getType() as string) === 'graphql') {
-      const responseBody = {
-        statusCode: status,
-        timestamp: new Date().toISOString(),
-        services: errorSource,
-        message: typeof message === 'string' ? message : (message as any).message || message,
-      };
-      // Throwing HttpException allows NestJS GraphQL driver to catch it.
-      // The responseBody will likely be serialized into the output message or extension.
-      throw new HttpException(responseBody, status);
+      if (exception instanceof GraphQLError) throw exception;
+      const errorMessage =
+        typeof message === 'string' ? message : (message as any).message || message;
+      const code =
+        status === HttpStatus.UNAUTHORIZED
+          ? 'UNAUTHENTICATED'
+          : status === HttpStatus.FORBIDDEN
+            ? 'FORBIDDEN'
+            : status === HttpStatus.SERVICE_UNAVAILABLE
+              ? 'SERVICE_UNAVAILABLE'
+              : 'INTERNAL_SERVER_ERROR';
+      throw new GraphQLError(errorMessage, {
+        extensions: {
+          code,
+          statusCode: status,
+        },
+      });
     }
   }
 
