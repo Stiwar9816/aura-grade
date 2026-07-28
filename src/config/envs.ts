@@ -11,6 +11,17 @@ const envsSchema = joi
     DB_NAME: joi.string().required(),
     DB_HOST: joi.string().required(),
     DB_USERNAME: joi.string().required(),
+    DB_SSL_MODE: joi
+      .string()
+      .valid('disable', 'require')
+      .when('STATE', {
+        is: 'prod',
+        then: joi.string().default('require'),
+        otherwise: joi.string().default('disable'),
+      }),
+    DB_CONNECTION_TIMEOUT_MS: joi.number().integer().positive().default(10000),
+    DB_MIGRATION_MAX_ATTEMPTS: joi.number().integer().min(1).max(20).default(10),
+    DB_MIGRATION_RETRY_DELAY_MS: joi.number().integer().positive().default(2000),
     JWT_SECRET: joi.string().required(),
     MAIL_FROM: joi.string().required(),
     RESEND_API_KEY: joi.string().required(),
@@ -84,6 +95,10 @@ export const envs = {
   db_name: envVars.DB_NAME,
   db_username: envVars.DB_USERNAME,
   db_password: envVars.DB_PASSWORD,
+  db_ssl_mode: envVars.DB_SSL_MODE,
+  db_connection_timeout_ms: envVars.DB_CONNECTION_TIMEOUT_MS,
+  db_migration_max_attempts: envVars.DB_MIGRATION_MAX_ATTEMPTS,
+  db_migration_retry_delay_ms: envVars.DB_MIGRATION_RETRY_DELAY_MS,
   jwt_secret: envVars.JWT_SECRET,
   mail_from: envVars.MAIL_FROM,
   resend_api_key: envVars.RESEND_API_KEY,

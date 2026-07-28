@@ -42,6 +42,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
+      # El PostgreSQL de este compose no habilita TLS. Para una DB administrada,
+      # sobrescribir con DB_SSL_MODE=require.
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
+      DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-10000}
+      DB_MIGRATION_MAX_ATTEMPTS: ${DB_MIGRATION_MAX_ATTEMPTS:-10}
+      DB_MIGRATION_RETRY_DELAY_MS: ${DB_MIGRATION_RETRY_DELAY_MS:-2000}
       TZ: America/Bogota
       JWT_SECRET: ${JWT_SECRET}
       MAIL_FROM: ${MAIL_FROM}

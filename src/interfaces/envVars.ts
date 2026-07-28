@@ -6,6 +6,10 @@ export interface EnvVars {
   DB_NAME: string;
   DB_HOST: string;
   DB_USERNAME: string;
+  DB_SSL_MODE: 'disable' | 'require';
+  DB_CONNECTION_TIMEOUT_MS: number;
+  DB_MIGRATION_MAX_ATTEMPTS: number;
+  DB_MIGRATION_RETRY_DELAY_MS: number;
   JWT_SECRET: string;
   MAIL_FROM: string;
   RESEND_API_KEY: string;

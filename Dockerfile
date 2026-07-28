@@ -50,4 +50,4 @@ USER nestjs
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["sh", "-c", "node_modules/.bin/typeorm migration:run -d dist/config/datasource.config.js && node dist/main"]
+CMD ["sh", "-c", "node dist/scripts/run-migrations.js && exec node dist/main"]

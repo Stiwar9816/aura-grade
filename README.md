@@ -110,6 +110,10 @@ DB_PORT=5432
 DB_NAME=aura_grade
 DB_USERNAME=postgres
 DB_PASSWORD=secret
+DB_SSL_MODE=disable
+DB_CONNECTION_TIMEOUT_MS=10000
+DB_MIGRATION_MAX_ATTEMPTS=10
+DB_MIGRATION_RETRY_DELAY_MS=2000
 
 # JWT
 JWT_SECRET=super-secret-key
@@ -218,7 +222,12 @@ Cada vez que realices un cambio en un archivo `.entity.ts`, sigue este flujo:
 
 En entornos de producción (Docker), las migraciones se ejecutan **automáticamente** antes de iniciar el servidor:
 
-- El pipeline utiliza `pnpm run migration:run:prod` para aplicar los archivos `.js` compilados.
+- Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en los archivos Compose.
+- Usa `DB_SSL_MODE=require` cuando el proveedor de la base de datos exige TLS.
+- Los errores transitorios de conexión se reintentan con backoff antes de abortar el arranque.
+- Los errores propios de una migración SQL fallan inmediatamente y no se ocultan con reintentos.
+
+- La imagen ejecuta `dist/scripts/run-migrations.js` para aplicar los archivos `.js` compilados.
 - Si una migración falla, el servidor no arrancará, previniendo estados inconsistentes.
 
 | Comando                       | Descripción                                       | Entorno     |
