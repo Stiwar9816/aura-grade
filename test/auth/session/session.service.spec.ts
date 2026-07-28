@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { SessionService } from 'src/auth/session';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 import { User } from 'src/user/entities/user.entity';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('SessionService', () => {
   const values = new Map<string, string>();
@@ -41,7 +42,7 @@ describe('SessionService', () => {
   };
   const redis = { client };
   const repository = {
-    findOneBy: jest.fn(),
+    findOne: jest.fn(),
   };
   const config = {
     get: jest.fn((_key: string) => undefined),
@@ -61,6 +62,17 @@ describe('SessionService', () => {
     password: 'hashed',
     isActive: true,
     role: UserRoles.Estudiante,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+    institution: {
+      id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+      name: 'Universidad Aura',
+      slug: 'universidad-aura',
+      emailDomain: 'aura.edu.co',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
@@ -71,7 +83,7 @@ describe('SessionService', () => {
     values.clear();
     indexes.clear();
     jest.clearAllMocks();
-    repository.findOneBy.mockResolvedValue({ ...user });
+    repository.findOne.mockResolvedValue({ ...user });
     service = new SessionService(
       redis as any,
       repository as any,
@@ -90,12 +102,15 @@ describe('SessionService', () => {
 
     const validated = await service.validate(created.sessionToken);
     expect(validated?.user.id).toBe(user.id);
-    expect(repository.findOneBy).toHaveBeenCalledWith({ id: user.id });
+    expect(repository.findOne).toHaveBeenCalledWith({
+      where: { id: user.id },
+      relations: ['institution'],
+    });
   });
 
   it('invalidates a session when authVersion changes', async () => {
     const created = await service.create(user);
-    repository.findOneBy.mockResolvedValue({ ...user, authVersion: 2 });
+    repository.findOne.mockResolvedValue({ ...user, authVersion: 2 });
 
     await expect(service.validate(created.sessionToken)).resolves.toBeNull();
     await expect(service.validate(created.sessionToken)).resolves.toBeNull();

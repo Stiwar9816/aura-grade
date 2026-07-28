@@ -162,11 +162,27 @@ METRICS_TOKEN=un-token-aleatorio-de-al-menos-32-caracteres
 # Ventana temporal de migración; cambiar a false al retirar JWT
 AUTH_ACCEPT_LEGACY_JWT=true
 
+# Bootstrap de tenancy (solo mientras se aplica la migración inicial)
+BOOTSTRAP_INSTITUTION_NAME="Universidad Aura"
+BOOTSTRAP_INSTITUTION_SLUG=universidad-aura
+BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN=aura.edu.co
+BOOTSTRAP_ADMIN_EMAIL=admin@aura.edu.co
+BOOTSTRAP_ADMIN_PASSWORD=una-clave-inicial-fuerte-y-unica
+BOOTSTRAP_ADMIN_NAME=Administrador
+BOOTSTRAP_ADMIN_LAST_NAME=Institucional
+BOOTSTRAP_ADMIN_DOCUMENT_NUM=1000000000
+BOOTSTRAP_ADMIN_PHONE=3000000000
+
 # App
 APP_NAME='Aura Grade'
 PORT=3000
 FRONTEND_URL=http://localhost:3000
 ```
+
+Genera `BFF_SHARED_SECRET` y `METRICS_TOKEN` con un alfabeto seguro para
+archivos `.env` (por ejemplo, `openssl rand -hex 32`). Evita valores con `$`
+sin escapar, porque Docker Compose y Next.js pueden interpretarlos como
+expansión de variables.
 
 ### 3. Iniciar Servicios (Docker)
 
@@ -212,15 +228,39 @@ En entornos de producción (Docker), las migraciones se ejecutan **automáticame
 | `pnpm run migration:revert`   | Deshace la última migración aplicada.             | Local       |
 | `pnpm run migration:run:prod` | Aplica las migraciones compiladas (`dist/`).      | Prod (Auto) |
 
+### Bootstrap institucional y aprobación de cuentas
+
+La migración `AddInstitutionTenancyAndApproval` crea la primera institución,
+asigna a ella los usuarios existentes y garantiza un administrador aprobado. En
+una base vacía, sus variables `BOOTSTRAP_*` son obligatorias. La contraseña se
+almacena con bcrypt y nunca debe quedar escrita en el repositorio.
+
+1. Define las variables `BOOTSTRAP_*` mediante el gestor de secretos del entorno.
+2. Ejecuta la migración.
+3. Verifica el ingreso del administrador y cambia inmediatamente su contraseña.
+4. Retira `BOOTSTRAP_ADMIN_PASSWORD` y las demás variables temporales del
+   entorno una vez aplicada la migración.
+
+El registro público solo acepta `Estudiante` o `Docente`. Ambos se crean con
+estado `PENDING`, no reciben sesión y deben ser aprobados o rechazados por un
+administrador de la misma institución mediante
+`pendingInstitutionUsers`/`reviewInstitutionUser`. Los administradores no
+pueden crearse desde el endpoint público.
+
 ## 🌱 Seeding (Datos de Prueba)
 
-Para poblar la base de datos con usuarios, cursos y rúbricas iniciales, ejecuta la siguiente mutación en el Playground de GraphQL:
+El seed destructivo no está expuesto mediante REST ni GraphQL. Para poblar una
+base de datos exclusivamente local con usuarios, cursos y rúbricas iniciales,
+confirma que `STATE=dev` y ejecuta:
 
-```graphql
-mutation ExecuteSeed {
-  executeSeed
-}
+```bash
+pnpm run seed:dev
 ```
+
+El comando se bloquea si `STATE` no es `dev`. Nunca debe ejecutarse contra
+staging o producción porque elimina los datos académicos y los usuarios que no
+son administradores antes de crear los datos de prueba. Requiere que las
+migraciones ya hayan creado al menos una institución activa.
 
 Esto creará:
 

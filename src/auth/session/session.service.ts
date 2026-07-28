@@ -8,6 +8,7 @@ import { User } from '../../user/entities/user.entity';
 import { RedisService } from '../../redis';
 import { AuthMetricsService } from '../../observability';
 import { CreatedSession, StoredSession } from './session.types';
+import { InstitutionApprovalStatus } from '../../institution';
 
 interface SessionPolicy {
   idleTtlMs: number;
@@ -142,10 +143,15 @@ export class SessionService {
     }
 
     const now = Date.now();
-    const user = await this.userRepository.findOneBy({ id: session.userId });
+    const user = await this.userRepository.findOne({
+      where: { id: session.userId },
+      relations: ['institution'],
+    });
     if (
       !user ||
       !user.isActive ||
+      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
+      !user.institution?.isActive ||
       user.authVersion !== session.authVersion ||
       now >= session.absoluteExpiresAt
     ) {

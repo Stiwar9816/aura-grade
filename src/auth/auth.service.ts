@@ -1,6 +1,7 @@
 // NestJS
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -17,6 +18,7 @@ import { User } from '../user/entities/user.entity';
 import * as bcrypt from 'bcryptjs';
 // DTO
 import { CreateUserDto, LoginUserDto } from './dto';
+import { UserRoles } from './enums';
 // Interfaces
 import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
@@ -25,6 +27,7 @@ import { SessionService } from './session';
 import { Logger } from '@nestjs/common';
 import { AuthMetricsService } from '../observability';
 import { AuthAttemptService } from './security';
+import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
 
 @Injectable()
 export class AuthService {
@@ -39,7 +42,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly sessionService: SessionService,
     private readonly authAttempts: AuthAttemptService,
-    private readonly metrics: AuthMetricsService
+    private readonly metrics: AuthMetricsService,
+    private readonly institutionService: InstitutionService
   ) {}
 
   getToken(payload: JwtPayload) {
@@ -47,9 +51,20 @@ export class AuthService {
   }
 
   async register(createAuthDto: CreateUserDto) {
-    const { password, courses, ...userInfo } = createAuthDto;
+    const {
+      password,
+      courses,
+      institutionId,
+      role = UserRoles.Estudiante,
+      ...userInfo
+    } = createAuthDto;
+    const institution = await this.institutionService.findActiveById(institutionId);
     const user = this.authRepository.create({
       ...userInfo,
+      role,
+      institutionId: institution.id,
+      institution,
+      approvalStatus: InstitutionApprovalStatus.PENDING,
       password: bcrypt.hashSync(password, 12),
     });
 
@@ -63,8 +78,11 @@ export class AuthService {
     }
 
     delete user.password;
-    const session = await this.sessionService.create(user);
-    return this.authResponse(user, session);
+    return {
+      user,
+      pendingApproval: true,
+      message: 'Tu registro fue recibido y está pendiente de aprobación institucional.',
+    };
   }
 
   async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown') {
@@ -81,11 +99,13 @@ export class AuthService {
         phone: true,
         email: true,
         role: true,
+        approvalStatus: true,
+        institutionId: true,
         document_type: true,
         isActive: true,
         authVersion: true,
       },
-      relations: ['courses', 'assignments'],
+      relations: ['courses', 'assignments', 'institution'],
     });
 
     const passwordMatches = bcrypt.compareSync(
@@ -104,6 +124,14 @@ export class AuthService {
       await this.authAttempts.registerFailure(clientIdentity);
       throw new UnauthorizedException('Credenciales inválidas.');
     }
+    if (user.approvalStatus !== InstitutionApprovalStatus.APPROVED || !user.institution?.isActive) {
+      await this.authAttempts.clear(clientIdentity);
+      throw new ForbiddenException(
+        user.approvalStatus === InstitutionApprovalStatus.REJECTED
+          ? 'Tu solicitud institucional fue rechazada.'
+          : 'Tu cuenta está pendiente de aprobación institucional.'
+      );
+    }
     delete user.password;
 
     await this.authAttempts.clear(clientIdentity);
@@ -114,8 +142,16 @@ export class AuthService {
   }
 
   async validateUser(id: string): Promise<User> {
-    const user = await this.authRepository.findOneByOrFail({ id });
-    if (!user.isActive)
+    const user = await this.authRepository.findOne({
+      where: { id },
+      relations: ['institution'],
+    });
+    if (
+      !user ||
+      !user.isActive ||
+      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
+      !user.institution?.isActive
+    )
       throw new UnauthorizedException(`The user is inactive, please speak to an administrator.`);
 
     delete user.password;
@@ -125,9 +161,14 @@ export class AuthService {
   async me(user: User): Promise<{ user: User }> {
     const currentUser = await this.authRepository.findOne({
       where: { id: user.id },
-      relations: ['courses', 'assignments'],
+      relations: ['courses', 'assignments', 'institution'],
     });
-    if (!currentUser || !currentUser.isActive)
+    if (
+      !currentUser ||
+      !currentUser.isActive ||
+      currentUser.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
+      !currentUser.institution?.isActive
+    )
       throw new UnauthorizedException('Sesión inválida o expirada.');
     delete currentUser.password;
     return { user: currentUser };

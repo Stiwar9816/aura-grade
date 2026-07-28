@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { secureCompare } from '../security';
+import { normalizeConfiguredSecret, secureCompare } from '../security';
 
 @Injectable()
 export class BffAuthGuard implements CanActivate {
@@ -12,7 +12,7 @@ export class BffAuthGuard implements CanActivate {
     const path = request.originalUrl ?? request.url ?? '';
     if (path.startsWith('/api/health') || path.startsWith('/api/metrics')) return true;
 
-    const expected = this.configService.get<string>('BFF_SHARED_SECRET');
+    const expected = normalizeConfiguredSecret(this.configService.get<string>('BFF_SHARED_SECRET'));
     const isDevelopment = this.configService.get<string>('STATE') === 'dev';
     if (!expected && isDevelopment) return true;
 

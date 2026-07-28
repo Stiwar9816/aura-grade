@@ -3,11 +3,13 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -108,12 +110,23 @@ export class CreateUserDto {
     enum: UserRoles,
   })
   @IsOptional()
-  @IsEnum(UserRoles)
+  @IsIn([UserRoles.Estudiante, UserRoles.Docente], {
+    message: 'Public registration only allows Estudiante or Docente roles',
+  })
   @Field(() => UserRoles, {
     nullable: true,
     description: 'User roles wich can Administrator, User by default takes the user role',
   })
   role?: UserRoles = UserRoles.Estudiante;
+
+  @ApiProperty({
+    description: 'Institution selected during registration',
+    type: 'string',
+    format: 'uuid',
+  })
+  @IsUUID('4')
+  @Field(() => String, { description: 'Institution selected during registration' })
+  institutionId: string;
 
   @ApiProperty({
     description: 'User courses',

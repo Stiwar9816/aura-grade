@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   BadRequestException,
+  ForbiddenException,
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -16,8 +17,19 @@ import { DocumentType, UserRoles } from 'src/auth/enums';
 import { SessionService } from 'src/auth/session';
 import { AuthAttemptService } from 'src/auth/security';
 import { AuthMetricsService } from 'src/observability';
+import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
 
 describe('AuthService', () => {
+  const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
+  const mockInstitution = {
+    id: institutionId,
+    name: 'Universidad Aura',
+    slug: 'universidad-aura',
+    emailDomain: 'aura.edu.co',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   let service: AuthService;
   let authRepository: Repository<User>;
   let mailService: MailService;
@@ -34,6 +46,9 @@ describe('AuthService', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId,
+    institution: mockInstitution,
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
@@ -43,7 +58,8 @@ describe('AuthService', () => {
     create: jest.fn(),
     save: jest.fn(),
     findOne: jest.fn(),
-    findOneByOrFail: jest.fn(),
+    findOneBy: jest.fn(),
+    increment: jest.fn(),
   };
 
   const mockMailService = {
@@ -65,6 +81,9 @@ describe('AuthService', () => {
   };
   const mockMetrics = {
     increment: jest.fn(),
+  };
+  const mockInstitutionService = {
+    findActiveById: jest.fn(),
   };
 
   const mockPayload = () => ({
@@ -105,6 +124,10 @@ describe('AuthService', () => {
           provide: AuthMetricsService,
           useValue: mockMetrics,
         },
+        {
+          provide: InstitutionService,
+          useValue: mockInstitutionService,
+        },
       ],
     }).compile();
 
@@ -114,6 +137,7 @@ describe('AuthService', () => {
     jwtService = module.get<JwtService>(JwtService);
 
     jest.clearAllMocks();
+    mockInstitutionService.findActiveById.mockResolvedValue(mockInstitution);
   });
 
   it('should be defined', () => {
@@ -134,7 +158,7 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should create a new user and return user with token', async () => {
+    it('should create a pending user without creating a session', async () => {
       const createUserDto: CreateUserDto = {
         name: 'John',
         last_name: 'Doe',
@@ -144,6 +168,7 @@ describe('AuthService', () => {
         email: 'john.doe@example.com',
         password: 'Password123',
         role: UserRoles.Estudiante,
+        institutionId,
       };
 
       const hashedPassword = 'hashedPassword123';
@@ -153,20 +178,26 @@ describe('AuthService', () => {
       mockAuthRepository.create.mockReturnValue(createdUser);
       mockAuthRepository.save.mockResolvedValue(createdUser);
       mockMailService.sendUserConfirmation.mockResolvedValue(true);
-      mockSessionService.create.mockResolvedValue({
-        sessionToken: 'opaque-token',
-        expiresAt: '2026-07-26T00:00:00.000Z',
-      });
-
       const result = await service.register(createUserDto);
 
       expect(mockAuthRepository.create).toHaveBeenCalledWith({
-        ...createUserDto,
+        name: createUserDto.name,
+        last_name: createUserDto.last_name,
+        document_type: createUserDto.document_type,
+        document_num: createUserDto.document_num,
+        phone: createUserDto.phone,
+        email: createUserDto.email,
+        role: UserRoles.Estudiante,
+        institutionId,
+        institution: mockInstitution,
+        approvalStatus: InstitutionApprovalStatus.PENDING,
         password: hashedPassword,
       });
       expect(mockAuthRepository.save).toHaveBeenCalled();
-      expect(result).toHaveProperty('token');
-      expect(result.sessionToken).toBe('opaque-token');
+      expect(mockInstitutionService.findActiveById).toHaveBeenCalledWith(institutionId);
+      expect(mockSessionService.create).not.toHaveBeenCalled();
+      expect(result.pendingApproval).toBe(true);
+      expect(result).not.toHaveProperty('sessionToken');
       expect(result.user.password).toBeUndefined();
     });
 
@@ -180,6 +211,7 @@ describe('AuthService', () => {
         email: 'john.doe@example.com',
         password: 'Password123',
         role: UserRoles.Estudiante,
+        institutionId,
       };
 
       mockAuthRepository.create.mockReturnValue(mockUser);
@@ -201,6 +233,7 @@ describe('AuthService', () => {
         email: 'john.doe@example.com',
         password: 'Password123',
         role: UserRoles.Estudiante,
+        institutionId,
       };
 
       mockAuthRepository.create.mockReturnValue(mockUser);
@@ -241,11 +274,13 @@ describe('AuthService', () => {
           phone: true,
           email: true,
           role: true,
+          approvalStatus: true,
+          institutionId: true,
           document_type: true,
           isActive: true,
           authVersion: true,
         },
-        relations: ['courses', 'assignments'],
+        relations: ['courses', 'assignments', 'institution'],
       });
       expect(result).toHaveProperty('token');
       expect(result.token).toBe(result.sessionToken);
@@ -304,24 +339,43 @@ describe('AuthService', () => {
 
       await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should reject login while institutional approval is pending', async () => {
+      const pendingUser = {
+        ...mockUser,
+        approvalStatus: InstitutionApprovalStatus.PENDING,
+        password: bcrypt.hashSync('Password123', 12),
+      };
+      mockAuthRepository.findOne.mockResolvedValue(pendingUser);
+      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
+
+      await expect(
+        service.login({
+          email: pendingUser.email,
+          password: 'Password123',
+        })
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockSessionService.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('validateUser', () => {
     it('should return user if active', async () => {
-      mockAuthRepository.findOneByOrFail.mockResolvedValue(mockUser);
+      mockAuthRepository.findOne.mockResolvedValue({ ...mockUser });
 
       const result = await service.validateUser(mockUser.id);
 
-      expect(mockAuthRepository.findOneByOrFail).toHaveBeenCalledWith({
-        id: mockUser.id,
+      expect(mockAuthRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+        relations: ['institution'],
       });
-      expect(result).toEqual(mockUser);
+      expect(result).toEqual(expect.objectContaining({ id: mockUser.id }));
       expect(result.password).toBeUndefined();
     });
 
     it('should throw UnauthorizedException if user is inactive', async () => {
       const inactiveUser = { ...mockUser, isActive: false };
-      mockAuthRepository.findOneByOrFail.mockResolvedValue(inactiveUser);
+      mockAuthRepository.findOne.mockResolvedValue(inactiveUser);
 
       await expect(service.validateUser(mockUser.id)).rejects.toThrow(UnauthorizedException);
     });

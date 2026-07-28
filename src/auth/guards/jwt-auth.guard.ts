@@ -9,6 +9,7 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { User } from '../../user/entities/user.entity';
 import { JwtPayload } from '../interface/jwt-payload.interface';
 import { SessionService } from '../session';
+import { InstitutionApprovalStatus } from '../../institution';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -69,8 +70,17 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesión inválida o expirada.');
     }
 
-    const user = await this.userRepository.findOneBy({ id: payload.id });
-    if (!user || !user.isActive) throw new UnauthorizedException('Sesión inválida o expirada.');
+    const user = await this.userRepository.findOne({
+      where: { id: payload.id },
+      relations: ['institution'],
+    });
+    if (
+      !user ||
+      !user.isActive ||
+      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
+      !user.institution?.isActive
+    )
+      throw new UnauthorizedException('Sesión inválida o expirada.');
     delete user.password;
     return user;
   }

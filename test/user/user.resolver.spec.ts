@@ -6,8 +6,10 @@ import { UpdateUserInput } from 'src/user/dto';
 import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { UserRoles } from 'src/auth/enums';
 import { JwtAuthGuard } from 'src/auth/guards';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('UserResolver', () => {
+  const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   let resolver: UserResolver;
   let userService: UserService;
 
@@ -22,6 +24,17 @@ describe('UserResolver', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Administrador,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId,
+    institution: {
+      id: institutionId,
+      name: 'Universidad Aura',
+      slug: 'universidad-aura',
+      emailDomain: 'aura.edu.co',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
@@ -35,6 +48,8 @@ describe('UserResolver', () => {
     block: jest.fn(),
     resetPassword: jest.fn(),
     resetPasswordAuth: jest.fn(),
+    findPendingInstitutionUsers: jest.fn(),
+    reviewInstitutionUser: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -56,6 +71,30 @@ describe('UserResolver', () => {
 
     // Clear all mocks before each test
     jest.clearAllMocks();
+  });
+
+  describe('institutional approvals', () => {
+    it('returns pending users for the current administrator', async () => {
+      mockUserService.findPendingInstitutionUsers.mockResolvedValue([mockUser]);
+
+      const result = await resolver.findPendingInstitutionUsers(mockUser);
+
+      expect(mockUserService.findPendingInstitutionUsers).toHaveBeenCalledWith(mockUser);
+      expect(result).toEqual([mockUser]);
+    });
+
+    it('reviews a pending user', async () => {
+      const input = {
+        userId: mockUser.id,
+        status: InstitutionApprovalStatus.APPROVED,
+      };
+      mockUserService.reviewInstitutionUser.mockResolvedValue(mockUser);
+
+      const result = await resolver.reviewInstitutionUser(input, mockUser);
+
+      expect(mockUserService.reviewInstitutionUser).toHaveBeenCalledWith(input, mockUser);
+      expect(result).toEqual(mockUser);
+    });
   });
 
   it('should be defined', () => {

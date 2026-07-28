@@ -3,6 +3,7 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { resolveCurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('CurrentUser Decorator', () => {
   const mockUser: User = {
@@ -16,6 +17,16 @@ describe('CurrentUser Decorator', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Administrador,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+    institution: {
+      id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+      name: 'Universidad Aura',
+      slug: 'universidad-aura',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),

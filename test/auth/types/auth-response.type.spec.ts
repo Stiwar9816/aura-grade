@@ -1,6 +1,7 @@
 import { AuthResponde } from 'src/auth/types/auth-response.type';
 import { User } from 'src/user/entities/user.entity';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('AuthResponde Type', () => {
   let authResponse: AuthResponde;
@@ -18,6 +19,16 @@ describe('AuthResponde Type', () => {
       password: 'hashedPassword123',
       isActive: true,
       role: UserRoles.Estudiante,
+      approvalStatus: InstitutionApprovalStatus.APPROVED,
+      institutionId: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+      institution: {
+        id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+        name: 'Universidad Aura',
+        slug: 'universidad-aura',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
       authVersion: 1,
       checkFieldsBeforeInsert: jest.fn(),
       checkFieldsBeforeUpdate: jest.fn(),

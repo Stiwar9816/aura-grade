@@ -1,5 +1,6 @@
 import { User } from 'src/user/entities/user.entity';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('User Entity', () => {
   let user: User;
@@ -16,6 +17,8 @@ describe('User Entity', () => {
     user.password = 'hashedPassword123';
     user.isActive = true;
     user.role = UserRoles.Estudiante;
+    user.approvalStatus = InstitutionApprovalStatus.PENDING;
+    user.institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   });
 
   it('should be defined', () => {
@@ -34,6 +37,8 @@ describe('User Entity', () => {
       expect(user.password).toBeDefined();
       expect(user.isActive).toBeDefined();
       expect(user.role).toBeDefined();
+      expect(user.approvalStatus).toBeDefined();
+      expect(user.institutionId).toBeDefined();
     });
 
     it('should have correct property types', () => {

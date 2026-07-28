@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 // Services
 import { SeedService } from './seed.service';
-// Resolvers
-import { SeedResolver } from './seed.resolver';
 // TypeORM
 import { TypeOrmModule } from '@nestjs/typeorm';
 // Entities
@@ -12,9 +10,21 @@ import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { Course } from 'src/course/entities/course.entity';
+import { Institution } from 'src/institution';
 
 @Module({
-  providers: [SeedService, SeedResolver],
-  imports: [TypeOrmModule.forFeature([User, Rubric, Assignment, Submission, Evaluation, Course])],
+  providers: [SeedService],
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      Rubric,
+      Assignment,
+      Submission,
+      Evaluation,
+      Course,
+      Institution,
+    ]),
+  ],
+  exports: [SeedService],
 })
 export class SeedModule {}

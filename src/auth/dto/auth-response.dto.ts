@@ -8,15 +8,23 @@ export class AuthResponse {
   @ApiProperty({
     description: 'Temporary alias for sessionToken',
     example: 'a-random-opaque-session-token',
+    required: false,
   })
-  token: string;
+  token?: string;
 
   @ApiProperty({
     description: 'Opaque session token',
     example: 'a-random-opaque-session-token',
+    required: false,
   })
-  sessionToken: string;
+  sessionToken?: string;
 
-  @ApiProperty({ description: 'Absolute session expiration date' })
-  expiresAt: string;
+  @ApiProperty({ description: 'Absolute session expiration date', required: false })
+  expiresAt?: string;
+
+  @ApiProperty({ description: 'Registration requires institutional approval', required: false })
+  pendingApproval?: boolean;
+
+  @ApiProperty({ required: false })
+  message?: string;
 }

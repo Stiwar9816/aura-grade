@@ -18,6 +18,7 @@ import { User } from '../user/entities/user.entity';
 import { MailModule } from 'src/mail/mail.module';
 import { SessionService } from './session';
 import { AuthAttemptService } from './security';
+import { InstitutionModule } from 'src/institution';
 
 @Global()
 @Module({
@@ -50,6 +51,7 @@ import { AuthAttemptService } from './security';
       },
     }),
     MailModule,
+    InstitutionModule,
   ],
 })
 export class AuthModule {}

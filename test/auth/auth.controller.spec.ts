@@ -6,6 +6,7 @@ import { DocumentType, UserRoles } from 'src/auth/enums';
 import { JwtAuthGuard } from 'src/auth/guards';
 
 describe('AuthController', () => {
+  const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   let controller: AuthController;
   let authService: AuthService;
 
@@ -24,7 +25,16 @@ describe('AuthController', () => {
     email: 'john.doe@example.com',
     isActive: true,
     role: UserRoles.Estudiante,
-    token: 'mock-jwt-token',
+    pendingApproval: true,
+    message: 'Tu registro fue recibido y está pendiente de aprobación institucional.',
+  };
+  const mockLoginResponse = {
+    ...mockUserResponse,
+    pendingApproval: undefined,
+    message: undefined,
+    token: 'opaque-token',
+    sessionToken: 'opaque-token',
+    expiresAt: '2026-07-29T00:00:00.000Z',
   };
 
   beforeEach(async () => {
@@ -62,6 +72,7 @@ describe('AuthController', () => {
         email: 'john.doe@example.com',
         password: 'Password123',
         role: UserRoles.Estudiante,
+        institutionId,
       };
 
       mockAuthService.register.mockResolvedValue(mockUserResponse);
@@ -70,7 +81,8 @@ describe('AuthController', () => {
 
       expect(mockAuthService.register).toHaveBeenCalledWith(createUserDto);
       expect(result).toEqual(mockUserResponse);
-      expect(result).toHaveProperty('token');
+      expect(result.pendingApproval).toBe(true);
+      expect(result).not.toHaveProperty('token');
     });
 
     it('should return user without password', async () => {
@@ -83,6 +95,7 @@ describe('AuthController', () => {
         email: 'john.doe@example.com',
         password: 'Password123',
         role: UserRoles.Estudiante,
+        institutionId,
       };
 
       mockAuthService.register.mockResolvedValue(mockUserResponse);
@@ -100,7 +113,7 @@ describe('AuthController', () => {
         password: 'Password123',
       };
 
-      mockAuthService.login.mockResolvedValue(mockUserResponse);
+      mockAuthService.login.mockResolvedValue(mockLoginResponse);
 
       const request = { ip: '127.0.0.1' } as any;
       const result = await controller.login(loginUserDto, request);
@@ -109,7 +122,7 @@ describe('AuthController', () => {
         loginUserDto,
         '127.0.0.1:john.doe@example.com'
       );
-      expect(result).toEqual(mockUserResponse);
+      expect(result).toEqual(mockLoginResponse);
       expect(result).toHaveProperty('token');
     });
 
@@ -119,7 +132,7 @@ describe('AuthController', () => {
         password: 'Password123',
       };
 
-      mockAuthService.login.mockResolvedValue(mockUserResponse);
+      mockAuthService.login.mockResolvedValue(mockLoginResponse);
 
       const result = await controller.login(loginUserDto, {
         ip: '127.0.0.1',

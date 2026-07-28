@@ -28,6 +28,16 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type Institution {
+  id: ID!
+  name: String!
+  slug: String!
+  emailDomain: String
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type User {
   id: String!
   name: String!
@@ -39,6 +49,8 @@ type User {
   password: String!
   isActive: Boolean!
   role: UserRoles!
+  approvalStatus: InstitutionApprovalStatus!
+  institution: Institution!
 
   """Many-to-many relationship with course table"""
   courses: [Course!]
@@ -66,6 +78,13 @@ enum UserRoles {
   Administrador
   Estudiante
   Docente
+}
+
+"""Institutional approval state for a user account"""
+enum InstitutionApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 type Course {
@@ -189,6 +208,9 @@ type Query {
   """Find all users"""
   users: [User!]!
 
+  """Find pending users for the current administrator institution"""
+  pendingInstitutionUsers: [User!]!
+
   """Search for a user by a unique ID"""
   userByID(id: String!): User!
 
@@ -212,6 +234,9 @@ type Query {
 }
 
 type Mutation {
+  """Approve or reject a pending user from the administrator institution"""
+  reviewInstitutionUser(input: ReviewInstitutionUserInput!): User!
+
   """Updates the data of a user by a unique ID"""
   updateUser(updateUserInput: UpdateUserInput!): User!
 
@@ -247,7 +272,11 @@ type Mutation {
   removeEvaluation(id: ID!): Boolean!
   createReEvaluationRequest(createReEvaluationRequestInput: CreateReEvaluationRequestInput!): ReEvaluationRequest!
   resolveReEvaluationRequest(resolveReEvaluationRequestInput: ResolveReEvaluationRequestInput!): ReEvaluationRequest!
-  executeSeed: String!
+}
+
+input ReviewInstitutionUserInput {
+  userId: ID!
+  status: InstitutionApprovalStatus!
 }
 
 input UpdateUserInput {

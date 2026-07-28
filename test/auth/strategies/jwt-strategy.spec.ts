@@ -7,6 +7,7 @@ import { JwtStrategy } from 'src/auth/strategies/jwt-strategy';
 import { User } from 'src/user/entities/user.entity';
 import { JwtPayload } from 'src/auth/interface/jwt-payload.interface';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
@@ -23,13 +24,23 @@ describe('JwtStrategy', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+    institution: {
+      id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+      name: 'Universidad Aura',
+      slug: 'universidad-aura',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };
 
   const mockUserRepository = {
-    findOneBy: jest.fn(),
+    findOne: jest.fn(),
   };
 
   const mockPayload = (overrides: Partial<JwtPayload> = {}): JwtPayload => ({
@@ -76,14 +87,17 @@ describe('JwtStrategy', () => {
     it('should return user when token is valid and user is active', async () => {
       const payload = mockPayload({ role: UserRoles.Administrador });
 
-      mockUserRepository.findOneBy.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await strategy.validate(payload);
 
-      expect(mockUserRepository.findOneBy).toHaveBeenCalledWith({ id: payload.id });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: payload.id },
+        relations: ['institution'],
+      });
       expect(result).toBeDefined();
       expect(result.id).toBe(mockUser.id);
-      expect(result.role).toBe(payload.role);
+      expect(result.role).toBe(mockUser.role);
       expect(result.password).toBeUndefined();
     });
 
@@ -96,7 +110,7 @@ describe('JwtStrategy', () => {
         role: UserRoles.Estudiante,
       });
 
-      mockUserRepository.findOneBy.mockResolvedValue(null);
+      mockUserRepository.findOne.mockResolvedValue(null);
 
       await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
       await expect(strategy.validate(payload)).rejects.toThrow('Token not valid');
@@ -106,7 +120,7 @@ describe('JwtStrategy', () => {
       const payload = mockPayload({ role: UserRoles.Estudiante });
 
       const inactiveUser = { ...mockUser, isActive: false };
-      mockUserRepository.findOneBy.mockResolvedValue(inactiveUser);
+      mockUserRepository.findOne.mockResolvedValue(inactiveUser);
 
       await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
       await expect(strategy.validate(payload)).rejects.toThrow(
@@ -114,21 +128,21 @@ describe('JwtStrategy', () => {
       );
     });
 
-    it('should update user role from payload', async () => {
+    it('should trust the current database role instead of the legacy token role', async () => {
       const payload = mockPayload({ role: UserRoles.Docente });
 
       const userWithDifferentRole = { ...mockUser, role: UserRoles.Estudiante };
-      mockUserRepository.findOneBy.mockResolvedValue(userWithDifferentRole);
+      mockUserRepository.findOne.mockResolvedValue(userWithDifferentRole);
 
       const result = await strategy.validate(payload);
 
-      expect(result.role).toBe(UserRoles.Docente);
+      expect(result.role).toBe(UserRoles.Estudiante);
     });
 
     it('should remove password from returned user', async () => {
       const payload = mockPayload({ role: UserRoles.Estudiante });
 
-      mockUserRepository.findOneBy.mockResolvedValue(mockUser);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await strategy.validate(payload);
 

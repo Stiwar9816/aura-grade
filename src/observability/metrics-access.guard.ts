@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { secureCompare } from '../common/security';
+import { normalizeConfiguredSecret, secureCompare } from '../common/security';
 
 @Injectable()
 export class MetricsAccessGuard implements CanActivate {
@@ -8,7 +8,7 @@ export class MetricsAccessGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
-    const expected = this.configService.get<string>('METRICS_TOKEN');
+    const expected = normalizeConfiguredSecret(this.configService.get<string>('METRICS_TOKEN'));
     const isDevelopment = this.configService.get<string>('STATE') === 'dev';
     if (!expected && isDevelopment) return true;
 

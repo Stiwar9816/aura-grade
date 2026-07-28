@@ -3,6 +3,7 @@ import { CreateUserDto } from 'src/auth/dto/create-user.dto';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 
 describe('CreateUserDto', () => {
+  const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   let createUserDto: CreateUserDto;
 
   beforeEach(() => {
@@ -15,6 +16,7 @@ describe('CreateUserDto', () => {
     createUserDto.email = 'john.doe@example.com';
     createUserDto.password = 'Password123';
     createUserDto.role = UserRoles.Estudiante;
+    createUserDto.institutionId = institutionId;
   });
 
   it('should pass validation with valid data', async () => {
@@ -178,8 +180,8 @@ describe('CreateUserDto', () => {
   });
 
   describe('role validation', () => {
-    it('should pass with valid roles', async () => {
-      const validRoles = [UserRoles.Administrador, UserRoles.Estudiante, UserRoles.Docente];
+    it('should pass with public registration roles', async () => {
+      const validRoles = [UserRoles.Estudiante, UserRoles.Docente];
 
       for (const role of validRoles) {
         createUserDto.role = role;
@@ -187,5 +189,17 @@ describe('CreateUserDto', () => {
         expect(errors.length).toBe(0);
       }
     });
+
+    it('should reject the administrator role in public registration', async () => {
+      createUserDto.role = UserRoles.Administrador;
+      const errors = await validate(createUserDto);
+      expect(errors.some((error) => error.property === 'role')).toBe(true);
+    });
+  });
+
+  it('should require a valid institution ID', async () => {
+    createUserDto.institutionId = 'not-a-uuid';
+    const errors = await validate(createUserDto);
+    expect(errors.some((error) => error.property === 'institutionId')).toBe(true);
   });
 });

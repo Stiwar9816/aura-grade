@@ -4,6 +4,7 @@ import { SessionService } from 'src/auth/session';
 import { RedisService } from 'src/redis';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 import { User } from 'src/user/entities/user.entity';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 const describeRedis = process.env.RUN_REDIS_INTEGRATION === 'true' ? describe : describe.skip;
 
@@ -20,6 +21,16 @@ describeRedis('SessionService Redis integration', () => {
     password: 'hashed',
     isActive: true,
     role: UserRoles.Estudiante,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+    institution: {
+      id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
+      name: 'Universidad Aura',
+      slug: 'universidad-aura',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
@@ -32,7 +43,7 @@ describeRedis('SessionService Redis integration', () => {
     },
   } as unknown as ConfigService;
   const repository = {
-    findOneBy: jest.fn(async () => ({ ...user })),
+    findOne: jest.fn(async () => ({ ...user })),
   };
   const metrics = {
     increment: jest.fn(),

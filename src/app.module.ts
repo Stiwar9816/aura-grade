@@ -34,6 +34,7 @@ import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
 import { ReEvaluationModule } from './reevaluation/reevaluation.module';
+import { InstitutionModule } from './institution';
 // Config
 import { envs } from './config';
 import { SeedModule } from './seed/seed.module';
@@ -89,7 +90,7 @@ const redisQueueConnection = envs.redis_url
       entities: [], // Usar autoLoadEntities
       migrations: [], // Evitar que el glob falle en runtime
       autoLoadEntities: true,
-      synchronize: envs.state === 'dev',
+      synchronize: false,
     }),
     // GraphQL
     GraphQLModule.forRoot<ApolloDriverConfig>({
@@ -113,6 +114,7 @@ const redisQueueConnection = envs.redis_url
     AiModule,
     NotificationsModule,
     ReEvaluationModule,
+    InstitutionModule,
     SeedModule,
     HealthModule,
     ObservabilityModule,

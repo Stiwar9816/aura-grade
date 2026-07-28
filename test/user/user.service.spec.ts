@@ -5,6 +5,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UserService } from 'src/user/user.service';
@@ -17,8 +18,19 @@ import { CreateUserInput } from 'src/user/dto/inputs/create-user.input';
 import { UpdateUserInput } from 'src/user/dto/inputs/update-user.input';
 import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('UserService', () => {
+  const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
+  const institution = {
+    id: institutionId,
+    name: 'Universidad Aura',
+    slug: 'universidad-aura',
+    emailDomain: 'aura.edu.co',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   let service: UserService;
   let userRepository: Repository<User>;
   let mailService: MailService;
@@ -36,6 +48,9 @@ describe('UserService', () => {
     password: 'hashedPassword123',
     isActive: true,
     role: UserRoles.Estudiante,
+    approvalStatus: InstitutionApprovalStatus.APPROVED,
+    institutionId,
+    institution,
     authVersion: 1,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
@@ -46,6 +61,7 @@ describe('UserService', () => {
     save: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneBy: jest.fn(),
     findOneByOrFail: jest.fn(),
     preload: jest.fn(),
     createQueryBuilder: jest.fn(),
@@ -166,6 +182,7 @@ describe('UserService', () => {
       expect(mockUserRepository.find).toHaveBeenCalledWith({
         where: {
           role: expect.anything(),
+          institutionId,
         },
         relations: [
           'courses',
@@ -176,6 +193,68 @@ describe('UserService', () => {
         ],
       });
       expect(result).toEqual([mockUser]);
+    });
+  });
+
+  describe('institutional approvals', () => {
+    const administrator = {
+      ...mockUser,
+      id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+      role: UserRoles.Administrador,
+    } as User;
+
+    it('lists only pending users from the administrator institution', async () => {
+      mockUserRepository.find.mockResolvedValue([]);
+
+      await service.findPendingInstitutionUsers(administrator);
+
+      expect(mockUserRepository.find).toHaveBeenCalledWith({
+        where: {
+          institutionId,
+          approvalStatus: InstitutionApprovalStatus.PENDING,
+          role: expect.anything(),
+        },
+        order: { name: 'ASC', last_name: 'ASC' },
+      });
+    });
+
+    it('approves a user from the same institution and invalidates old sessions', async () => {
+      const pendingUser = {
+        ...mockUser,
+        approvalStatus: InstitutionApprovalStatus.PENDING,
+      };
+      mockUserRepository.findOneBy.mockResolvedValue(pendingUser);
+      mockUserRepository.save.mockImplementation(async (user) => user);
+
+      const result = await service.reviewInstitutionUser(
+        {
+          userId: pendingUser.id,
+          status: InstitutionApprovalStatus.APPROVED,
+        },
+        administrator
+      );
+
+      expect(result.approvalStatus).toBe(InstitutionApprovalStatus.APPROVED);
+      expect(result.authVersion).toBe(2);
+    });
+
+    it('rejects cross-institution review attempts', async () => {
+      mockUserRepository.findOneBy.mockResolvedValue({
+        ...mockUser,
+        institutionId: '46dcda76-9df1-421c-866d-23e95de2e639',
+        approvalStatus: InstitutionApprovalStatus.PENDING,
+      });
+
+      await expect(
+        service.reviewInstitutionUser(
+          {
+            userId: mockUser.id,
+            status: InstitutionApprovalStatus.APPROVED,
+          },
+          administrator
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 

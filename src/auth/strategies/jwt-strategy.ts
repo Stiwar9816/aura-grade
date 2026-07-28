@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 // Interfaces
 import { JwtPayload } from '../interface/jwt-payload.interface';
+import { InstitutionApprovalStatus } from '../../institution';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -27,12 +28,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   // validate if the user has a required token
   async validate(payload: JwtPayload): Promise<User> {
-    const { id, role } = payload;
-    const user = await this.userRepository.findOneBy({ id });
+    const { id } = payload;
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['institution'],
+    });
     if (!user) throw new UnauthorizedException('Token not valid');
-    if (!user.isActive) throw new UnauthorizedException('User is inactive, talk with an admin');
+    if (
+      !user.isActive ||
+      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
+      !user.institution?.isActive
+    )
+      throw new UnauthorizedException('User is inactive, talk with an admin');
 
-    user.role = role;
     delete user.password;
 
     return user;

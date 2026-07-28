@@ -33,6 +33,21 @@ describe('BffAuthGuard', () => {
     );
   });
 
+  it('accepts a raw env-file value wrapped in quotes', () => {
+    const guard = new BffAuthGuard({
+      get: (key: string) => (key === 'BFF_SHARED_SECRET' ? `"${'a'.repeat(32)}"` : 'prod'),
+    } as any);
+
+    expect(
+      guard.canActivate(
+        context({
+          originalUrl: '/api/auth/me',
+          headers: { 'x-bff-secret': 'a'.repeat(32) },
+        })
+      )
+    ).toBe(true);
+  });
+
   it('keeps health checks public', () => {
     const guard = new BffAuthGuard({ get: jest.fn() } as any);
     expect(guard.canActivate(context({ originalUrl: '/api/health', headers: {} }))).toBe(true);

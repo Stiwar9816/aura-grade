@@ -6,6 +6,8 @@ import {
   BeforeUpdate,
   Column,
   Entity,
+  JoinColumn,
+  ManyToOne,
   ManyToMany,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -19,6 +21,8 @@ import type { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import type { Institution } from 'src/institution';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 @Entity({ name: 'users' })
 @ObjectType()
@@ -118,6 +122,26 @@ export class User {
   @Column({ type: 'enum', enum: UserRoles, default: UserRoles.Estudiante })
   @Field(() => UserRoles)
   role: UserRoles;
+
+  @Column({
+    type: 'enum',
+    enum: InstitutionApprovalStatus,
+    default: InstitutionApprovalStatus.PENDING,
+  })
+  @Field(() => InstitutionApprovalStatus)
+  approvalStatus: InstitutionApprovalStatus;
+
+  @Column({ name: 'institution_id', type: 'uuid' })
+  institutionId: string;
+
+  @ManyToOne(
+    () => require('../../institution/entities/institution.entity').Institution,
+    (institution: Institution) => institution.users,
+    { nullable: false, onDelete: 'RESTRICT' }
+  )
+  @JoinColumn({ name: 'institution_id' })
+  @Field(() => require('../../institution/entities/institution.entity').Institution)
+  institution: Institution;
 
   @Column({ type: 'int', default: 1 })
   authVersion: number;

@@ -1,6 +1,7 @@
 // NestJS
 import {
   BadRequestException,
+  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
@@ -15,7 +16,12 @@ import { In, Repository } from 'typeorm';
 // Bcrypt
 import * as bcrypt from 'bcryptjs';
 // Dto
-import { AssignCoursesInput, CreateUserInput, UpdateUserInput } from './dto';
+import {
+  AssignCoursesInput,
+  CreateUserInput,
+  ReviewInstitutionUserInput,
+  UpdateUserInput,
+} from './dto';
 // Entities
 import { User } from './entities/user.entity';
 import { Course } from 'src/course/entities/course.entity';
@@ -24,6 +30,8 @@ import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
 // Utils
 import { randomPassword } from 'src/auth/common';
+import { InstitutionApprovalStatus } from 'src/institution';
+import { UserRoles } from 'src/auth/enums';
 
 @Injectable()
 export class UserService {
@@ -50,11 +58,12 @@ export class UserService {
     }
   }
 
-  async findAll(_user: User): Promise<User[]> {
+  async findAll(user: User): Promise<User[]> {
     const allowedRoles = ['Estudiante', 'Docente', 'Administrador'];
     return this.userRepository.find({
       where: {
         role: In(allowedRoles),
+        institutionId: user.institutionId,
       },
       relations: [
         'courses',
@@ -64,6 +73,36 @@ export class UserService {
         'submissions.assignment.rubric',
       ],
     });
+  }
+
+  async findPendingInstitutionUsers(administrator: User): Promise<User[]> {
+    return this.userRepository.find({
+      where: {
+        institutionId: administrator.institutionId,
+        approvalStatus: InstitutionApprovalStatus.PENDING,
+        role: In([UserRoles.Estudiante, UserRoles.Docente]),
+      },
+      order: { name: 'ASC', last_name: 'ASC' },
+    });
+  }
+
+  async reviewInstitutionUser(
+    { userId, status }: ReviewInstitutionUserInput,
+    administrator: User
+  ): Promise<User> {
+    if (status === InstitutionApprovalStatus.PENDING)
+      throw new BadRequestException('La revisión debe aprobar o rechazar la solicitud.');
+
+    const target = await this.userRepository.findOneBy({ id: userId });
+    if (!target) throw new NotFoundException(`${userId} not found`);
+    if (target.institutionId !== administrator.institutionId)
+      throw new ForbiddenException('No puedes revisar usuarios de otra institución.');
+    if (target.role === UserRoles.Administrador)
+      throw new BadRequestException('Los administradores solo se crean mediante migración.');
+
+    target.approvalStatus = status;
+    target.authVersion = (target.authVersion ?? 1) + 1;
+    return this.userRepository.save(target);
   }
 
   async findOneById(id: string): Promise<User> {

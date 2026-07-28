@@ -1,7 +1,14 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRoles } from 'src/auth/enums';
+import * as bcrypt from 'bcryptjs';
 
 import { SEED_DATA } from './data/seed-data';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
@@ -10,6 +17,7 @@ import { Submission } from 'src/submission/entities/submission.entity';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { User } from 'src/user/entities/user.entity';
 import { Course } from 'src/course/entities/course.entity';
+import { Institution, InstitutionApprovalStatus } from 'src/institution';
 
 @Injectable()
 export class SeedService {
@@ -21,16 +29,37 @@ export class SeedService {
     @InjectRepository(Assignment) private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(Submission) private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Evaluation) private readonly evaluationRepository: Repository<Evaluation>,
-    @InjectRepository(Course) private readonly courseRepository: Repository<Course>
+    @InjectRepository(Course) private readonly courseRepository: Repository<Course>,
+    @InjectRepository(Institution)
+    private readonly institutionRepository: Repository<Institution>,
+    private readonly configService: ConfigService
   ) {}
 
   async executeSeed() {
+    if (this.configService.get<string>('STATE') !== 'dev') {
+      throw new ForbiddenException('Database seeding is only available in development.');
+    }
+
     try {
       // 1. Limpiar base de datos (Orden de integridad referencial)
       await this.deleteDatabase();
 
       // 2. Crear Usuarios (Docentes y Estudiantes)
-      const users = await this.userRepository.save(SEED_DATA.users);
+      const institution = await this.institutionRepository.findOne({
+        where: { isActive: true },
+        order: { createdAt: 'ASC' },
+      });
+      if (!institution) {
+        throw new Error('No active institution found. Run database migrations before the seed.');
+      }
+      const seedUsers = SEED_DATA.users.map((user) => ({
+        ...user,
+        password: bcrypt.hashSync(user.password, 12),
+        institutionId: institution.id,
+        institution,
+        approvalStatus: InstitutionApprovalStatus.APPROVED,
+      }));
+      const users = await this.userRepository.save(seedUsers);
       const teacher = users.find((u) => u.role === UserRoles.Docente);
 
       if (!teacher) throw new Error('No teacher found in SEED_DATA');
@@ -80,6 +109,10 @@ export class SeedService {
     await this.assignmentRepository.createQueryBuilder().delete().execute();
     await this.courseRepository.createQueryBuilder().delete().execute();
     await this.rubricRepository.createQueryBuilder().delete().execute();
-    await this.userRepository.createQueryBuilder().delete().execute();
+    await this.userRepository
+      .createQueryBuilder()
+      .delete()
+      .where('role != :administrator', { administrator: UserRoles.Administrador })
+      .execute();
   }
 }

@@ -9,7 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // Services
 import { UserService } from './user.service';
 // Dto
-import { AssignCoursesInput, UpdateUserInput } from './dto';
+import { AssignCoursesInput, ReviewInstitutionUserInput, UpdateUserInput } from './dto';
 // Entities
 import { User } from './entities/user.entity';
 // Enums
@@ -28,6 +28,29 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
     return this.userService.findAll(user);
+  }
+
+  @Query(() => [User], {
+    name: 'pendingInstitutionUsers',
+    description: 'Find pending users for the current administrator institution',
+  })
+  @UseGuards(JwtAuthGuard)
+  findPendingInstitutionUsers(
+    @CurrentUser([UserRoles.Administrador]) administrator: User
+  ): Promise<User[]> {
+    return this.userService.findPendingInstitutionUsers(administrator);
+  }
+
+  @Mutation(() => User, {
+    name: 'reviewInstitutionUser',
+    description: 'Approve or reject a pending user from the administrator institution',
+  })
+  @UseGuards(JwtAuthGuard)
+  reviewInstitutionUser(
+    @Args('input') input: ReviewInstitutionUserInput,
+    @CurrentUser([UserRoles.Administrador]) administrator: User
+  ): Promise<User> {
+    return this.userService.reviewInstitutionUser(input, administrator);
   }
 
   @Query(() => User, {
