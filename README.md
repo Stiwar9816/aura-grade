@@ -266,10 +266,43 @@ Cada PR que cambie el esquema debe incluir:
    actualmente desplegada.
 4. Plan de respaldo, aplicación y recuperación para producción.
 
-Después de aprobar y compilar el PR, el responsable del despliegue ejecuta desde
-un entorno controlado con acceso a PostgreSQL:
+Después de aprobar y fusionar el PR, el responsable ejecuta manualmente el
+workflow de GitHub Actions **Production Database Migrations** desde `main`.
+Este flujo permite operar con un Web Service Free de Render, que no ofrece
+Shell ni SSH, y nunca se dispara con un `push` o un despliegue.
+
+Configura estos secretos en **GitHub > Settings > Secrets and variables >
+Actions**:
+
+```text
+PRODUCTION_DB_HOST
+PRODUCTION_DB_NAME
+PRODUCTION_DB_USERNAME
+PRODUCTION_DB_PASSWORD
+```
+
+Usa el hostname **externo** de Render PostgreSQL. El workflow fija el puerto
+`5432`, `STATE=prod` y `DB_SSL_MODE=require`. PostgreSQL debe permitir conexiones
+externas desde el runner de GitHub; si existe una lista de acceso restrictiva,
+la conexión será rechazada.
+
+Para ejecutar:
+
+1. Abre **GitHub > Actions > Production Database Migrations**.
+2. Selecciona **Run workflow**, conserva la rama `main` y escribe
+   `MIGRATE_PRODUCTION`.
+3. Revisa el estado mostrado antes y después de la ejecución.
+4. Despliega la aplicación solo cuando el workflow termine correctamente.
+
+La configuración de la CLI valida únicamente las variables de PostgreSQL. No
+copies al workflow secretos de JWT, correo, Redis, IA, Cloudinary ni del BFF.
+
+Como alternativa local, un responsable con acceso al endpoint externo puede
+compilar y ejecutar:
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm run build
 STATE=prod pnpm run migration:show:prod
 STATE=prod pnpm run migration:run:prod
 STATE=prod pnpm run migration:show:prod
@@ -302,11 +335,13 @@ asigna a ella los usuarios existentes y garantiza un administrador aprobado. En
 una base vacía, sus variables `BOOTSTRAP_*` son obligatorias. La contraseña se
 almacena con bcrypt y nunca debe quedar escrita en el repositorio.
 
-1. Define las variables `BOOTSTRAP_*` mediante el gestor de secretos del entorno.
-2. Ejecuta la migración.
+1. Define las nueve variables `BOOTSTRAP_*` anteriores como secretos de GitHub
+   Actions.
+2. Ejecuta manualmente `Production Database Migrations` desde `main`.
 3. Verifica el ingreso del administrador y cambia inmediatamente su contraseña.
-4. Retira `BOOTSTRAP_ADMIN_PASSWORD` y las demás variables temporales del
-   entorno una vez aplicada la migración.
+4. Elimina `BOOTSTRAP_ADMIN_PASSWORD` y las demás variables `BOOTSTRAP_*` de
+   GitHub una vez aplicada la migración. Las siguientes migraciones ya no las
+   necesitarán.
 
 El registro público solo acepta `Estudiante` o `Docente`. Ambos se crean con
 estado `PENDING`, no reciben sesión y deben ser aprobados o rechazados por un

@@ -1,21 +1,21 @@
 import { DataSource, DataSourceOptions } from 'typeorm';
-import { envs } from './envs';
+import { databaseEnvs } from './database-envs';
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
-  host: envs.db_host,
-  port: +envs.db_port,
-  username: envs.db_username,
-  password: envs.db_password,
-  database: envs.db_name,
-  ssl: envs.db_ssl_mode === 'require' ? { rejectUnauthorized: false } : false,
+  host: databaseEnvs.db_host,
+  port: +databaseEnvs.db_port,
+  username: databaseEnvs.db_username,
+  password: databaseEnvs.db_password,
+  database: databaseEnvs.db_name,
+  ssl: databaseEnvs.db_ssl_mode === 'require' ? { rejectUnauthorized: false } : false,
   extra: {
-    connectionTimeoutMillis: envs.db_connection_timeout_ms,
+    connectionTimeoutMillis: databaseEnvs.db_connection_timeout_ms,
     keepAlive: true,
     application_name: 'aura-grade',
   },
-  entities: envs.state === 'prod' ? ['dist/**/*.entity.js'] : ['src/**/*.entity.ts'],
-  migrations: envs.state === 'prod' ? ['dist/migrations/*.js'] : ['src/migrations/*.ts'],
+  entities: databaseEnvs.state === 'prod' ? ['dist/**/*.entity.js'] : ['src/**/*.entity.ts'],
+  migrations: databaseEnvs.state === 'prod' ? ['dist/migrations/*.js'] : ['src/migrations/*.ts'],
   synchronize: false, // Always false for CLI
 };
 

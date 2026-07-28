@@ -1,0 +1,89 @@
+name: Production Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Escribe MIGRATE_PRODUCTION para confirmar'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STATE: prod
+      DB_HOST: ${{ secrets.PRODUCTION_DB_HOST }}
+      DB_PORT: ${{ secrets.PRODUCTION_DB_PORT }}
+      DB_NAME: ${{ secrets.PRODUCTION_DB_NAME }}
+      DB_USERNAME: ${{ secrets.PRODUCTION_DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.PRODUCTION_DB_PASSWORD }}
+      DB_SSL_MODE: ${{ secrets.PRODUCTION_DB_SSL_MODE }}
+      DB_CONNECTION_TIMEOUT_MS: ${{ secrets.PRODUCTION_DB_CONNECTION_TIMEOUT_MS }}
+      BOOTSTRAP_INSTITUTION_NAME: ${{ secrets.BOOTSTRAP_INSTITUTION_NAME }}
+      BOOTSTRAP_INSTITUTION_SLUG: ${{ secrets.BOOTSTRAP_INSTITUTION_SLUG }}
+      BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN: ${{ secrets.BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN }}
+      BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.BOOTSTRAP_ADMIN_EMAIL }}
+      BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.BOOTSTRAP_ADMIN_PASSWORD }}
+      BOOTSTRAP_ADMIN_NAME: ${{ secrets.BOOTSTRAP_ADMIN_NAME }}
+      BOOTSTRAP_ADMIN_LAST_NAME: ${{ secrets.BOOTSTRAP_ADMIN_LAST_NAME }}
+      BOOTSTRAP_ADMIN_DOCUMENT_NUM: ${{ secrets.BOOTSTRAP_ADMIN_DOCUMENT_NUM }}
+      BOOTSTRAP_ADMIN_PHONE: ${{ secrets.BOOTSTRAP_ADMIN_PHONE }}
+
+    steps:
+      - name: Validate manual confirmation and branch
+        env:
+          MIGRATION_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$MIGRATION_CONFIRMATION" != "MIGRATE_PRODUCTION" ]; then
+            echo "La confirmación no coincide."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Las migraciones de producción solo pueden ejecutarse desde main."
+            exit 1
+          fi
+          for variable in DB_HOST DB_NAME DB_USERNAME DB_PASSWORD; do
+            if [ -z "${!variable}" ]; then
+              echo "Falta configurar el secreto correspondiente a $variable."
+              exit 1
+            fi
+          done
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build migration artifact
+        run: pnpm run build
+
+      - name: Show migration status before execution
+        run: pnpm run migration:show:prod
+
+      - name: Apply pending migrations
+        run: pnpm run migration:run:prod
+
+      - name: Confirm final migration status
+        run: pnpm run migration:show:prod
