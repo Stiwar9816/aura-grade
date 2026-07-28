@@ -57,4 +57,4 @@ USER nestjs
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["sh", "-c", "node dist/scripts/run-migrations.js && exec node dist/main"]
+CMD ["node", "dist/main"]

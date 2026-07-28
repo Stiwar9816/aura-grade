@@ -112,8 +112,6 @@ DB_USERNAME=postgres
 DB_PASSWORD=secret
 DB_SSL_MODE=disable
 DB_CONNECTION_TIMEOUT_MS=10000
-DB_MIGRATION_MAX_ATTEMPTS=10
-DB_MIGRATION_RETRY_DELAY_MS=2000
 
 # JWT
 JWT_SECRET=super-secret-key
@@ -255,30 +253,38 @@ revierte manualmente una base sin una estrategia de recuperación y respaldo.
 
 #### Despliegue (Producción)
 
-En entornos de producción (Docker), las migraciones se ejecutan **automáticamente** antes de iniciar el servidor:
+La imagen de producción **no ejecuta migraciones automáticamente**. El
+contenedor inicia la API directamente con `node dist/main`; las migraciones se
+revisan en el PR y se aplican como un paso operativo explícito.
 
-- Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en los archivos Compose.
-- Usa `DB_SSL_MODE=require` cuando el proveedor de la base de datos exige TLS.
-- Dentro de Compose, la API siempre conecta a `db:5432`; `DB_PORT` solo cambia
-  el puerto publicado en el host para desarrollo.
-- Los errores transitorios de conexión se reintentan con backoff antes de abortar el arranque.
-- Los errores propios de una migración SQL fallan inmediatamente y no se ocultan con reintentos.
-- La imagen ejecuta `dist/scripts/run-migrations.js` para aplicar los archivos `.js` compilados.
-- Si una migración falla, el servidor no arrancará, previniendo estados inconsistentes.
-- No ejecutes simultáneamente `migration:run:prod` y el arranque de la imagen:
-  el contenedor ya ejecuta el mismo runner.
+Cada PR que cambie el esquema debe incluir:
 
-Para una comprobación manual de un artefacto productivo ya compilado:
+1. La entidad modificada y su migración TypeORM.
+2. Evidencia de ejecución sobre una base de prueba y de una segunda ejecución
+   idempotente.
+3. Evaluación de bloqueo, pérdida de datos y compatibilidad con la versión
+   actualmente desplegada.
+4. Plan de respaldo, aplicación y recuperación para producción.
+
+Después de aprobar y compilar el PR, el responsable del despliegue ejecuta desde
+un entorno controlado con acceso a PostgreSQL:
 
 ```bash
 STATE=prod pnpm run migration:show:prod
 STATE=prod pnpm run migration:run:prod
+STATE=prod pnpm run migration:show:prod
 ```
 
-El segundo comando usa el mismo runner resiliente del contenedor. Debe
-ejecutarse desde un entorno con acceso directo a PostgreSQL y todas las
-variables requeridas. Antes de una migración destructiva, crea y comprueba un
-respaldo.
+Solo después de confirmar que no quedan migraciones pendientes se despliega o
+reinicia la aplicación. Antes de una migración destructiva, crea y comprueba un
+respaldo. En producción no uses `migration:revert`; corrige mediante una nueva
+migración revisada.
+
+- Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en Compose o con la
+  conexión interna de Render.
+- Usa `DB_SSL_MODE=require` con un endpoint externo que exija TLS.
+- Dentro de Compose, la API conecta a `db:5432`; `DB_PORT` solo cambia el puerto
+  publicado en el host para desarrollo.
 
 | Comando                        | Descripción                                       | Entorno     |
 | :----------------------------- | :------------------------------------------------ | :---------- |
@@ -287,7 +293,7 @@ respaldo.
 | `pnpm run migration:run`       | Aplica las migraciones `.ts` pendientes.          | Local       |
 | `pnpm run migration:revert`    | Revierte la última migración local.               | Local       |
 | `pnpm run migration:show:prod` | Lista el estado del artefacto compilado.          | Prod/manual |
-| `pnpm run migration:run:prod`  | Ejecuta el runner resiliente compilado.           | Prod/auto   |
+| `pnpm run migration:run:prod`  | Aplica manualmente las migraciones compiladas.    | Prod/manual |
 
 ### Bootstrap institucional y aprobación de cuentas
 

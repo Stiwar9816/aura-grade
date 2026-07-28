@@ -13,7 +13,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 // Services
 import { AuthService } from './auth.service';
