@@ -3,7 +3,7 @@ services:
     image: postgres:17-alpine
     restart: always
     ports:
-      - '${DB_PORT}:${DB_PORT}'
+      - '${DB_PORT:-5432}:5432'
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
@@ -35,7 +35,8 @@ services:
     environment:
       STATE: dev
       DB_HOST: db
-      DB_PORT: ${DB_PORT}
+      # Entre contenedores se usa siempre el puerto interno de PostgreSQL.
+      DB_PORT: 5432
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}

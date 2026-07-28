@@ -209,14 +209,49 @@ AuraGrade utiliza **TypeORM Migrations** para gestionar el esquema de la base de
 
 Cada vez que realices un cambio en un archivo `.entity.ts`, sigue este flujo:
 
-1. **Generar la migración**:
+1. **Modifica la entidad**, pero no habilites `synchronize`; debe permanecer en
+   `false`.
+2. **Genera una migración con un nombre descriptivo**:
+
    ```bash
-   pnpm run migration:generate -- src/migrations/NombreDeMiCambio
+   pnpm run migration:generate -- src/migrations/AddNombreDelCambio
    ```
-2. **Aplicar los cambios localmente**:
+
+3. **Revisa el archivo generado** antes de ejecutarlo. Comprueba especialmente:
+   operaciones destructivas, columnas `NOT NULL` sobre tablas con datos,
+   conversiones de tipos, índices, claves foráneas y el método `down`.
+4. **Consulta el estado local**:
+
+   ```bash
+   pnpm run migration:show
+   ```
+
+5. **Aplica las migraciones pendientes localmente**:
+
    ```bash
    pnpm run migration:run
    ```
+
+6. **Verifica que sea idempotente**. La segunda ejecución no debe aplicar nada:
+
+   ```bash
+   pnpm run migration:run
+   pnpm run migration:show
+   ```
+
+7. **Ejecuta las comprobaciones antes de publicar**:
+
+   ```bash
+   pnpm test -- --runInBand
+   pnpm run build
+   ```
+
+8. Incluye en el mismo commit la entidad, la migración, sus pruebas y cualquier
+   variable/documentación asociada.
+
+`migration:revert` se reserva para desarrollo y revierte solo la última
+migración aplicada. En producción se corrige con una nueva migración; no se
+revierte manualmente una base sin una estrategia de recuperación y respaldo.
 
 #### Despliegue (Producción)
 
@@ -224,18 +259,35 @@ En entornos de producción (Docker), las migraciones se ejecutan **automáticame
 
 - Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en los archivos Compose.
 - Usa `DB_SSL_MODE=require` cuando el proveedor de la base de datos exige TLS.
+- Dentro de Compose, la API siempre conecta a `db:5432`; `DB_PORT` solo cambia
+  el puerto publicado en el host para desarrollo.
 - Los errores transitorios de conexión se reintentan con backoff antes de abortar el arranque.
 - Los errores propios de una migración SQL fallan inmediatamente y no se ocultan con reintentos.
-
 - La imagen ejecuta `dist/scripts/run-migrations.js` para aplicar los archivos `.js` compilados.
 - Si una migración falla, el servidor no arrancará, previniendo estados inconsistentes.
+- No ejecutes simultáneamente `migration:run:prod` y el arranque de la imagen:
+  el contenedor ya ejecuta el mismo runner.
 
-| Comando                       | Descripción                                       | Entorno     |
-| :---------------------------- | :------------------------------------------------ | :---------- |
-| `pnpm run migration:generate` | Crea un archivo `.ts` con los cambios detectados. | Local       |
-| `pnpm run migration:run`      | Sincroniza la DB local con las migraciones `.ts`. | Local       |
-| `pnpm run migration:revert`   | Deshace la última migración aplicada.             | Local       |
-| `pnpm run migration:run:prod` | Aplica las migraciones compiladas (`dist/`).      | Prod (Auto) |
+Para una comprobación manual de un artefacto productivo ya compilado:
+
+```bash
+STATE=prod pnpm run migration:show:prod
+STATE=prod pnpm run migration:run:prod
+```
+
+El segundo comando usa el mismo runner resiliente del contenedor. Debe
+ejecutarse desde un entorno con acceso directo a PostgreSQL y todas las
+variables requeridas. Antes de una migración destructiva, crea y comprueba un
+respaldo.
+
+| Comando                        | Descripción                                       | Entorno     |
+| :----------------------------- | :------------------------------------------------ | :---------- |
+| `pnpm run migration:generate`  | Genera una migración `.ts` desde las entidades.   | Local       |
+| `pnpm run migration:show`      | Lista migraciones locales aplicadas y pendientes. | Local       |
+| `pnpm run migration:run`       | Aplica las migraciones `.ts` pendientes.          | Local       |
+| `pnpm run migration:revert`    | Revierte la última migración local.               | Local       |
+| `pnpm run migration:show:prod` | Lista el estado del artefacto compilado.          | Prod/manual |
+| `pnpm run migration:run:prod`  | Ejecuta el runner resiliente compilado.           | Prod/auto   |
 
 ### Bootstrap institucional y aprobación de cuentas
 

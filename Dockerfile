@@ -1,8 +1,15 @@
 # Base stage
 FROM node:22-alpine AS base
+ARG PNPM_VERSION=10.33.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && apk update && apk upgrade --no-cache && \
+RUN corepack enable && \
+    for attempt in 1 2 3 4 5; do \
+      corepack install --global "pnpm@${PNPM_VERSION}" && break; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      sleep "$((attempt * 2))"; \
+    done && \
+    apk update && apk upgrade --no-cache && \
     apk add --no-cache dumb-init tzdata libc6-compat
 ENV TZ=America/Bogota
 WORKDIR /app

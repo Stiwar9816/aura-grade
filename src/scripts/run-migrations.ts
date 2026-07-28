@@ -39,6 +39,9 @@ interface ErrorLike {
   cause?: unknown;
 }
 
+const sanitizeLogValue = (value: string, maxLength: number): string =>
+  value.replace(/[\r\n]/g, ' ').slice(0, maxLength);
+
 export interface MigrationRetryOptions {
   maxAttempts: number;
   retryDelayMs: number;
@@ -57,6 +60,33 @@ export function isTransientDatabaseError(error: unknown): boolean {
   }
 
   return false;
+}
+
+export function describeDatabaseError(error: unknown): string {
+  let current: unknown = error;
+
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const candidate = current as ErrorLike;
+    const code = candidate.code && sanitizeLogValue(candidate.code, 64);
+    const message = candidate.message && sanitizeLogValue(candidate.message, 300);
+
+    if (code || message) {
+      return [code && `code=${code}`, message && `message="${message}"`].filter(Boolean).join(' ');
+    }
+
+    current = candidate.cause;
+  }
+
+  return 'no error details available';
+}
+
+export function describeDatabaseTarget(
+  host: string,
+  port: number,
+  database: string,
+  sslMode: string
+): string {
+  return `host=${sanitizeLogValue(host, 255)} port=${port} database=${sanitizeLogValue(database, 128)} ssl=${sanitizeLogValue(sslMode, 16)}`;
 }
 
 export async function runMigrationsWithRetry(
@@ -92,7 +122,7 @@ export async function runMigrationsWithRetry(
 
       const delay = Math.min(options.retryDelayMs * 2 ** (attempt - 1), 30000);
       logger.warn(
-        `Transient database error during migration attempt ${attempt}/${options.maxAttempts}. Retrying in ${delay} ms.`
+        `Transient database error during migration attempt ${attempt}/${options.maxAttempts}: ${describeDatabaseError(error)}. Retrying in ${delay} ms.`
       );
       await wait(delay);
     }
@@ -100,6 +130,14 @@ export async function runMigrationsWithRetry(
 }
 
 async function main(): Promise<void> {
+  logger.log(
+    `Starting database migrations: ${describeDatabaseTarget(
+      envs.db_host,
+      envs.db_port,
+      envs.db_name,
+      envs.db_ssl_mode
+    )}`
+  );
   await runMigrationsWithRetry(() => new DataSource(dataSourceOptions), {
     maxAttempts: envs.db_migration_max_attempts,
     retryDelayMs: envs.db_migration_retry_delay_ms,

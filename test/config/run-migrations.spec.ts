@@ -1,5 +1,10 @@
 import { DataSource } from 'typeorm';
-import { isTransientDatabaseError, runMigrationsWithRetry } from '../../src/scripts/run-migrations';
+import {
+  describeDatabaseError,
+  describeDatabaseTarget,
+  isTransientDatabaseError,
+  runMigrationsWithRetry,
+} from '../../src/scripts/run-migrations';
 
 function dataSourceMock(overrides: Partial<DataSource> = {}): DataSource {
   return {
@@ -22,6 +27,27 @@ describe('migration runner', () => {
 
   it('does not classify SQL migration failures as transient', () => {
     expect(isTransientDatabaseError({ code: '23505', message: 'duplicate key' })).toBe(false);
+  });
+
+  it('describes a database error without multiline log injection', () => {
+    expect(
+      describeDatabaseError({
+        code: 'ECONNRESET\nspoofed',
+        message: 'Connection terminated\nunexpectedly',
+      })
+    ).toBe('code=ECONNRESET spoofed message="Connection terminated unexpectedly"');
+  });
+
+  it('describes a nested database error cause', () => {
+    expect(describeDatabaseError({ cause: { code: '57P03', message: 'starting up' } })).toBe(
+      'code=57P03 message="starting up"'
+    );
+  });
+
+  it('describes the database target without credentials or multiline log injection', () => {
+    expect(describeDatabaseTarget('db.internal\nspoofed', 5432, 'aura_grade', 'require')).toBe(
+      'host=db.internal spoofed port=5432 database=aura_grade ssl=require'
+    );
   });
 
   it('retries with a fresh datasource and exponential backoff', async () => {

@@ -39,9 +39,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:generate": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate -d src/config/datasource.config.ts",
+    "migration:show": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:show -d src/config/datasource.config.ts",
     "migration:run": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/config/datasource.config.ts",
     "migration:revert": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d src/config/datasource.config.ts",
-    "migration:run:prod": "typeorm migration:run -d dist/config/datasource.config.js",
+    "migration:show:prod": "typeorm migration:show -d dist/config/datasource.config.js",
+    "migration:run:prod": "node dist/scripts/run-migrations.js",
     "seed:dev": "ts-node -r tsconfig-paths/register src/seed/run-seed.ts"
   },
   "dependencies": {
