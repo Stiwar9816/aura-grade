@@ -41,7 +41,7 @@ export class EvaluationService {
 
     // 1. Verificar que la entrega existe
     const submission = await this.submissionRepository.findOneBy({ id: submissionId });
-    if (!submission) throw new NotFoundException(`Submission ${submissionId} not found`);
+    if (!submission) throw new NotFoundException(`No se encontró la entrega ${submissionId}.`);
 
     // 2. Crear la evaluación (por defecto en DRAFT según la entidad)
     const evaluation = this.evaluationRepository.create({
@@ -67,7 +67,8 @@ export class EvaluationService {
       relations: ['submission', 'submission.student'],
     });
 
-    if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
+    if (!evaluation)
+      throw new NotFoundException(`No se encontró la evaluación con identificador ${id}.`);
 
     // 2. Aplicar actualizaciones si vienen (ajustes del docente)
     if (updateEvaluationInput) {
@@ -142,7 +143,8 @@ export class EvaluationService {
       relations: this.evaluationRelations,
     });
 
-    if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
+    if (!evaluation)
+      throw new NotFoundException(`No se encontró la evaluación con identificador ${id}.`);
     return evaluation;
   }
 
@@ -151,7 +153,8 @@ export class EvaluationService {
       where: { submission: { id: submissionId } },
       relations: this.evaluationRelations,
     });
-    if (!evaluation) throw new NotFoundException('Evaluation not found for this submission');
+    if (!evaluation)
+      throw new NotFoundException('No se encontró una evaluación para esta entrega.');
     return evaluation;
   }
 
@@ -164,7 +167,8 @@ export class EvaluationService {
       ...toUpdate,
     });
 
-    if (!evaluation) throw new NotFoundException(`Evaluation with id ${id} not found`);
+    if (!evaluation)
+      throw new NotFoundException(`No se encontró la evaluación con identificador ${id}.`);
 
     return await this.evaluationRepository.save(evaluation);
   }

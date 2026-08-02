@@ -15,27 +15,16 @@ describe('SeedService production safety', () => {
     expect(schema).not.toContain('executeSeed');
   });
 
-  it('rejects destructive seeding outside development before accessing repositories', async () => {
-    const repository = {
-      createQueryBuilder: jest.fn(),
-      save: jest.fn(),
+  it('rejects destructive seeding outside development before opening a transaction', async () => {
+    const dataSource = {
+      transaction: jest.fn(),
     };
     const configService = {
       get: jest.fn().mockReturnValue('prod'),
     } as unknown as ConfigService;
-    const service = new SeedService(
-      repository as never,
-      repository as never,
-      repository as never,
-      repository as never,
-      repository as never,
-      repository as never,
-      repository as never,
-      configService
-    );
+    const service = new SeedService(dataSource as never, configService);
 
     await expect(service.executeSeed()).rejects.toBeInstanceOf(ForbiddenException);
-    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });

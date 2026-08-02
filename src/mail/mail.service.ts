@@ -76,7 +76,7 @@ export class MailService {
     });
 
     if (error) {
-      throw new InternalServerErrorException(`Error sending email: ${error.message}`);
+      throw new InternalServerErrorException(`No se pudo enviar el correo: ${error.message}`);
     }
   }
 }

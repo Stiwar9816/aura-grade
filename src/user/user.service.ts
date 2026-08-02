@@ -28,8 +28,6 @@ import { Course } from 'src/course/entities/course.entity';
 // Services
 import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
-// Utils
-import { randomPassword } from 'src/auth/common';
 import { InstitutionApprovalStatus } from 'src/institution';
 import { UserRoles } from 'src/auth/enums';
 
@@ -94,7 +92,7 @@ export class UserService {
       throw new BadRequestException('La revisión debe aprobar o rechazar la solicitud.');
 
     const target = await this.userRepository.findOneBy({ id: userId });
-    if (!target) throw new NotFoundException(`${userId} not found`);
+    if (!target) throw new NotFoundException(`No se encontró el usuario ${userId}.`);
     if (target.institutionId !== administrator.institutionId)
       throw new ForbiddenException('No puedes revisar usuarios de otra institución.');
     if (target.role === UserRoles.Administrador)
@@ -116,7 +114,7 @@ export class UserService {
         'submissions.assignment.rubric',
       ],
     });
-    if (!user) throw new NotFoundException(`${id} not found`);
+    if (!user) throw new NotFoundException(`No se encontró el usuario ${id}.`);
     return user;
   }
 
@@ -125,7 +123,7 @@ export class UserService {
       where: { email },
       relations: ['courses'],
     });
-    if (!user) throw new NotFoundException(`${email} not found`);
+    if (!user) throw new NotFoundException(`No se encontró un usuario con el correo ${email}.`);
     return user;
   }
 
@@ -135,7 +133,7 @@ export class UserService {
       id,
       ...updateUserInput,
     });
-    if (!user) throw new NotFoundException(`${id} not found`);
+    if (!user) throw new NotFoundException(`No se encontró el usuario ${id}.`);
     const mustInvalidateSessions =
       Boolean(updateUserInput.password) ||
       (updateUserInput.role !== undefined && updateUserInput.role !== currentUser.role) ||
@@ -144,10 +142,13 @@ export class UserService {
     if (updateUserInput.password) {
       // Encrypt password
       user.password = bcrypt.hashSync(updateUserInput.password, 10);
+      await this.mailService.sendUpdatePassword(user, updateUserInput.password);
     }
     const savedUser = await this.userRepository.save(user);
     if (mustInvalidateSessions)
-      this.logger.log(`Authentication version changed for user ${id} to ${savedUser.authVersion}`);
+      this.logger.log(
+        `La versión de autenticación del usuario ${id} cambió a ${savedUser.authVersion}.`
+      );
     return savedUser;
   }
 
@@ -156,28 +157,23 @@ export class UserService {
     userToBlock.isActive = false;
     userToBlock.authVersion = (userToBlock.authVersion ?? 1) + 1;
     const savedUser = await this.userRepository.save(userToBlock);
-    this.logger.log(`User ${id} deactivated; authentication version is ${savedUser.authVersion}`);
+    this.logger.log(
+      `El usuario ${id} fue desactivado; la versión de autenticación es ${savedUser.authVersion}.`
+    );
     return savedUser;
   }
 
   async resetPassword(email: string): Promise<User> {
-    const userReset = await this.findOneByEmail(email);
-    const newPassword = randomPassword();
-    // this.mailService.sendResetPassword(userReset, newPassword);
-    userReset.password = bcrypt.hashSync(newPassword, 10);
-    userReset.authVersion = (userReset.authVersion ?? 1) + 1;
-    const savedUser = await this.userRepository.save(userReset);
-    this.logger.log(`Password reset invalidated sessions for user ${savedUser.id}`);
-    return savedUser;
+    return this.authService.forgotPassword(email);
   }
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
     const userFound = await this.findOneById(user.id);
-    // this.mailService.sendResetPassword(userFound, password);
+    await this.mailService.sendUpdatePassword(userFound, password);
     userFound.password = bcrypt.hashSync(password, 10);
     userFound.authVersion = (userFound.authVersion ?? 1) + 1;
     const savedUser = await this.userRepository.save(userFound);
-    this.logger.log(`Password change invalidated sessions for user ${savedUser.id}`);
+    this.logger.log(`El cambio de contraseña invalidó las sesiones del usuario ${savedUser.id}.`);
     return savedUser;
   }
 
@@ -187,14 +183,15 @@ export class UserService {
       relations: ['courses'],
     });
 
-    if (!user) throw new BadRequestException(`User with ID ${userId} not found`);
+    if (!user)
+      throw new BadRequestException(`No se encontró el usuario con identificador ${userId}.`);
 
     const courses = await this.courseRepository.findBy({
       id: In(courseIds),
     });
 
     if (courses.length !== courseIds.length)
-      throw new BadRequestException(`Some courses do not exist`);
+      throw new BadRequestException('Algunos cursos no existen.');
 
     // Asignación
     user.courses = courses;
@@ -205,6 +202,8 @@ export class UserService {
   private handleDBException(error: any): never {
     if (error.code === '23505') throw new BadRequestException(error.detail);
 
-    throw new InternalServerErrorException('Unexpected error, check server logs');
+    throw new InternalServerErrorException(
+      'Ocurrió un error inesperado. Revisa los registros del servidor.'
+    );
   }
 }

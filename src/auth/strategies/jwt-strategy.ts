@@ -33,13 +33,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id },
       relations: ['institution'],
     });
-    if (!user) throw new UnauthorizedException('Token not valid');
+    if (!user) throw new UnauthorizedException('El token no es válido.');
     if (
       !user.isActive ||
       user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
       !user.institution?.isActive
     )
-      throw new UnauthorizedException('User is inactive, talk with an admin');
+      throw new UnauthorizedException('El usuario está inactivo. Comunícate con un administrador.');
 
     delete user.password;
 

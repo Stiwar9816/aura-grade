@@ -57,7 +57,7 @@ export class AssignmentService {
     });
 
     if (!assignment) {
-      throw new BadRequestException(`Assignment with id ${id} not found`);
+      throw new BadRequestException(`No se encontró la tarea con identificador ${id}.`);
     }
 
     return assignment;
@@ -73,7 +73,8 @@ export class AssignmentService {
       rubric: rubricId ? ({ id: rubricId } as any) : undefined,
     });
 
-    if (!assignment) throw new NotFoundException(`Assignment with id ${id} not found`);
+    if (!assignment)
+      throw new NotFoundException(`No se encontró la tarea con identificador ${id}.`);
 
     return await this.assignmentRepository.save(assignment);
   }

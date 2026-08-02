@@ -34,7 +34,7 @@ export class CourseService {
 
   async findOne(id: string): Promise<Course> {
     const course = await this.courseRepository.findOne({ where: { id }, relations: ['users'] });
-    if (!course) throw new NotFoundException(`Course with id ${id} not found`);
+    if (!course) throw new NotFoundException(`No se encontró el curso con identificador ${id}.`);
     return course;
   }
 
@@ -46,7 +46,7 @@ export class CourseService {
       ...toUpdate,
     });
 
-    if (!course) throw new NotFoundException(`Course with id ${id} not found`);
+    if (!course) throw new NotFoundException(`No se encontró el curso con identificador ${id}.`);
 
     if (studentsIds) {
       course.users = await this.userRepository.findBy({ id: In(studentsIds) });

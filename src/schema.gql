@@ -299,7 +299,7 @@ input UpdateUserInput {
   email: String
 
   """
-  User password that must have a minimum length of 6 digits and the password must have an Uppercase, lowercase letter and a number
+  Contraseña de usuario: mínimo 6 caracteres e incluye mayúsculas, minúsculas y un número
   """
   password: String
 

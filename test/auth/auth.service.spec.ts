@@ -64,6 +64,7 @@ describe('AuthService', () => {
 
   const mockMailService = {
     sendUserConfirmation: jest.fn(),
+    sendResetPassword: jest.fn(),
   };
 
   const mockJwtService = {
@@ -194,11 +195,38 @@ describe('AuthService', () => {
         password: hashedPassword,
       });
       expect(mockAuthRepository.save).toHaveBeenCalled();
+      expect(mockMailService.sendUserConfirmation).toHaveBeenCalledWith(
+        createdUser,
+        createUserDto.password
+      );
       expect(mockInstitutionService.findActiveById).toHaveBeenCalledWith(institutionId);
       expect(mockSessionService.create).not.toHaveBeenCalled();
       expect(result.pendingApproval).toBe(true);
       expect(result).not.toHaveProperty('sessionToken');
       expect(result.user.password).toBeUndefined();
+    });
+
+    it('should not send a confirmation email when persistence fails', async () => {
+      const createUserDto: CreateUserDto = {
+        name: 'John',
+        last_name: 'Doe',
+        document_type: DocumentType.CITIZENSHIP_CARD,
+        document_num: 123456789,
+        phone: 3001234567,
+        email: 'john.doe@example.com',
+        password: 'Password123',
+        role: UserRoles.Estudiante,
+        institutionId,
+      };
+
+      mockAuthRepository.create.mockReturnValue(mockUser);
+      mockAuthRepository.save.mockRejectedValue({
+        code: '23505',
+        detail: 'Key (email)=(john.doe@example.com) already exists.',
+      });
+
+      await expect(service.register(createUserDto)).rejects.toThrow(BadRequestException);
+      expect(mockMailService.sendUserConfirmation).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException on duplicate email', async () => {
@@ -243,6 +271,33 @@ describe('AuthService', () => {
       });
 
       await expect(service.register(createUserDto)).rejects.toThrow(InternalServerErrorException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should send a temporary password before persisting it', async () => {
+      const user = { ...mockUser, password: 'previous-password', authVersion: 1 };
+      mockAuthRepository.findOne.mockResolvedValue(user);
+      mockMailService.sendResetPassword.mockResolvedValue(true);
+      mockAuthRepository.save.mockResolvedValue(user);
+
+      const result = await service.forgotPassword(' JOHN.DOE@EXAMPLE.COM ');
+
+      expect(mockAuthRepository.findOne).toHaveBeenCalledWith({
+        where: { email: 'john.doe@example.com' },
+      });
+      expect(mockMailService.sendResetPassword).toHaveBeenCalledWith(user, expect.any(String));
+      expect(mockAuthRepository.save).toHaveBeenCalledWith(user);
+      expect(user.authVersion).toBe(2);
+      expect(result).toBe(user);
+    });
+
+    it('should not persist a new password when email delivery fails', async () => {
+      mockAuthRepository.findOne.mockResolvedValue({ ...mockUser });
+      mockMailService.sendResetPassword.mockRejectedValue(new Error('Email delivery failed'));
+
+      await expect(service.forgotPassword(mockUser.email)).rejects.toThrow('Email delivery failed');
+      expect(mockAuthRepository.save).not.toHaveBeenCalled();
     });
   });
 

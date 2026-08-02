@@ -100,12 +100,12 @@ export class SessionService {
       });
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
-      this.logger.error('Redis failed while creating a session', (error as Error).stack);
+      this.logger.error('Redis falló al crear una sesión.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
 
     this.metrics.increment('auth_session_created_total');
-    this.logger.log(`Session created (${hash.slice(0, 12)}) for user ${user.id}`);
+    this.logger.log(`Sesión creada (${hash.slice(0, 12)}) para el usuario ${user.id}.`);
     return {
       sessionToken,
       expiresAt: new Date(session.absoluteExpiresAt).toISOString(),
@@ -132,13 +132,13 @@ export class SessionService {
       session = stored ? (JSON.parse(stored) as StoredSession) : undefined;
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
-      this.logger.error('Redis failed while validating a session', (error as Error).stack);
+      this.logger.error('Redis falló al validar una sesión.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
 
     if (!session) {
       this.metrics.increment('auth_session_invalid_total');
-      this.logger.warn(`Session not found (${hash.slice(0, 12)})`);
+      this.logger.warn(`Sesión no encontrada (${hash.slice(0, 12)}).`);
       return null;
     }
 
@@ -157,7 +157,7 @@ export class SessionService {
     ) {
       await this.revokeByHash(hash, session.userId);
       this.metrics.increment('auth_session_invalid_total');
-      this.logger.warn(`Session invalidated (${hash.slice(0, 12)})`);
+      this.logger.warn(`Sesión invalidada (${hash.slice(0, 12)}).`);
       return null;
     }
 
@@ -165,7 +165,7 @@ export class SessionService {
     if (now - session.lastActivityAt >= policy.idleTtlMs) {
       await this.revokeByHash(hash, session.userId);
       this.metrics.increment('auth_session_invalid_total');
-      this.logger.warn(`Session expired by inactivity (${hash.slice(0, 12)})`);
+      this.logger.warn(`Sesión expirada por inactividad (${hash.slice(0, 12)}).`);
       return null;
     }
 
@@ -177,7 +177,7 @@ export class SessionService {
         });
       } catch (error) {
         this.metrics.increment('auth_redis_error_total');
-        this.logger.error('Redis failed while renewing a session', (error as Error).stack);
+        this.logger.error('Redis falló al renovar una sesión.', (error as Error).stack);
         throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
       }
     }
@@ -194,12 +194,12 @@ export class SessionService {
       if (!session) return false;
       await this.revokeByHash(hash, session.userId);
       this.metrics.increment('auth_session_revoked_total');
-      this.logger.log(`Session revoked (${hash.slice(0, 12)}) for user ${session.userId}`);
+      this.logger.log(`Sesión revocada (${hash.slice(0, 12)}) para el usuario ${session.userId}.`);
       return true;
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
       this.metrics.increment('auth_redis_error_total');
-      this.logger.error('Redis failed while revoking a session', (error as Error).stack);
+      this.logger.error('Redis falló al revocar una sesión.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
   }
@@ -214,7 +214,7 @@ export class SessionService {
       return Number(revoked);
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
-      this.logger.error('Redis failed while revoking all sessions', (error as Error).stack);
+      this.logger.error('Redis falló al revocar todas las sesiones.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
   }
@@ -227,7 +227,7 @@ export class SessionService {
       });
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
-      this.logger.error('Redis failed while removing a session', (error as Error).stack);
+      this.logger.error('Redis falló al eliminar una sesión.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
   }

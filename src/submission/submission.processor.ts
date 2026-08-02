@@ -37,7 +37,7 @@ export class SubmissionProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { id, url } = job.data;
-    this.logger.log(`Processing grading job ${job.id} for submission ${id}`);
+    this.logger.log(`Procesando el trabajo de calificación ${job.id} para la entrega ${id}.`);
 
     try {
       // 1. Extracción de texto
@@ -52,7 +52,7 @@ export class SubmissionProcessor extends WorkerHost {
       });
 
       if (!submission) {
-        this.logger.error(`Submission with id ${id} not found`);
+        this.logger.error(`No se encontró la entrega con identificador ${id}.`);
         return;
       }
 
@@ -65,7 +65,7 @@ export class SubmissionProcessor extends WorkerHost {
       await job.updateProgress(40);
 
       // 4. Ejecutar la Evaluación con IA
-      this.logger.log(`Calling AI for grading submission ${id}`);
+      this.logger.log(`Solicitando a la IA la calificación de la entrega ${id}.`);
       const cleanText = AiSanitizer.clean(text);
 
       const aiResponse = await this.aiService.evaluateSubmission(
@@ -88,7 +88,7 @@ export class SubmissionProcessor extends WorkerHost {
       // 6. Notificación y progreso final
       await job.updateProgress(100);
       this.logger.log(
-        `AI grading draft saved with ID ${evaluation.id}. Waiting for teacher review.`
+        `Borrador de calificación guardado con identificador ${evaluation.id}. Esperando revisión del docente.`
       );
 
       this.notificationsGateway.notifyStudent('gradingCompleted', {
@@ -102,7 +102,7 @@ export class SubmissionProcessor extends WorkerHost {
         status: 'DRAFT_SAVED',
       };
     } catch (error) {
-      this.logger.error(`Failed processing submission ${id}: ${error.message}`);
+      this.logger.error(`Falló el procesamiento de la entrega ${id}: ${error.message}`);
       await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
 
       // Lanza el error para que BullMQ registre el fallo y pueda reintentar según la configuración

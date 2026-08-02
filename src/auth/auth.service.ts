@@ -28,6 +28,7 @@ import { Logger } from '@nestjs/common';
 import { AuthMetricsService } from '../observability';
 import { AuthAttemptService } from './security';
 import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
+import { randomPassword } from './common';
 
 @Injectable()
 export class AuthService {
@@ -77,6 +78,7 @@ export class AuthService {
       this.handleDBException(error);
     }
 
+    await this.mailService.sendUserConfirmation(user, password);
     delete user.password;
     return {
       user,
@@ -114,13 +116,13 @@ export class AuthService {
     );
     if (!user || user.email !== email || !passwordMatches) {
       this.metrics.increment('auth_login_failure_total');
-      this.logger.warn('Authentication failed');
+      this.logger.warn('Falló la autenticación.');
       await this.authAttempts.registerFailure(clientIdentity);
       throw new UnauthorizedException('Credenciales inválidas.');
     }
     if (!user.isActive) {
       this.metrics.increment('auth_login_failure_total');
-      this.logger.warn('Authentication rejected for an inactive user');
+      this.logger.warn('Autenticación rechazada: el usuario está inactivo.');
       await this.authAttempts.registerFailure(clientIdentity);
       throw new UnauthorizedException('Credenciales inválidas.');
     }
@@ -137,8 +139,25 @@ export class AuthService {
     await this.authAttempts.clear(clientIdentity);
     const session = await this.sessionService.create(user, rememberMe);
     this.metrics.increment('auth_login_success_total');
-    this.logger.log(`Authentication succeeded for user ${user.id}`);
+    this.logger.log(`Autenticación exitosa para el usuario ${user.id}.`);
     return this.authResponse(user, session);
+  }
+
+  async forgotPassword(email: string): Promise<User> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.authRepository.findOne({ where: { email: normalizedEmail } });
+    if (!user)
+      throw new NotFoundException(`No se encontró un usuario con el correo ${normalizedEmail}.`);
+
+    const newPassword = randomPassword();
+    await this.mailService.sendResetPassword(user, newPassword);
+    user.password = bcrypt.hashSync(newPassword, 10);
+    user.authVersion = (user.authVersion ?? 1) + 1;
+    const savedUser = await this.authRepository.save(user);
+    this.logger.log(
+      `El restablecimiento de contraseña invalidó las sesiones del usuario ${savedUser.id}.`
+    );
+    return savedUser;
   }
 
   async validateUser(id: string): Promise<User> {
@@ -152,7 +171,7 @@ export class AuthService {
       user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
       !user.institution?.isActive
     )
-      throw new UnauthorizedException(`The user is inactive, please speak to an administrator.`);
+      throw new UnauthorizedException('El usuario está inactivo. Comunícate con un administrador.');
 
     delete user.password;
     return user;
@@ -188,7 +207,7 @@ export class AuthService {
     if (!target) throw new NotFoundException('Usuario no encontrado.');
     await this.authRepository.increment({ id: userId }, 'authVersion', 1);
     const revokedSessions = await this.sessionService.revokeAll(userId);
-    this.logger.log(`All sessions revoked for user ${userId}`);
+    this.logger.log(`Se revocaron todas las sesiones del usuario ${userId}.`);
     return { success: true, revokedSessions };
   }
 
@@ -204,6 +223,8 @@ export class AuthService {
   private handleDBException(error: any): never {
     if (error.code === '23505') throw new BadRequestException(error.detail);
 
-    throw new InternalServerErrorException('Unexpected error, check server logs');
+    throw new InternalServerErrorException(
+      'Ocurrió un error inesperado. Revisa los registros del servidor.'
+    );
   }
 }

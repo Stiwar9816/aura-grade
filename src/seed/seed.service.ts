@@ -5,16 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { UserRoles } from 'src/auth/enums';
+import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 
 import { SEED_DATA } from './data/seed-data';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
-import { Submission } from 'src/submission/entities/submission.entity';
-import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { User } from 'src/user/entities/user.entity';
 import { Course } from 'src/course/entities/course.entity';
 import { Institution, InstitutionApprovalStatus } from 'src/institution';
@@ -24,95 +20,111 @@ export class SeedService {
   private readonly logger = new Logger('SeedService');
 
   constructor(
-    @InjectRepository(User) private readonly userRepository: Repository<User>,
-    @InjectRepository(Rubric) private readonly rubricRepository: Repository<Rubric>,
-    @InjectRepository(Assignment) private readonly assignmentRepository: Repository<Assignment>,
-    @InjectRepository(Submission) private readonly submissionRepository: Repository<Submission>,
-    @InjectRepository(Evaluation) private readonly evaluationRepository: Repository<Evaluation>,
-    @InjectRepository(Course) private readonly courseRepository: Repository<Course>,
-    @InjectRepository(Institution)
-    private readonly institutionRepository: Repository<Institution>,
+    private readonly dataSource: DataSource,
     private readonly configService: ConfigService
   ) {}
 
-  async executeSeed() {
+  async executeSeed(): Promise<string> {
     if (this.configService.get<string>('STATE') !== 'dev') {
-      throw new ForbiddenException('Database seeding is only available in development.');
+      throw new ForbiddenException(
+        'La carga de datos iniciales solo está disponible en desarrollo.'
+      );
     }
+
+    const passwordHashes = this.hashSeedPasswords();
 
     try {
-      // 1. Limpiar base de datos (Orden de integridad referencial)
-      await this.deleteDatabase();
+      await this.dataSource.transaction(async (manager) => {
+        // Every application record is downstream from an institution. CASCADE also clears
+        // course enrollments, submissions, evaluations and re-evaluation requests.
+        await manager.query('TRUNCATE TABLE "institutions" RESTART IDENTITY CASCADE');
 
-      // 2. Crear Usuarios (Docentes y Estudiantes)
-      const institution = await this.institutionRepository.findOne({
-        where: { isActive: true },
-        order: { createdAt: 'ASC' },
+        const institutionRepository = manager.getRepository(Institution);
+        const userRepository = manager.getRepository(User);
+        const rubricRepository = manager.getRepository(Rubric);
+        const courseRepository = manager.getRepository(Course);
+        const assignmentRepository = manager.getRepository(Assignment);
+
+        const institutions = await institutionRepository.save(SEED_DATA.institutions);
+        const institutionsBySlug = new Map(
+          institutions.map((institution) => [institution.slug, institution])
+        );
+
+        const users = await userRepository.save(
+          SEED_DATA.users.map(({ institutionSlug, password, approvalStatus, ...user }) => {
+            const institution = this.requireReference(
+              institutionsBySlug,
+              institutionSlug,
+              'institution'
+            );
+            return {
+              ...user,
+              password: this.requireReference(passwordHashes, password, 'password hash'),
+              institutionId: institution.id,
+              institution,
+              approvalStatus: approvalStatus ?? InstitutionApprovalStatus.APPROVED,
+            };
+          })
+        );
+        const usersByEmail = new Map(users.map((user) => [user.email, user]));
+
+        const rubrics = await rubricRepository.save(
+          SEED_DATA.rubrics.map(({ ownerEmail, ...rubric }) => ({
+            ...rubric,
+            user: this.requireReference(usersByEmail, ownerEmail, 'rubric owner'),
+          }))
+        );
+        const rubricsByTitle = new Map(rubrics.map((rubric) => [rubric.title, rubric]));
+
+        const courses = await courseRepository.save(
+          SEED_DATA.courses.map(({ teacherEmail, studentEmails, ...course }) => ({
+            ...course,
+            user: this.requireReference(usersByEmail, teacherEmail, 'course teacher'),
+            users: studentEmails.map((email) =>
+              this.requireReference(usersByEmail, email, 'course student')
+            ),
+          }))
+        );
+        const coursesByCode = new Map(courses.map((course) => [course.code_course, course]));
+
+        await assignmentRepository.save(
+          SEED_DATA.assignments.map(
+            ({ teacherEmail, courseCode, rubricTitle, dueInDays, ...assignment }) => ({
+              ...assignment,
+              dueDate: new Date(Date.now() + dueInDays * 24 * 60 * 60 * 1000),
+              user: this.requireReference(usersByEmail, teacherEmail, 'assignment teacher'),
+              course: this.requireReference(coursesByCode, courseCode, 'assignment course'),
+              rubric: this.requireReference(rubricsByTitle, rubricTitle, 'assignment rubric'),
+            })
+          )
+        );
       });
-      if (!institution) {
-        throw new Error('No active institution found. Run database migrations before the seed.');
-      }
-      const seedUsers = SEED_DATA.users.map((user) => ({
-        ...user,
-        password: bcrypt.hashSync(user.password, 12),
-        institutionId: institution.id,
-        institution,
-        approvalStatus: InstitutionApprovalStatus.APPROVED,
-      }));
-      const users = await this.userRepository.save(seedUsers);
-      const teacher = users.find((u) => u.role === UserRoles.Docente);
-
-      if (!teacher) throw new Error('No teacher found in SEED_DATA');
-
-      // 3. Crear Rúbricas de prueba
-      const rubrics = await this.rubricRepository.save(SEED_DATA.rubrics);
-      const essayRubric = rubrics.find((r) => r.title === 'Rúbrica de Ensayo Académico');
-      const projectRubric = rubrics.find((r) => r.title === 'Rúbrica de Proyecto de Software');
-
-      // 4. Crear Curso de prueba
-      const course = await this.courseRepository.save({
-        course_name: 'Desarrollo Backend con NestJS',
-        code_course: 'NEST101',
-        user: teacher,
-      });
-
-      // 5. Crear Tareas (Assignment) vinculada al docente, curso y la rúbrica
-      await this.assignmentRepository.save([
-        {
-          title: 'Ensayo Final sobre NestJS',
-          description: 'Escribir un ensayo argumentativo sobre las ventajas de NestJS.',
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Vence en 7 días
-          user: teacher,
-          rubric: essayRubric,
-          course: course,
-        },
-        {
-          title: 'API GraphQL con AuraGrade',
-          description: 'Implementar el backend usando los principios del curso.',
-          dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Vence en 14 días
-          user: teacher,
-          rubric: projectRubric,
-          course: course,
-        },
-      ]);
-      this.logger.log('Seed executed successfully');
-      return 'Seed executed successfully. Database is ready for AuraGrade testing.';
     } catch (error) {
-      this.logger.error(error.message);
-      throw new InternalServerErrorException(error.message);
+      const message =
+        error instanceof Error ? error.message : 'Error desconocido al cargar los datos iniciales.';
+      this.logger.error(message);
+      throw new InternalServerErrorException(message);
     }
+
+    const summary = `Datos iniciales cargados correctamente: ${SEED_DATA.institutions.length} instituciones, ${SEED_DATA.users.length} usuarios, ${SEED_DATA.courses.length} cursos, ${SEED_DATA.rubrics.length} rúbricas y ${SEED_DATA.assignments.length} tareas.`;
+    this.logger.log(summary);
+    return summary;
   }
 
-  private async deleteDatabase() {
-    await this.evaluationRepository.createQueryBuilder().delete().execute();
-    await this.submissionRepository.createQueryBuilder().delete().execute();
-    await this.assignmentRepository.createQueryBuilder().delete().execute();
-    await this.courseRepository.createQueryBuilder().delete().execute();
-    await this.rubricRepository.createQueryBuilder().delete().execute();
-    await this.userRepository
-      .createQueryBuilder()
-      .delete()
-      .where('role != :administrator', { administrator: UserRoles.Administrador })
-      .execute();
+  private hashSeedPasswords(): Map<string, string> {
+    const hashes = new Map<string, string>();
+
+    for (const { password } of SEED_DATA.users) {
+      if (!hashes.has(password)) hashes.set(password, bcrypt.hashSync(password, 12));
+    }
+
+    return hashes;
+  }
+
+  private requireReference<T>(references: Map<string, T>, key: string, label: string): T {
+    const reference = references.get(key);
+    if (!reference)
+      throw new Error(`No se encontró la referencia de datos iniciales ${label} para «${key}».`);
+    return reference;
   }
 }

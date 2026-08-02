@@ -15,7 +15,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost) {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | object = 'Internal Server Error';
+    let message: string | object = 'Error interno del servidor.';
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -24,20 +24,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const { code, detail } = exception as any;
       if (code === '23505') {
         status = HttpStatus.BAD_REQUEST;
-        message = detail ? detail.replace('Key ', '') : 'Duplicate key violation';
+        message = detail ? detail.replace('Key ', '') : 'Violación de clave duplicada.';
       } else if (code === '23503') {
         status = HttpStatus.BAD_REQUEST;
-        message = 'Foreign key violation: Check related resources';
+        message = 'Violación de clave foránea. Verifica los recursos relacionados.';
       } else if (code === 'error-001') {
         status = HttpStatus.BAD_REQUEST;
-        message = detail ? detail.replace('Key ', '') : 'Custom DB error';
+        message = detail ? detail.replace('Key ', '') : 'Error personalizado de base de datos.';
       }
     }
 
     const errorSource = this.getErrorSource((exception as Error).stack);
 
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
-      this.logger.error(`Error in ${errorSource}: ${message}`, (exception as Error).stack);
+      this.logger.error(`Error en ${errorSource}: ${message}`, (exception as Error).stack);
     }
 
     if (host.getType() === 'http') {
@@ -83,7 +83,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 
   private getErrorSource(stack: string | undefined): string {
-    if (!stack) return 'Unknown Source';
+    if (!stack) return 'Origen desconocido';
 
     const lines = stack.split('\n');
     // Find the first line that is part of our src code but not node_modules or standard internals
@@ -110,6 +110,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return sourceLine.trim();
     }
 
-    return 'Unknown Source';
+    return 'Origen desconocido';
   }
 }

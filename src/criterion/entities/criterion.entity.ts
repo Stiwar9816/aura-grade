@@ -20,7 +20,7 @@ export class CriterionLevel {
   @Field(() => Int)
   score: number;
 
-  @ApiProperty({ example: 'Excellent performance.', description: 'Level description' })
+  @ApiProperty({ example: 'Desempeño excelente.', description: 'Descripción del nivel' })
   @Column({ type: 'text' })
   @Field(() => String)
   description: string;

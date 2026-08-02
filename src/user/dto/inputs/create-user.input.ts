@@ -78,7 +78,7 @@ export class CreateUserInput {
   email: string;
 
   @ApiProperty({
-    description: 'User password',
+    description: 'Contraseña del usuario',
     nullable: false,
     minLength: 6,
     maxLength: 30,
@@ -87,11 +87,11 @@ export class CreateUserInput {
   @MinLength(6)
   @MaxLength(30)
   @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'The password must have a Uppercase, lowercase letter and a number',
+    message: 'La contraseña debe incluir mayúsculas, minúsculas y números.',
   })
   @Field(() => String, {
     description:
-      'User password that must have a minimum length of 6 digits and the password must have an Uppercase, lowercase letter and a number',
+      'Contraseña de usuario: mínimo 6 caracteres e incluye mayúsculas, minúsculas y un número',
   })
   password: string;
 

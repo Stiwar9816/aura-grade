@@ -6,12 +6,12 @@ import { IsNotEmpty, IsInt, IsString, Min } from 'class-validator';
 @InputType()
 export class CreateCriterionLevelsInput {
   @Field(() => Int, { description: 'Score assigned to this level' })
-  @IsInt({ message: 'Score must be an integer.' })
-  @Min(0, { message: 'Score cannot be negative.' })
+  @IsInt({ message: 'La puntuación debe ser un número entero.' })
+  @Min(0, { message: 'La puntuación no puede ser negativa.' })
   score: number;
 
   @Field(() => String, { description: 'Description of this level' })
-  @IsNotEmpty({ message: 'Description cannot be empty.' })
-  @IsString({ message: 'Description must be a string.' })
+  @IsNotEmpty({ message: 'La descripción no puede estar vacía.' })
+  @IsString({ message: 'La descripción debe ser un texto.' })
   description: string;
 }

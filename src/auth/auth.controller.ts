@@ -18,12 +18,13 @@ import { Throttle } from '@nestjs/throttler';
 // Services
 import { AuthService } from './auth.service';
 // Dto
-import { CreateUserDto, LoginUserDto, AuthResponse } from './dto';
+import { CreateUserDto, ForgotPasswordDto, LoginUserDto, AuthResponse } from './dto';
 // Entities
 import { User } from 'src/user/entities/user.entity';
 // Swagger
 import {
   ApiTags,
+  ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiCreatedResponse,
   ApiInternalServerErrorResponse,
@@ -49,10 +50,10 @@ export class AuthController {
   @Post('register')
   @Throttle({ short: { limit: 5, ttl: 60 * 60 * 1000 } })
   // Doc API - ApiResponse
-  @ApiCreatedResponse({ description: 'User was created successfully', type: AuthResponse })
-  @ApiBadRequestResponse({ description: 'Bad request' })
-  @ApiNotFoundResponse({ description: 'Not found' })
-  @ApiInternalServerErrorResponse({ description: 'Internal Server Error' })
+  @ApiCreatedResponse({ description: 'El usuario fue creado correctamente.', type: AuthResponse })
+  @ApiBadRequestResponse({ description: 'Solicitud inválida.' })
+  @ApiNotFoundResponse({ description: 'Recurso no encontrado.' })
+  @ApiInternalServerErrorResponse({ description: 'Error interno del servidor.' })
   // End - Doc API
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
@@ -62,14 +63,23 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ short: { limit: 5, ttl: 60 * 1000 } })
   // Doc API - ApiResponse
-  @ApiOkResponse({ description: 'User successfully logged in', type: AuthResponse })
-  @ApiNotFoundResponse({ description: 'Not found' })
-  @ApiBadRequestResponse({ description: 'Bad request' })
-  @ApiInternalServerErrorResponse({ description: 'Internal Server Error' })
+  @ApiOkResponse({ description: 'El usuario inició sesión correctamente.', type: AuthResponse })
+  @ApiNotFoundResponse({ description: 'Recurso no encontrado.' })
+  @ApiBadRequestResponse({ description: 'Solicitud inválida.' })
+  @ApiInternalServerErrorResponse({ description: 'Error interno del servidor.' })
   // End - Doc API
   login(@Body() loginUserDto: LoginUserDto, @Req() request: Request) {
     const identity = `${request.ip}:${loginUserDto.email.toLowerCase().trim()}`;
     return this.authService.login(loginUserDto, identity);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ short: { limit: 3, ttl: 15 * 60 * 1000 } })
+  @ApiAcceptedResponse({ description: 'Solicitud de recuperación de contraseña aceptada.' })
+  async forgotPassword(@Body() { email }: ForgotPasswordDto) {
+    await this.authService.forgotPassword(email);
+    return { message: 'Revisa tu correo para continuar con el restablecimiento de contraseña.' };
   }
 
   @Get('me')

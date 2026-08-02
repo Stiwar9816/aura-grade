@@ -53,17 +53,18 @@ export class SubmissionService {
     const effectiveStudentId =
       user.role === UserRoles.Estudiante ? user.id : (studentId ?? user.id);
     if (!effectiveStudentId) {
-      throw new BadRequestException('Student id is required');
+      throw new BadRequestException('El identificador del estudiante es obligatorio.');
     }
     // 1. Validaciones previas
     const assignment = await this.assignmentRepository.findOneBy({ id: assignmentId });
-    if (!assignment) throw new NotFoundException(`Assignment with id ${assignmentId} not found`);
+    if (!assignment)
+      throw new NotFoundException(`No se encontró la tarea con identificador ${assignmentId}.`);
     if (new Date() > assignment.dueDate)
-      throw new BadRequestException('The deadline for this assignment has passed');
+      throw new BadRequestException('La fecha límite de esta tarea ya pasó.');
 
     const extension = filename.split('.').pop()?.toLowerCase();
     if (extension !== 'docx') {
-      throw new BadRequestException('Only .docx files are allowed for submissions');
+      throw new BadRequestException('Solo se permiten archivos .docx para las entregas.');
     }
 
     // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
@@ -117,7 +118,8 @@ export class SubmissionService {
       relations: this.submissionRelations,
     });
 
-    if (!submission) throw new NotFoundException(`Submission with id ${id} not found`);
+    if (!submission)
+      throw new NotFoundException(`No se encontró la entrega con identificador ${id}.`);
     return submission;
   }
 
@@ -129,7 +131,8 @@ export class SubmissionService {
       ...toUpdate,
     });
 
-    if (!submission) throw new NotFoundException(`Submission with id ${id} not found`);
+    if (!submission)
+      throw new NotFoundException(`No se encontró la entrega con identificador ${id}.`);
 
     return await this.submissionRepository.save(submission);
   }

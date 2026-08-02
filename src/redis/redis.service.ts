@@ -22,7 +22,7 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     );
     this.client.on('error', (error) => {
       this.logger.error(
-        `Redis connection error: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `Error de conexión con Redis: ${error instanceof Error ? error.message : 'error desconocido'}`,
         error instanceof Error ? error.stack : undefined
       );
     });

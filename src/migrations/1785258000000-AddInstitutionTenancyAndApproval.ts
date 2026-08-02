@@ -4,7 +4,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 const requiredEnvironment = (name: string): string => {
   const value = process.env[name]?.trim();
   if (!value) {
-    throw new Error(`${name} is required to bootstrap institutional tenancy.`);
+    throw new Error(`${name} es obligatorio para inicializar la configuración institucional.`);
   }
   return value;
 };
@@ -19,7 +19,7 @@ const bootstrapPassword = (): string => {
     !/\d/.test(password)
   ) {
     throw new Error(
-      'BOOTSTRAP_ADMIN_PASSWORD must be 12-30 characters and include uppercase, lowercase and a number.'
+      'BOOTSTRAP_ADMIN_PASSWORD debe tener entre 12 y 30 caracteres e incluir mayúsculas, minúsculas y un número.'
     );
   }
   return password;
@@ -68,7 +68,7 @@ export class AddInstitutionTenancyAndApproval1785258000000 implements MigrationI
     const institutionId = institutionRows[0]?.id;
 
     if (!institutionId) {
-      throw new Error('The bootstrap institution could not be created.');
+      throw new Error('No se pudo crear la institución inicial.');
     }
 
     await queryRunner.query(

@@ -33,7 +33,7 @@ export class AuthAttemptService {
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
       this.logger.error(
-        'Redis failed while recording an authentication failure',
+        'Redis falló al registrar un intento de autenticación fallido.',
         (error as Error).stack
       );
       throw new ServiceUnavailableException('El servicio de autenticación no está disponible.');
@@ -46,7 +46,7 @@ export class AuthAttemptService {
     } catch (error) {
       this.metrics.increment('auth_redis_error_total');
       this.logger.error(
-        'Redis failed while clearing authentication failures',
+        'Redis falló al limpiar los intentos fallidos de autenticación.',
         (error as Error).stack
       );
       throw new ServiceUnavailableException('El servicio de autenticación no está disponible.');

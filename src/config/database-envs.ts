@@ -34,7 +34,8 @@ const databaseEnvsSchema = joi
 
 const { error, value } = databaseEnvsSchema.validate({ ...process.env });
 
-if (error) throw new Error(`Database config validation error: ${error.message}`);
+if (error)
+  throw new Error(`Error de validación de configuración de base de datos: ${error.message}`);
 const databaseEnvVars: DatabaseEnvVars = value;
 
 export const databaseEnvs = {

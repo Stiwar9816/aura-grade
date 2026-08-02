@@ -20,7 +20,7 @@ export class BullMQHealthIndicator extends HealthIndicator {
       return this.getStatus(key, true);
     } catch (error) {
       throw new HealthCheckError(
-        'BullMQ connection failed',
+        'Falló la conexión con BullMQ.',
         this.getStatus(key, false, { message: error.message })
       );
     }

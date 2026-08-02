@@ -82,7 +82,7 @@ const envsSchema = joi
 
 const { error, value } = envsSchema.validate({ ...process.env });
 
-if (error) throw new Error(`Config validation error: ${error.message}`);
+if (error) throw new Error(`Error de validación de configuración: ${error.message}`);
 const envVars: EnvVars = value;
 
 export const envs = {

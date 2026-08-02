@@ -55,7 +55,9 @@ export class ReEvaluationService {
     });
 
     if (!evaluation) {
-      throw new NotFoundException(`Evaluation with id ${evaluationId} not found`);
+      throw new NotFoundException(
+        `No se encontró la evaluación con identificador ${evaluationId}.`
+      );
     }
 
     if (
@@ -63,12 +65,14 @@ export class ReEvaluationService {
       evaluation.submission.status !== SubmissionStatus.PUBLISHED
     ) {
       throw new BadRequestException(
-        'Only published evaluations can be requested for re-evaluation'
+        'Solo se pueden solicitar reevaluaciones de evaluaciones publicadas.'
       );
     }
 
     if (evaluation.submission.student.id !== user.id) {
-      throw new ForbiddenException('Only the submission owner can request a re-evaluation');
+      throw new ForbiddenException(
+        'Solo el propietario de la entrega puede solicitar una reevaluación.'
+      );
     }
 
     const existingRequest = await this.requestRepository.findOne({
@@ -76,13 +80,15 @@ export class ReEvaluationService {
     });
 
     if (existingRequest) {
-      throw new BadRequestException('Only one re-evaluation request is allowed per evaluation');
+      throw new BadRequestException(
+        'Solo se permite una solicitud de reevaluación por evaluación.'
+      );
     }
 
     const teacher =
       evaluation.submission.assignment.user ?? evaluation.submission.assignment.course.user;
     if (!teacher) {
-      throw new BadRequestException('The evaluation does not have an assigned teacher');
+      throw new BadRequestException('La evaluación no tiene un docente asignado.');
     }
 
     const request = this.requestRepository.create({
@@ -136,7 +142,9 @@ export class ReEvaluationService {
     });
 
     if (!request) {
-      throw new NotFoundException(`Re-evaluation request with id ${id} not found`);
+      throw new NotFoundException(
+        `No se encontró la solicitud de reevaluación con identificador ${id}.`
+      );
     }
 
     this.assertCanAccess(request, user);
@@ -150,13 +158,15 @@ export class ReEvaluationService {
     const { id, status, teacherResponse } = resolveReEvaluationRequestInput;
 
     if (status === ReEvaluationStatus.PENDING) {
-      throw new BadRequestException('A re-evaluation request cannot be resolved as PENDING');
+      throw new BadRequestException(
+        'Una solicitud de reevaluación no puede resolverse como PENDIENTE.'
+      );
     }
 
     const request = await this.findOne(id, user);
 
     if (request.status !== ReEvaluationStatus.PENDING) {
-      throw new BadRequestException('This re-evaluation request has already been resolved');
+      throw new BadRequestException('Esta solicitud de reevaluación ya fue resuelta.');
     }
 
     request.status = status;
@@ -181,6 +191,6 @@ export class ReEvaluationService {
       return;
     }
 
-    throw new ForbiddenException('You do not have access to this re-evaluation request');
+    throw new ForbiddenException('No tienes acceso a esta solicitud de reevaluación.');
   }
 }

@@ -113,7 +113,7 @@ describe('JwtStrategy', () => {
       mockUserRepository.findOne.mockResolvedValue(null);
 
       await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
-      await expect(strategy.validate(payload)).rejects.toThrow('Token not valid');
+      await expect(strategy.validate(payload)).rejects.toThrow('El token no es válido.');
     });
 
     it('should throw UnauthorizedException when user is inactive', async () => {
@@ -124,7 +124,7 @@ describe('JwtStrategy', () => {
 
       await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
       await expect(strategy.validate(payload)).rejects.toThrow(
-        'User is inactive, talk with an admin'
+        'El usuario está inactivo. Comunícate con un administrador.'
       );
     });
 

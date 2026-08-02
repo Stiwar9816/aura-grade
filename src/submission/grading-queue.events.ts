@@ -22,7 +22,7 @@ export class GradingQueueEvents extends QueueEventsHost {
 
   @OnQueueEvent('progress')
   async onProgress({ jobId, data }: { jobId: string; data: number | object }) {
-    this.logger.debug(`Job ${jobId} progress: ${data}`);
+    this.logger.debug(`Progreso del trabajo ${jobId}: ${data}.`);
 
     const job = await this.gradingQueue.getJob(jobId);
     if (!job) return;
@@ -45,7 +45,7 @@ export class GradingQueueEvents extends QueueEventsHost {
 
   @OnQueueEvent('failed')
   async onFailed({ jobId, failedReason }: { jobId: string; failedReason: string }) {
-    this.logger.error(`Job ${jobId} failed: ${failedReason}`);
+    this.logger.error(`Falló el trabajo ${jobId}: ${failedReason}.`);
 
     // Solo notificamos fallo definitivo si ya no quedan intentos
     const job = await this.gradingQueue.getJob(jobId);
@@ -68,7 +68,7 @@ export class GradingQueueEvents extends QueueEventsHost {
 
   @OnQueueEvent('completed')
   async onCompleted({ jobId }: { jobId: string }) {
-    this.logger.log(`Job ${jobId} completed successfully`);
+    this.logger.log(`El trabajo ${jobId} terminó correctamente.`);
   }
 
   private getProgressMessage(progress: number): string {

@@ -6,12 +6,12 @@ import { IsBoolean, IsDate, IsNotEmpty, IsOptional, IsString, IsUUID } from 'cla
 @InputType()
 export class CreateAssignmentInput {
   @Field(() => String, { description: 'title of the task' })
-  @IsNotEmpty({ message: 'The title is required' })
+  @IsNotEmpty({ message: 'El título es obligatorio.' })
   @IsString()
   title: string;
 
   @Field(() => String, { description: 'Detailed instructions' })
-  @IsNotEmpty({ message: 'The description is required' })
+  @IsNotEmpty({ message: 'La descripción es obligatoria.' })
   @IsString()
   description: string;
 

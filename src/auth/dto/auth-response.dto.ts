@@ -19,10 +19,10 @@ export class AuthResponse {
   })
   sessionToken?: string;
 
-  @ApiProperty({ description: 'Absolute session expiration date', required: false })
+  @ApiProperty({ description: 'Fecha absoluta de expiración de la sesión', required: false })
   expiresAt?: string;
 
-  @ApiProperty({ description: 'Registration requires institutional approval', required: false })
+  @ApiProperty({ description: 'El registro requiere aprobación institucional', required: false })
   pendingApproval?: boolean;
 
   @ApiProperty({ required: false })

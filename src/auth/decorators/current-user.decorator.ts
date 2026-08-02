@@ -38,14 +38,16 @@ export const resolveCurrentUser = (role: UserRoles[] | undefined, ctx: Execution
   //Validation of errors
   if (!user)
     throw new InternalServerErrorException(
-      'There is no user inside the request - make sure you have used AuthGuard'
+      'No hay un usuario en la solicitud. Verifica que hayas usado AuthGuard.'
     );
 
   if (!role) return user;
 
   // Validate the user's role
   if (role && !role.includes(user.role)) {
-    throw new ForbiddenException(`User ${user.name} ${user.last_name} You do not have permission`);
+    throw new ForbiddenException(
+      `El usuario ${user.name} ${user.last_name} no tiene permisos suficientes.`
+    );
   }
 
   return user;

@@ -78,6 +78,7 @@ describe('UserService', () => {
 
   const mockAuthService = {
     getToken: jest.fn(),
+    forgotPassword: jest.fn(),
   };
 
   const mockJwtService = {
@@ -358,9 +359,29 @@ describe('UserService', () => {
 
       const result = await service.update(mockUser.id, updateUserInput);
 
-      expect(mockMailService.sendUpdatePassword).not.toHaveBeenCalled();
+      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(
+        updatedUser,
+        updateUserInput.password
+      );
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(updatedUser);
+    });
+
+    it('should not persist a password change when its email cannot be sent', async () => {
+      const updateUserInput: UpdateUserInput = {
+        id: mockUser.id,
+        password: 'NewPassword123',
+        role: UserRoles.Estudiante,
+      };
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockUserRepository.preload.mockResolvedValue({ ...mockUser });
+      mockMailService.sendUpdatePassword.mockRejectedValue(new Error('Email delivery failed'));
+
+      await expect(service.update(mockUser.id, updateUserInput)).rejects.toThrow(
+        'Email delivery failed'
+      );
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 
@@ -378,27 +399,19 @@ describe('UserService', () => {
   });
 
   describe('resetPassword', () => {
-    it('should reset password and send email', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockUserRepository.save.mockResolvedValue(mockUser);
-      mockMailService.sendResetPassword.mockResolvedValue(true);
+    it('should delegate password recovery to AuthService', async () => {
+      mockAuthService.forgotPassword.mockResolvedValue(mockUser);
 
       const result = await service.resetPassword(mockUser.email);
 
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-        where: { email: mockUser.email },
-        relations: ['courses'],
-      });
-      expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
-      expect(mockUserRepository.save).toHaveBeenCalled();
+      expect(mockAuthService.forgotPassword).toHaveBeenCalledWith(mockUser.email);
       expect(result).toEqual(mockUser);
     });
 
-    it('should throw NotFoundException when user not found', async () => {
-      const email = 'nonexistent@example.com';
-      mockUserRepository.findOne.mockResolvedValue(null);
+    it('should propagate recovery failures', async () => {
+      mockAuthService.forgotPassword.mockRejectedValue(new Error('Email delivery failed'));
 
-      await expect(service.resetPassword(email)).rejects.toThrow(NotFoundException);
+      await expect(service.resetPassword(mockUser.email)).rejects.toThrow('Email delivery failed');
     });
   });
 
@@ -408,10 +421,11 @@ describe('UserService', () => {
 
       mockUserRepository.findOne.mockResolvedValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
-      mockMailService.sendResetPassword.mockResolvedValue(true);
+      mockMailService.sendUpdatePassword.mockResolvedValue(true);
 
       const result = await service.resetPasswordAuth(newPassword, mockUser);
 
+      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(mockUser, newPassword);
       expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);

@@ -26,16 +26,16 @@ export class ExtractorService {
       if (extension === 'docx') {
         return await this.extractFromDocx(buffer);
       } else {
-        throw new Error('Unsupported file format. Only DOCX is allowed.');
+        throw new Error('Formato de archivo no compatible. Solo se permiten archivos DOCX.');
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        this.logger.error(`Axios error: ${error.message} - Status: ${error.response?.status}`);
-        this.logger.error(`Headers: ${JSON.stringify(error.response?.headers)}`);
+        this.logger.error(`Error de Axios: ${error.message} - Estado: ${error.response?.status}`);
+        this.logger.error(`Encabezados: ${JSON.stringify(error.response?.headers)}`);
       } else {
-        this.logger.error(`Source extraction error: ${error.message}`);
+        this.logger.error(`Error al extraer el contenido: ${error.message}`);
       }
-      throw new InternalServerErrorException(`Failed to extract text: ${error.message}`);
+      throw new InternalServerErrorException(`No se pudo extraer el texto: ${error.message}`);
     }
   }
 

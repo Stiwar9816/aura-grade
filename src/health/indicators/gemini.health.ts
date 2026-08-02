@@ -23,7 +23,7 @@ export class GeminiHealthIndicator extends HealthIndicator {
     } catch (error) {
       const duration = Date.now() - start;
       throw new HealthCheckError(
-        'Gemini API unreachable',
+        'La API de Gemini no está disponible.',
         this.getStatus(key, false, {
           message: error.message,
           latency: `${duration}ms`,

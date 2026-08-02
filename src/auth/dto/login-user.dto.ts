@@ -20,7 +20,7 @@ export class LoginUserDto {
   email: string;
 
   @ApiProperty({
-    description: 'User password',
+    description: 'Contraseña del usuario',
     nullable: false,
     minLength: 6,
     maxLength: 30,
@@ -29,7 +29,7 @@ export class LoginUserDto {
   @MinLength(6)
   @MaxLength(30)
   @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'The password must have a Uppercase, lowercase and a number',
+    message: 'La contraseña debe incluir mayúsculas, minúsculas y números.',
   })
   password: string;
 

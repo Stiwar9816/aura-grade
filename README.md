@@ -351,24 +351,54 @@ pueden crearse desde el endpoint público.
 
 ## 🌱 Seeding (Datos de Prueba)
 
-El seed destructivo no está expuesto mediante REST ni GraphQL. Para poblar una
-base de datos exclusivamente local con usuarios, cursos y rúbricas iniciales,
-confirma que `STATE=dev` y ejecuta:
+El seed destructivo no está expuesto mediante REST ni GraphQL. Para reconstruir
+una base de datos exclusivamente local, confirma que `STATE=dev`, aplica antes
+las migraciones y ejecuta:
 
 ```bash
+pnpm run migration:run
 pnpm run seed:dev
 ```
 
 El comando se bloquea si `STATE` no es `dev`. Nunca debe ejecutarse contra
-staging o producción porque elimina los datos académicos y los usuarios que no
-son administradores antes de crear los datos de prueba. Requiere que las
-migraciones ya hayan creado al menos una institución activa.
+staging o producción: dentro de una transacción, vacía todos los datos de la
+aplicación vinculados a instituciones, incluidos usuarios, matrículas, cursos,
+rúbricas, tareas, entregas, evaluaciones y solicitudes de reevaluación. Si la
+carga falla, la transacción se revierte.
 
 Esto creará:
 
-- Docentes y Estudiantes de prueba.
-- Rúbricas (Ensayo Académico, Proyecto Software).
-- Tareas de ejemplo.
+- 3 instituciones activas: Universidad Aura, Instituto Tecnológico del Pacífico
+  y Colegio Innovación Andina.
+- 15 usuarios: un administrador y un docente por institución; además de
+  estudiantes aprobados, uno pendiente y uno rechazado para probar aprobación
+  institucional.
+- 3 cursos, 7 matrículas, 3 rúbricas y 6 tareas de ejemplo.
+
+Todos los usuarios de prueba usan la contraseña `Password123!`.
+
+## 🔐 Probar autenticación con Postman
+
+Cuando `BFF_SHARED_SECRET` está configurado, el backend solo acepta solicitudes
+del BFF. En Postman crea una variable de entorno `aura_bff_secret` con el mismo
+valor de `BFF_SHARED_SECRET` del archivo `.env` y agrega este header a todas las
+solicitudes de la API:
+
+```text
+X-BFF-Secret: {{aura_bff_secret}}
+```
+
+Sin ese header, `POST /api/auth/login` y `POST /api/auth/register` responden
+`403 El acceso directo al backend no está permitido.` No copies el secreto a
+colecciones compartidas. Tras ejecutar el seed puedes probar el inicio de
+sesión con `admin@aura.edu.co` y la contraseña `Password123!`.
+
+La recuperación se solicita mediante `POST /api/auth/forgot-password` con el
+mismo header y este cuerpo:
+
+```json
+{ "email": "admin@aura.edu.co" }
+```
 
 ## 🧪 Testing
 

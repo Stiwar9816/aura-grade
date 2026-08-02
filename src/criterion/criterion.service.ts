@@ -33,7 +33,8 @@ export class CriterionService {
       where: { id },
       relations: ['rubric'],
     });
-    if (!criterion) throw new NotFoundException(`Criterion with id ${id} not found`);
+    if (!criterion)
+      throw new NotFoundException(`No se encontró el criterio con identificador ${id}.`);
     return criterion;
   }
 

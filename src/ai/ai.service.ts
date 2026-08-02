@@ -29,7 +29,7 @@ export class AiService {
       if (cachedResult) return JSON.parse(cachedResult);
     } catch (error) {
       this.logger.warn(
-        `AI cache read failed: ${error instanceof Error ? error.message : 'unknown error'}`
+        `Falló la lectura de la caché de IA: ${error instanceof Error ? error.message : 'error desconocido'}`
       );
     }
 
@@ -43,7 +43,7 @@ export class AiService {
       });
     } catch (error) {
       this.logger.warn(
-        `AI cache write failed: ${error instanceof Error ? error.message : 'unknown error'}`
+        `Falló la escritura de la caché de IA: ${error instanceof Error ? error.message : 'error desconocido'}`
       );
     }
 

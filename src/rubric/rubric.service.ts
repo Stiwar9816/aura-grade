@@ -73,7 +73,7 @@ export class RubricService {
       relations: ['user', 'criteria'],
     });
 
-    if (!rubric) throw new NotFoundException(`Rubric with id ${id} not found`);
+    if (!rubric) throw new NotFoundException(`No se encontró la rúbrica con identificador ${id}.`);
 
     // Iniciar transacción
     const queryRunner = this.dataSource.createQueryRunner();

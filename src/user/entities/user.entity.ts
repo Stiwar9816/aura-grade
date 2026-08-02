@@ -98,7 +98,7 @@ export class User {
 
   @ApiProperty({
     example: 'Abcd123',
-    description: 'User password',
+    description: 'Contraseña del usuario',
     type: 'string',
   })
   @Column({ type: 'text', select: false })

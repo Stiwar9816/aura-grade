@@ -71,7 +71,7 @@ describe('CurrentUser Decorator', () => {
         ForbiddenException
       );
       expect(() => resolveCurrentUser([UserRoles.Estudiante], mockExecutionContext)).toThrow(
-        `User ${mockUser.name} ${mockUser.last_name} You do not have permission`
+        `El usuario ${mockUser.name} ${mockUser.last_name} no tiene permisos suficientes.`
       );
     });
 
@@ -87,7 +87,7 @@ describe('CurrentUser Decorator', () => {
         InternalServerErrorException
       );
       expect(() => resolveCurrentUser(undefined, mockExecutionContext)).toThrow(
-        'There is no user inside the request - make sure you have used AuthGuard'
+        'No hay un usuario en la solicitud. Verifica que hayas usado AuthGuard.'
       );
     });
   });

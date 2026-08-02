@@ -23,7 +23,7 @@ export class OpenaiHealthIndicator extends HealthIndicator {
     } catch (error) {
       const duration = Date.now() - start;
       throw new HealthCheckError(
-        'OpenAI API unreachable',
+        'La API de OpenAI no está disponible.',
         this.getStatus(key, false, {
           message: error.message,
           latency: `${duration}ms`,

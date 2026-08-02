@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from 'src/auth/auth.controller';
 import { AuthService } from 'src/auth/auth.service';
-import { CreateUserDto, LoginUserDto } from 'src/auth/dto';
+import { CreateUserDto, ForgotPasswordDto, LoginUserDto } from 'src/auth/dto';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 import { JwtAuthGuard } from 'src/auth/guards';
 
@@ -13,6 +13,7 @@ describe('AuthController', () => {
   const mockAuthService = {
     register: jest.fn(),
     login: jest.fn(),
+    forgotPassword: jest.fn(),
   };
 
   const mockUserResponse = {
@@ -139,6 +140,20 @@ describe('AuthController', () => {
       } as any);
 
       expect(result).not.toHaveProperty('password');
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should request password recovery and return an accepted response', async () => {
+      const dto: ForgotPasswordDto = { email: 'john.doe@example.com' };
+      mockAuthService.forgotPassword.mockResolvedValue(mockUserResponse);
+
+      const result = await controller.forgotPassword(dto);
+
+      expect(mockAuthService.forgotPassword).toHaveBeenCalledWith(dto.email);
+      expect(result).toEqual({
+        message: 'Revisa tu correo para continuar con el restablecimiento de contraseña.',
+      });
     });
   });
 });

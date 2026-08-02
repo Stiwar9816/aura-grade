@@ -1,23 +1,25 @@
 import 'dotenv/config';
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../app.module';
+import { ConfigService } from '@nestjs/config';
+import { AppDataSource } from '../config/datasource.config';
 import { SeedService } from './seed.service';
 
 const logger = new Logger('DevelopmentSeed');
 
 async function runSeed() {
-  const app = await NestFactory.createApplicationContext(AppModule);
+  await AppDataSource.initialize();
 
   try {
-    const result = await app.get(SeedService).executeSeed();
+    const result = await new SeedService(AppDataSource, new ConfigService()).executeSeed();
     logger.log(result);
   } finally {
-    await app.close();
+    if (AppDataSource.isInitialized) await AppDataSource.destroy();
   }
 }
 
 void runSeed().catch((error: unknown) => {
-  logger.error(error instanceof Error ? error.message : 'Unknown seed error');
+  logger.error(
+    error instanceof Error ? error.message : 'Error desconocido al cargar los datos iniciales.'
+  );
   process.exitCode = 1;
 });
