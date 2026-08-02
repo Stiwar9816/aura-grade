@@ -20,13 +20,37 @@ export class Institution {
   @Field(() => String)
   name: string;
 
-  @Column({ type: 'text', unique: true })
-  @Field(() => String)
-  slug: string;
-
-  @Column({ name: 'email_domain', type: 'text', nullable: true })
+  @Column({ name: 'legal_name', type: 'text', nullable: true })
   @Field(() => String, { nullable: true })
-  emailDomain?: string;
+  legalName?: string;
+
+  @Column({ name: 'tax_id', type: 'text', nullable: true, unique: true })
+  @Field(() => String, { nullable: true })
+  taxId?: string;
+
+  @Column({ name: 'contact_email', type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  contactEmail?: string;
+
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  phone?: string;
+
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  address?: string;
+
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  city?: string;
+
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  website?: string;
+
+  @Column({ name: 'logo_url', type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  logoUrl?: string;
 
   @Column({ type: 'boolean', default: true })
   @Field(() => Boolean)

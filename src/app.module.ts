@@ -35,9 +35,10 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
 import { ReEvaluationModule } from './reevaluation/reevaluation.module';
 import { InstitutionModule } from './institution';
+import { AuditModule } from './audit';
+import { SeedModule } from './seed/seed.module';
 // Config
 import { envs } from './config';
-import { SeedModule } from './seed/seed.module';
 import { dataSourceOptions } from './config/datasource.config';
 import { RedisModule, RedisService } from './redis';
 import { BffAuthGuard } from './common/guards/bff-auth.guard';
@@ -118,6 +119,7 @@ const redisQueueConnection = envs.redis_url
     SeedModule,
     HealthModule,
     ObservabilityModule,
+    AuditModule,
   ],
   providers: [
     {

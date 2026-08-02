@@ -7,21 +7,18 @@ const DEVELOPMENT_PASSWORD = 'Password123!';
 export const SEED_DATA: SeedData = {
   institutions: [
     {
+      key: 'universidad-aura',
       name: 'Universidad Aura',
-      slug: 'universidad-aura',
-      emailDomain: 'aura.edu.co',
       isActive: true,
     },
     {
+      key: 'instituto-tecnologico-pacifico',
       name: 'Instituto Tecnológico del Pacífico',
-      slug: 'instituto-tecnologico-pacifico',
-      emailDomain: 'itpacifico.edu.co',
       isActive: true,
     },
     {
+      key: 'colegio-innovacion-andina',
       name: 'Colegio Innovación Andina',
-      slug: 'colegio-innovacion-andina',
-      emailDomain: 'innovacionandina.edu.co',
       isActive: true,
     },
   ],
@@ -35,7 +32,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 9000000001,
       phone: 3200000001,
-      institutionSlug: 'universidad-aura',
+      institutionKey: 'universidad-aura',
     },
     {
       name: 'Jorge',
@@ -46,7 +43,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 1000000001,
       phone: 3000000001,
-      institutionSlug: 'universidad-aura',
+      institutionKey: 'universidad-aura',
     },
     {
       name: 'Juan',
@@ -57,7 +54,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.IDENTITY_CARD,
       document_num: 2000000001,
       phone: 3100000001,
-      institutionSlug: 'universidad-aura',
+      institutionKey: 'universidad-aura',
     },
     {
       name: 'María',
@@ -68,7 +65,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.IDENTITY_CARD,
       document_num: 2000000002,
       phone: 3100000002,
-      institutionSlug: 'universidad-aura',
+      institutionKey: 'universidad-aura',
     },
     {
       name: 'Lucía',
@@ -79,7 +76,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.IDENTITY_CARD,
       document_num: 2000000003,
       phone: 3100000003,
-      institutionSlug: 'universidad-aura',
+      institutionKey: 'universidad-aura',
       approvalStatus: InstitutionApprovalStatus.PENDING,
     },
     {
@@ -91,7 +88,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 9000000002,
       phone: 3200000002,
-      institutionSlug: 'instituto-tecnologico-pacifico',
+      institutionKey: 'instituto-tecnologico-pacifico',
     },
     {
       name: 'Ana',
@@ -102,7 +99,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 1000000002,
       phone: 3000000002,
-      institutionSlug: 'instituto-tecnologico-pacifico',
+      institutionKey: 'instituto-tecnologico-pacifico',
     },
     {
       name: 'Carlos',
@@ -113,7 +110,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 2000000004,
       phone: 3100000004,
-      institutionSlug: 'instituto-tecnologico-pacifico',
+      institutionKey: 'instituto-tecnologico-pacifico',
     },
     {
       name: 'Laura',
@@ -124,7 +121,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 2000000005,
       phone: 3100000005,
-      institutionSlug: 'instituto-tecnologico-pacifico',
+      institutionKey: 'instituto-tecnologico-pacifico',
     },
     {
       name: 'Pedro',
@@ -135,7 +132,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 2000000006,
       phone: 3100000006,
-      institutionSlug: 'instituto-tecnologico-pacifico',
+      institutionKey: 'instituto-tecnologico-pacifico',
       approvalStatus: InstitutionApprovalStatus.REJECTED,
     },
     {
@@ -147,7 +144,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 9000000003,
       phone: 3200000003,
-      institutionSlug: 'colegio-innovacion-andina',
+      institutionKey: 'colegio-innovacion-andina',
     },
     {
       name: 'Camila',
@@ -158,7 +155,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 1000000003,
       phone: 3000000003,
-      institutionSlug: 'colegio-innovacion-andina',
+      institutionKey: 'colegio-innovacion-andina',
     },
     {
       name: 'Sofía',
@@ -169,7 +166,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.IDENTITY_CARD,
       document_num: 2000000007,
       phone: 3100000007,
-      institutionSlug: 'colegio-innovacion-andina',
+      institutionKey: 'colegio-innovacion-andina',
     },
     {
       name: 'Diego',
@@ -180,7 +177,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.IDENTITY_CARD,
       document_num: 2000000008,
       phone: 3100000008,
-      institutionSlug: 'colegio-innovacion-andina',
+      institutionKey: 'colegio-innovacion-andina',
     },
     {
       name: 'Valentina',
@@ -191,7 +188,7 @@ export const SEED_DATA: SeedData = {
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 2000000009,
       phone: 3100000009,
-      institutionSlug: 'colegio-innovacion-andina',
+      institutionKey: 'colegio-innovacion-andina',
     },
   ],
   rubrics: [

@@ -8,7 +8,7 @@ import { User } from '../../user/entities/user.entity';
 import { RedisService } from '../../redis';
 import { AuthMetricsService } from '../../observability';
 import { CreatedSession, StoredSession } from './session.types';
-import { InstitutionApprovalStatus } from '../../institution';
+import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
 
 interface SessionPolicy {
   idleTtlMs: number;

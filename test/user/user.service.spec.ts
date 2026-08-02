@@ -25,8 +25,6 @@ describe('UserService', () => {
   const institution = {
     id: institutionId,
     name: 'Universidad Aura',
-    slug: 'universidad-aura',
-    emailDomain: 'aura.edu.co',
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -52,6 +50,7 @@ describe('UserService', () => {
     institutionId,
     institution,
     authVersion: 1,
+    isPlatformAdmin: false,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };

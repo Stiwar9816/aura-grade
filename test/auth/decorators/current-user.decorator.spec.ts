@@ -22,12 +22,12 @@ describe('CurrentUser Decorator', () => {
     institution: {
       id: 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31',
       name: 'Universidad Aura',
-      slug: 'universidad-aura',
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
     authVersion: 1,
+    isPlatformAdmin: true,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };

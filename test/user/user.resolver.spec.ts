@@ -29,13 +29,12 @@ describe('UserResolver', () => {
     institution: {
       id: institutionId,
       name: 'Universidad Aura',
-      slug: 'universidad-aura',
-      emailDomain: 'aura.edu.co',
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
     authVersion: 1,
+    isPlatformAdmin: true,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };

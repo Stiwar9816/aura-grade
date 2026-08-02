@@ -45,16 +45,19 @@ export class SeedService {
         const courseRepository = manager.getRepository(Course);
         const assignmentRepository = manager.getRepository(Assignment);
 
-        const institutions = await institutionRepository.save(SEED_DATA.institutions);
-        const institutionsBySlug = new Map(
-          institutions.map((institution) => [institution.slug, institution])
+        const institutionSeeds = SEED_DATA.institutions;
+        const institutions = await institutionRepository.save(
+          institutionSeeds.map(({ key: _key, ...institution }) => institution)
+        );
+        const institutionsByKey = new Map(
+          institutions.map((institution, index) => [institutionSeeds[index].key, institution])
         );
 
         const users = await userRepository.save(
-          SEED_DATA.users.map(({ institutionSlug, password, approvalStatus, ...user }) => {
+          SEED_DATA.users.map(({ institutionKey, password, approvalStatus, ...user }) => {
             const institution = this.requireReference(
-              institutionsBySlug,
-              institutionSlug,
+              institutionsByKey,
+              institutionKey,
               'institution'
             );
             return {

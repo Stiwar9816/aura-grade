@@ -9,7 +9,7 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { User } from '../../user/entities/user.entity';
 import { JwtPayload } from '../interface/jwt-payload.interface';
 import { SessionService } from '../session';
-import { InstitutionApprovalStatus } from '../../institution';
+import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {

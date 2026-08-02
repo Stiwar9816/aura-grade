@@ -11,7 +11,7 @@ import { Repository } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 // Interfaces
 import { JwtPayload } from '../interface/jwt-payload.interface';
-import { InstitutionApprovalStatus } from '../../institution';
+import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

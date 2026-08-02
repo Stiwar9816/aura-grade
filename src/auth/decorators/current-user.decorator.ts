@@ -8,7 +8,7 @@ import {
 // GraphQL
 import { GqlExecutionContext } from '@nestjs/graphql';
 // Entities
-import { User } from '../../user/entities/user.entity';
+import type { User } from '../../user/entities/user.entity';
 // Enums
 import { UserRoles } from '../enums';
 

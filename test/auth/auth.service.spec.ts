@@ -24,8 +24,6 @@ describe('AuthService', () => {
   const mockInstitution = {
     id: institutionId,
     name: 'Universidad Aura',
-    slug: 'universidad-aura',
-    emailDomain: 'aura.edu.co',
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -50,6 +48,7 @@ describe('AuthService', () => {
     institutionId,
     institution: mockInstitution,
     authVersion: 1,
+    isPlatformAdmin: false,
     checkFieldsBeforeInsert: jest.fn(),
     checkFieldsBeforeUpdate: jest.fn(),
   };
@@ -334,6 +333,7 @@ describe('AuthService', () => {
           document_type: true,
           isActive: true,
           authVersion: true,
+          isPlatformAdmin: true,
         },
         relations: ['courses', 'assignments', 'institution'],
       });

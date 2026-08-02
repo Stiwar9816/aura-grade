@@ -106,6 +106,7 @@ export class AuthService {
         document_type: true,
         isActive: true,
         authVersion: true,
+        isPlatformAdmin: true,
       },
       relations: ['courses', 'assignments', 'institution'],
     });

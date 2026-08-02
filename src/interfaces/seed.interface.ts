@@ -2,9 +2,8 @@ import { UserRoles, DocumentType } from 'src/auth/enums';
 import { InstitutionApprovalStatus } from 'src/institution';
 
 export interface SeedInstitution {
+  key: string;
   name: string;
-  slug: string;
-  emailDomain: string;
   isActive: boolean;
 }
 
@@ -36,7 +35,7 @@ export interface SeedUser {
   document_type: DocumentType;
   document_num: number;
   phone: number;
-  institutionSlug: string;
+  institutionKey: string;
   approvalStatus?: InstitutionApprovalStatus;
 }
 

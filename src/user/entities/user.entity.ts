@@ -19,10 +19,10 @@ import { UserRoles, DocumentType } from 'src/auth/enums';
 // Entities
 import type { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
-import { Submission } from 'src/submission/entities/submission.entity';
-import { Assignment } from 'src/assignment/entities/assignment.entity';
-import type { Institution } from 'src/institution';
-import { InstitutionApprovalStatus } from 'src/institution';
+import type { Submission } from 'src/submission/entities/submission.entity';
+import type { Assignment } from 'src/assignment/entities/assignment.entity';
+import type { Institution } from 'src/institution/entities/institution.entity';
+import { InstitutionApprovalStatus } from 'src/institution/enums/institution-approval-status.enum';
 
 @Entity({ name: 'users' })
 @ObjectType()
@@ -145,6 +145,10 @@ export class User {
 
   @Column({ type: 'int', default: 1 })
   authVersion: number;
+
+  @Column({ name: 'is_platform_admin', type: 'boolean', default: false })
+  @Field(() => Boolean)
+  isPlatformAdmin: boolean;
 
   // Relations - Many-to-Many with Course
   @ManyToMany(

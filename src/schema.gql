@@ -28,16 +28,6 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
-type Institution {
-  id: ID!
-  name: String!
-  slug: String!
-  emailDomain: String
-  isActive: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
 type User {
   id: String!
   name: String!
@@ -51,6 +41,7 @@ type User {
   role: UserRoles!
   approvalStatus: InstitutionApprovalStatus!
   institution: Institution!
+  isPlatformAdmin: Boolean!
 
   """Many-to-many relationship with course table"""
   courses: [Course!]
@@ -85,6 +76,22 @@ enum InstitutionApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+type Institution {
+  id: ID!
+  name: String!
+  legalName: String
+  taxId: String
+  contactEmail: String
+  phone: String
+  address: String
+  city: String
+  website: String
+  logoUrl: String
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Course {
