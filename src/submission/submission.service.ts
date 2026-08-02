@@ -17,6 +17,7 @@ import { FileUpload } from 'graphql-upload-ts';
 // Cloudinary
 import { v2 as cloudinary } from 'cloudinary';
 import { User } from 'src/user/entities/user.entity';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class SubmissionService {
@@ -40,7 +41,8 @@ export class SubmissionService {
     private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
-    @InjectQueue('grading') private readonly gradingQueue: Queue
+    @InjectQueue('grading') private readonly gradingQueue: Queue,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async create(
@@ -56,7 +58,10 @@ export class SubmissionService {
       throw new BadRequestException('El identificador del estudiante es obligatorio.');
     }
     // 1. Validaciones previas
-    const assignment = await this.assignmentRepository.findOneBy({ id: assignmentId });
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: assignmentId },
+      relations: ['user', 'course', 'course.user'],
+    });
     if (!assignment)
       throw new NotFoundException(`No se encontró la tarea con identificador ${assignmentId}.`);
     if (new Date() > assignment.dueDate)
@@ -102,6 +107,9 @@ export class SubmissionService {
       { id: savedSubmission.id, url: savedSubmission.fileUrl },
       { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
     );
+
+    const teacher = assignment.user ?? assignment.course?.user;
+    void this.notificationsService.sendNewSubmissionEmail(teacher, user, assignment);
 
     return savedSubmission;
   }

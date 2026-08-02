@@ -11,6 +11,7 @@ import { Submission } from 'src/submission/entities/submission.entity';
 import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class EvaluationService {
@@ -33,7 +34,8 @@ export class EvaluationService {
     private readonly evaluationRepository: Repository<Evaluation>,
     @InjectRepository(Submission)
     private readonly submissionRepository: Repository<Submission>,
-    private readonly notificationsGateway: NotificationsGateway
+    private readonly notificationsGateway: NotificationsGateway,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async create(createEvaluationInput: CreateEvaluationInput): Promise<Evaluation> {
@@ -64,7 +66,7 @@ export class EvaluationService {
     // 1. Cargar evaluación con relaciones
     const evaluation = await this.evaluationRepository.findOne({
       where: { id },
-      relations: ['submission', 'submission.student'],
+      relations: ['submission', 'submission.student', 'submission.assignment'],
     });
 
     if (!evaluation)
@@ -92,6 +94,11 @@ export class EvaluationService {
       message: '¡Tu calificación ha sido revisada y publicada!',
       evaluationId: evaluation.id,
     });
+    void this.notificationsService.sendPublishedGradeEmail(
+      evaluation.submission.student,
+      evaluation.submission.assignment.title,
+      evaluation.totalScore
+    );
 
     return savedEvaluation;
   }

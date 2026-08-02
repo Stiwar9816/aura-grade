@@ -4,6 +4,8 @@ import { User } from 'src/user/entities/user.entity';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 import { RESEND_CLIENT } from 'src/mail/resend.constants';
 import { InstitutionApprovalStatus } from 'src/institution';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { envs } from 'src/config';
 
 describe('MailService', () => {
   let service: MailService;
@@ -94,6 +96,46 @@ describe('MailService', () => {
 
       const callArgs = mockResend.emails.send.mock.calls[0][0];
       expect(callArgs.template.variables.name).toBe('John Doe');
+    });
+  });
+
+  describe('notification emails', () => {
+    it('sends a templated new submission notification', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+      envs.resend_new_submission_template_id = 'new-submission-test';
+
+      await service.sendNewSubmissionNotification(
+        mockUser,
+        { ...mockUser, name: 'Ana', last_name: 'Estudiante' } as User,
+        { title: 'Ensayo final' } as Assignment
+      );
+
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockUser.email,
+          subject: expect.stringContaining('Nueva entrega'),
+          template: expect.objectContaining({
+            variables: expect.objectContaining({
+              student_name: 'Ana Estudiante',
+              assignment_title: 'Ensayo final',
+            }),
+          }),
+        })
+      );
+    });
+
+    it('sends a plain-text published grade notification', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+
+      await service.sendGradePublishedNotification(mockUser, 'Ensayo final', 4.5);
+
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockUser.email,
+          subject: expect.stringContaining('Calificación publicada'),
+          text: expect.stringContaining('4.5'),
+        })
+      );
     });
   });
 

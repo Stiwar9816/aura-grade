@@ -150,6 +150,18 @@ export class User {
   @Field(() => Boolean)
   isPlatformAdmin: boolean;
 
+  @Column({ name: 'email_notifications_enabled', type: 'boolean', default: true })
+  emailNotificationsEnabled?: boolean;
+
+  @Column({ name: 'browser_notifications_enabled', type: 'boolean', default: false })
+  browserNotificationsEnabled?: boolean;
+
+  @Column({ name: 'submission_notifications_enabled', type: 'boolean', default: true })
+  submissionNotificationsEnabled?: boolean;
+
+  @Column({ name: 'grade_notifications_enabled', type: 'boolean', default: true })
+  gradeNotificationsEnabled?: boolean;
+
   // Relations - Many-to-Many with Course
   @ManyToMany(
     () => require('../../course/entities/course.entity').Course,
