@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { MailService } from 'src/mail/mail.service';
 import { User } from 'src/user/entities/user.entity';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
@@ -76,14 +77,14 @@ export class NotificationsService {
 
   async sendPublishedGradeEmail(
     student: User,
-    assignmentTitle: string,
-    score?: number
+    assignment: Assignment,
+    evaluation: Evaluation
   ): Promise<void> {
     if (student.emailNotificationsEnabled === false || student.gradeNotificationsEnabled === false)
       return;
 
     try {
-      await this.mailService.sendGradePublishedNotification(student, assignmentTitle, score);
+      await this.mailService.sendGradePublishedNotification(student, assignment, evaluation);
     } catch (error) {
       this.logger.error(
         `No se pudo enviar la notificación de calificación al usuario ${student.id}.`,

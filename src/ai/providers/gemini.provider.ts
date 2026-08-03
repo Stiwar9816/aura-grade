@@ -9,7 +9,9 @@ export class GeminiProvider implements IAiProvider {
   private readonly logger = new Logger('GeminiProvider');
 
   constructor(private config: ConfigService) {
-    this.genAI = new GoogleGenAI(this.config.get('GEMINI_API_KEY'));
+    this.genAI = new GoogleGenAI({
+      apiKey: this.config.getOrThrow<string>('GEMINI_API_KEY'),
+    });
   }
 
   async evaluateSubmission(extractedText: string, rubric: any, assignmentTitle: string) {
@@ -50,7 +52,7 @@ export class GeminiProvider implements IAiProvider {
       `;
 
       const response = await this.genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents: [
           {
             role: 'user',

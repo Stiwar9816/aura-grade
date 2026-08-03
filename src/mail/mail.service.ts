@@ -79,7 +79,7 @@ export class MailService {
       variables: {
         student_name: `${student.name} ${student.last_name}`,
         assignment_title: assignment.title,
-        score: score.totalScore.toFixed(2),
+        score: score.totalScore,
         app_name: envs.app_name,
         url_app: envs.frontend_url,
       },

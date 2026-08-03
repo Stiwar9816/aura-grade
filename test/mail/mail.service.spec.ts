@@ -5,6 +5,7 @@ import { DocumentType, UserRoles } from 'src/auth/enums';
 import { RESEND_CLIENT } from 'src/mail/resend.constants';
 import { InstitutionApprovalStatus } from 'src/institution';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { envs } from 'src/config';
 
 describe('MailService', () => {
@@ -124,16 +125,23 @@ describe('MailService', () => {
       );
     });
 
-    it('sends a plain-text published grade notification', async () => {
+    it('uses the assignment and evaluation entities in the published grade notification', async () => {
       mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+      const assignment = { title: 'Ensayo final' } as Assignment;
+      const evaluation = { totalScore: 4.5 } as Evaluation;
 
-      await service.sendGradePublishedNotification(mockUser, 'Ensayo final', 4.5);
+      await service.sendGradePublishedNotification(mockUser, assignment, evaluation);
 
       expect(mockResend.emails.send).toHaveBeenCalledWith(
         expect.objectContaining({
           to: mockUser.email,
-          subject: expect.stringContaining('Calificación publicada'),
-          text: expect.stringContaining('4.5'),
+          subject: 'Calificación publicada: Ensayo final',
+          template: expect.objectContaining({
+            variables: expect.objectContaining({
+              assignment_title: 'Ensayo final',
+              score: 4.5,
+            }),
+          }),
         })
       );
     });

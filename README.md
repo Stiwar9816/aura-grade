@@ -132,7 +132,7 @@ CLOUDINARY_API_SECRET=tu-api-secret
 OPENAI_API_KEY=sk-tu-api-key-openai
 
 # Gemini (Inteligencia Artificial)
-GEMINI_API_KEY=sk-tu-api-key-gemini
+GEMINI_API_KEY=tu-api-key-de-google-ai-studio
 
 # AI Provider
 AI_PROVIDER=gemini|openai

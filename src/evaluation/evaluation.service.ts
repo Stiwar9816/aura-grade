@@ -96,8 +96,8 @@ export class EvaluationService {
     });
     void this.notificationsService.sendPublishedGradeEmail(
       evaluation.submission.student,
-      evaluation.submission.assignment.title,
-      evaluation.totalScore
+      evaluation.submission.assignment,
+      savedEvaluation
     );
 
     return savedEvaluation;

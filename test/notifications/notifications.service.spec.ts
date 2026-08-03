@@ -1,5 +1,6 @@
 import { UserRoles } from 'src/auth/enums';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { InstitutionApprovalStatus } from 'src/institution';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { User } from 'src/user/entities/user.entity';
@@ -25,6 +26,7 @@ describe('NotificationsService', () => {
     gradeNotificationsEnabled: true,
   } as User;
   const assignment = { id: 'assignment-id', title: 'Ensayo final' } as Assignment;
+  const evaluation = { id: 'evaluation-id', totalScore: 4.5 } as Evaluation;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,12 +79,12 @@ describe('NotificationsService', () => {
   it('emails published grades when both email and grade notifications are enabled', async () => {
     mailService.sendGradePublishedNotification.mockResolvedValue(undefined);
 
-    await service.sendPublishedGradeEmail(user, 'Ensayo final', 4.5);
+    await service.sendPublishedGradeEmail(user, assignment, evaluation);
 
     expect(mailService.sendGradePublishedNotification).toHaveBeenCalledWith(
       user,
-      'Ensayo final',
-      4.5
+      assignment,
+      evaluation
     );
   });
 });
