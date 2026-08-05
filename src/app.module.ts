@@ -7,7 +7,6 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 // GraphQL
 import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriverConfig, ApolloDriver } from '@nestjs/apollo';
 // Rate Limiting
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -45,6 +44,7 @@ import { BffAuthGuard } from './common/guards/bff-auth.guard';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { AuthMetricsService, ObservabilityModule } from './observability';
+import { createGraphqlServerSecurityOptions } from './common/graphql';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -52,6 +52,7 @@ const redisQueueConnection = envs.redis_url
       host: envs.redis_host,
       port: envs.redis_port,
     };
+const isDevelopment = envs.state === 'dev';
 
 @Module({
   imports: [
@@ -96,10 +97,9 @@ const redisQueueConnection = envs.redis_url
     // GraphQL
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: envs.state === 'dev' ? join(process.cwd(), 'src/schema.gql') : true,
+      autoSchemaFile: isDevelopment ? join(process.cwd(), 'src/schema.gql') : true,
       playground: false,
-      csrfPrevention: false,
-      plugins: [ApolloServerPluginLandingPageLocalDefault()],
+      ...createGraphqlServerSecurityOptions(isDevelopment),
     }),
     AuthModule,
     UserModule,

@@ -58,20 +58,39 @@ export class UserService {
   }
 
   async findAll(user: User): Promise<User[]> {
-    const allowedRoles = ['Estudiante', 'Docente', 'Administrador'];
-    return this.userRepository.find({
-      where: {
-        role: In(allowedRoles),
-        institutionId: user.institutionId,
-      },
+    const where = user.isPlatformAdmin
+      ? { role: In([UserRoles.Estudiante, UserRoles.Docente, UserRoles.Administrador]) }
+      : user.role === UserRoles.Docente
+        ? [
+            { id: user.id, institutionId: user.institutionId },
+            { role: UserRoles.Estudiante, institutionId: user.institutionId },
+          ]
+        : {
+            role: In([UserRoles.Estudiante, UserRoles.Docente, UserRoles.Administrador]),
+            institutionId: user.institutionId,
+          };
+    const users = await this.userRepository.find({
+      where,
       relations: [
         'courses',
+        'courses.user',
         'submissions',
         'submissions.evaluation',
         'submissions.assignment',
+        'submissions.assignment.user',
         'submissions.assignment.rubric',
+        'assignments',
       ],
     });
+
+    if (user.role !== UserRoles.Docente || user.isPlatformAdmin) return users;
+    return users.map((subject) => ({
+      ...subject,
+      assignments: subject.id === user.id ? subject.assignments : [],
+      submissions: (subject.submissions ?? []).filter(
+        (submission) => submission.assignment?.user?.id === user.id
+      ),
+    })) as User[];
   }
 
   async findPendingInstitutionUsers(administrator: User): Promise<User[]> {
@@ -114,10 +133,13 @@ export class UserService {
       where: { id },
       relations: [
         'courses',
+        'courses.user',
         'submissions',
         'submissions.evaluation',
         'submissions.assignment',
+        'submissions.assignment.user',
         'submissions.assignment.rubric',
+        'assignments',
       ],
     });
     if (!user) throw new NotFoundException(`No se encontró el usuario ${id}.`);
@@ -127,10 +149,22 @@ export class UserService {
   async findOneByEmail(email: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { email },
-      relations: ['courses'],
+      relations: ['courses', 'courses.user'],
     });
     if (!user) throw new NotFoundException(`No se encontró un usuario con el correo ${email}.`);
     return user;
+  }
+
+  async findOneForActor(id: string, actor: User): Promise<User> {
+    const user = await this.findOneById(id);
+    this.assertCanReadUser(user, actor);
+    return this.scopeUserRelations(user, actor);
+  }
+
+  async findOneByEmailForActor(email: string, actor: User): Promise<User> {
+    const user = await this.findOneByEmail(email.toLowerCase().trim());
+    this.assertCanReadUser(user, actor);
+    return this.scopeUserRelations(user, actor);
   }
 
   async updateOwnProfile(input: UpdateOwnProfileInput, actor: User): Promise<User> {
@@ -272,6 +306,29 @@ export class UserService {
     }
 
     return await this.userRepository.save(user);
+  }
+
+  private assertCanReadUser(subject: User, actor: User): void {
+    const sameInstitution = actor.institutionId === subject.institutionId;
+    const allowedRole =
+      actor.role === UserRoles.Administrador ||
+      actor.id === subject.id ||
+      (actor.role === UserRoles.Docente && subject.role === UserRoles.Estudiante);
+    if (!actor.isPlatformAdmin && (!sameInstitution || !allowedRole))
+      throw new NotFoundException('No se encontró el usuario solicitado.');
+  }
+
+  private scopeUserRelations(subject: User, actor: User): User {
+    if (actor.isPlatformAdmin || actor.role === UserRoles.Administrador || actor.id === subject.id)
+      return subject;
+
+    return {
+      ...subject,
+      assignments: [],
+      submissions: (subject.submissions ?? []).filter(
+        (submission) => submission.assignment?.user?.id === actor.id
+      ),
+    } as User;
   }
 
   private handleDBException(error: any): never {

@@ -1,7 +1,16 @@
 // NestJS
 import { ParseUUIDPipe, UseGuards } from '@nestjs/common';
 // GraphQL
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  Context,
+  Float,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 // Decorators
 import { CurrentUser } from '../auth/decorators';
 // Guards
@@ -21,6 +30,16 @@ import { User } from './entities/user.entity';
 import { UserRoles } from '../auth/enums';
 import { NoAuthAuthGuard } from 'src/auth/guards';
 import { Throttle } from '@nestjs/throttler';
+import { DocumentType } from 'src/auth/enums/user-document-type.enum';
+import { Submission } from 'src/submission/entities/submission.entity';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Course } from 'src/course/entities/course.entity';
+
+type UserFieldContext = {
+  req?: {
+    user?: User;
+  };
+};
 
 @Resolver(() => User)
 export class UserResolver {
@@ -67,7 +86,7 @@ export class UserResolver {
     @Args('id', { type: () => String }, ParseUUIDPipe) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
-    return this.userService.findOneById(id);
+    return this.userService.findOneForActor(id, user);
   }
 
   @Query(() => User, {
@@ -79,7 +98,7 @@ export class UserResolver {
     @Args('email', { type: () => String }) email: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ): Promise<User> {
-    return this.userService.findOneByEmail(email);
+    return this.userService.findOneByEmailForActor(email, user);
   }
 
   @Mutation(() => User, {
@@ -151,5 +170,84 @@ export class UserResolver {
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) actor: User
   ) {
     return this.userService.assignCourses(assignCoursesInput, actor);
+  }
+
+  @ResolveField(() => String, { nullable: true })
+  email(@Parent() subject: User, @Context() context: UserFieldContext): string | null {
+    return this.canReadContact(context.req?.user, subject) ? subject.email : null;
+  }
+
+  @ResolveField(() => Float, { nullable: true })
+  phone(@Parent() subject: User, @Context() context: UserFieldContext): number | null {
+    return this.canReadContact(context.req?.user, subject) ? subject.phone : null;
+  }
+
+  @ResolveField(() => DocumentType, { nullable: true })
+  document_type(
+    @Parent() subject: User,
+    @Context() context: UserFieldContext
+  ): DocumentType | null {
+    return this.canReadIdentity(context.req?.user, subject) ? subject.document_type : null;
+  }
+
+  @ResolveField(() => Float, { nullable: true })
+  document_num(@Parent() subject: User, @Context() context: UserFieldContext): number | null {
+    return this.canReadIdentity(context.req?.user, subject) ? subject.document_num : null;
+  }
+
+  @ResolveField(() => [Submission], { nullable: true })
+  submissions(@Parent() subject: User, @Context() context: UserFieldContext): Submission[] {
+    const actor = context.req?.user;
+    if (!this.sameInstitution(actor, subject)) return [];
+    if (actor.isPlatformAdmin || actor.role === UserRoles.Administrador || actor.id === subject.id)
+      return subject.submissions ?? [];
+    if (actor.role !== UserRoles.Docente || subject.role !== UserRoles.Estudiante) return [];
+
+    return (subject.submissions ?? []).filter(
+      (submission) => submission.assignment?.user?.id === actor.id
+    );
+  }
+
+  @ResolveField(() => [Assignment], { nullable: true })
+  assignments(@Parent() subject: User, @Context() context: UserFieldContext): Assignment[] {
+    const actor = context.req?.user;
+    if (!this.sameInstitution(actor, subject)) return [];
+    if (actor.isPlatformAdmin || actor.role === UserRoles.Administrador || actor.id === subject.id)
+      return subject.assignments ?? [];
+    return [];
+  }
+
+  @ResolveField(() => [Course], { nullable: true })
+  courses(@Parent() subject: User, @Context() context: UserFieldContext): Course[] {
+    const actor = context.req?.user;
+    if (!this.sameInstitution(actor, subject)) return [];
+    if (actor.isPlatformAdmin || actor.role === UserRoles.Administrador || actor.id === subject.id)
+      return subject.courses ?? [];
+    if (actor.role === UserRoles.Docente && subject.role === UserRoles.Estudiante)
+      return subject.courses ?? [];
+    return [];
+  }
+
+  private canReadContact(actor: User | undefined, subject: User): boolean {
+    if (!this.sameInstitution(actor, subject)) return false;
+    return (
+      actor.isPlatformAdmin ||
+      actor.role === UserRoles.Administrador ||
+      actor.id === subject.id ||
+      (actor.role === UserRoles.Docente && subject.role === UserRoles.Estudiante)
+    );
+  }
+
+  private canReadIdentity(actor: User | undefined, subject: User): boolean {
+    if (!this.sameInstitution(actor, subject)) return false;
+    return (
+      actor.isPlatformAdmin || actor.role === UserRoles.Administrador || actor.id === subject.id
+    );
+  }
+
+  private sameInstitution(actor: User | undefined, subject: User): actor is User {
+    return Boolean(
+      actor && (actor.isPlatformAdmin || actor.institutionId === subject.institutionId)
+    );
   }
 }

@@ -1,13 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   BadRequestException,
   InternalServerErrorException,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
 import { UserService } from 'src/user/user.service';
 import { User } from 'src/user/entities/user.entity';
 import { Course } from 'src/course/entities/course.entity';
@@ -30,10 +28,6 @@ describe('UserService', () => {
     updatedAt: new Date(),
   };
   let service: UserService;
-  let userRepository: Repository<User>;
-  let mailService: MailService;
-  let authService: AuthService;
-  let jwtService: JwtService;
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -113,11 +107,6 @@ describe('UserService', () => {
     }).compile();
 
     service = module.get<UserService>(UserService);
-    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    mailService = module.get<MailService>(MailService);
-    authService = module.get<AuthService>(AuthService);
-    jwtService = module.get<JwtService>(JwtService);
-
     // Clear all mocks before each test
     jest.clearAllMocks();
   });
@@ -177,8 +166,9 @@ describe('UserService', () => {
   describe('findAll', () => {
     it('should return an array of users with allowed roles', async () => {
       mockUserRepository.find.mockResolvedValue([mockUser]);
+      const administrator = { ...mockUser, role: UserRoles.Administrador } as User;
 
-      const result = await service.findAll(mockUser);
+      const result = await service.findAll(administrator);
 
       expect(mockUserRepository.find).toHaveBeenCalledWith({
         where: {
@@ -187,13 +177,48 @@ describe('UserService', () => {
         },
         relations: [
           'courses',
+          'courses.user',
           'submissions',
           'submissions.evaluation',
           'submissions.assignment',
+          'submissions.assignment.user',
           'submissions.assignment.rubric',
+          'assignments',
         ],
       });
       expect(result).toEqual([mockUser]);
+    });
+
+    it('limits a teacher listing to self and institutional students and removes foreign work', async () => {
+      const teacher = {
+        ...mockUser,
+        id: '7882f5d0-c0cb-47f0-8b5e-4cbd1df0475f',
+        role: UserRoles.Docente,
+      } as User;
+      const ownSubmission = { id: 'own', assignment: { user: { id: teacher.id } } };
+      const foreignSubmission = {
+        id: 'foreign',
+        assignment: { user: { id: 'other-teacher-id' } },
+      };
+      const student = {
+        ...mockUser,
+        submissions: [ownSubmission, foreignSubmission],
+        assignments: [{ id: 'student-assignment' }],
+      } as User;
+      mockUserRepository.find.mockResolvedValue([teacher, student]);
+
+      const result = await service.findAll(teacher);
+
+      expect(mockUserRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: [
+            { id: teacher.id, institutionId },
+            { role: UserRoles.Estudiante, institutionId },
+          ],
+        })
+      );
+      expect(result[1].submissions).toEqual([ownSubmission]);
+      expect(result[1].assignments).toEqual([]);
     });
   });
 
@@ -269,10 +294,13 @@ describe('UserService', () => {
         where: { id: mockUser.id },
         relations: [
           'courses',
+          'courses.user',
           'submissions',
           'submissions.evaluation',
           'submissions.assignment',
+          'submissions.assignment.user',
           'submissions.assignment.rubric',
+          'assignments',
         ],
       });
       expect(result).toEqual(mockUser);
@@ -294,7 +322,7 @@ describe('UserService', () => {
 
       expect(mockUserRepository.findOne).toHaveBeenCalledWith({
         where: { email: mockUser.email },
-        relations: ['courses'],
+        relations: ['courses', 'courses.user'],
       });
       expect(result).toEqual(mockUser);
     });
@@ -304,6 +332,52 @@ describe('UserService', () => {
       mockUserRepository.findOne.mockResolvedValue(null);
 
       await expect(service.findOneByEmail(email)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('actor-scoped user lookups', () => {
+    const teacher = {
+      ...mockUser,
+      id: '7882f5d0-c0cb-47f0-8b5e-4cbd1df0475f',
+      role: UserRoles.Docente,
+    } as User;
+
+    it('hides users from another institution', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        institutionId: '46dcda76-9df1-421c-866d-23e95de2e639',
+      });
+
+      await expect(service.findOneForActor(mockUser.id, teacher)).rejects.toBeInstanceOf(
+        NotFoundException
+      );
+    });
+
+    it('does not allow a teacher to inspect another teacher', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        role: UserRoles.Docente,
+      });
+
+      await expect(service.findOneForActor(mockUser.id, teacher)).rejects.toBeInstanceOf(
+        NotFoundException
+      );
+    });
+
+    it('allows a teacher to inspect an institutional student and filters foreign submissions', async () => {
+      const ownSubmission = { id: 'own', assignment: { user: { id: teacher.id } } };
+      const foreignSubmission = {
+        id: 'foreign',
+        assignment: { user: { id: 'other-teacher-id' } },
+      };
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        submissions: [ownSubmission, foreignSubmission],
+      });
+
+      const result = await service.findOneForActor(mockUser.id, teacher);
+
+      expect(result.submissions).toEqual([ownSubmission]);
     });
   });
 

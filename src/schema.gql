@@ -32,11 +32,10 @@ type User {
   id: String!
   name: String!
   last_name: String!
-  document_type: DocumentType!
-  document_num: Float!
-  phone: Float!
-  email: String!
-  password: String!
+  document_type: DocumentType
+  document_num: Float
+  phone: Float
+  email: String
   isActive: Boolean!
   role: UserRoles!
   approvalStatus: InstitutionApprovalStatus!

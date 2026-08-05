@@ -1,5 +1,5 @@
 // GraphQL
-import { ObjectType, Field, Float } from '@nestjs/graphql';
+import { ObjectType, Field, Float, HideField } from '@nestjs/graphql';
 // TypeORM
 import {
   BeforeInsert,
@@ -63,7 +63,7 @@ export class User {
     type: 'string',
   })
   @Column({ type: 'enum', enum: DocumentType })
-  @Field(() => DocumentType)
+  @Field(() => DocumentType, { nullable: true })
   document_type: DocumentType;
 
   @ApiProperty({
@@ -73,7 +73,7 @@ export class User {
     uniqueItems: true,
   })
   @Column({ type: 'bigint', unique: true })
-  @Field(() => Float)
+  @Field(() => Float, { nullable: true })
   document_num: number;
 
   @ApiProperty({
@@ -83,7 +83,7 @@ export class User {
     uniqueItems: true,
   })
   @Column({ type: 'bigint', unique: true })
-  @Field(() => Float)
+  @Field(() => Float, { nullable: true })
   phone: number;
 
   @ApiProperty({
@@ -93,16 +93,17 @@ export class User {
     type: 'string',
   })
   @Column({ type: 'text', unique: true })
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
   email: string;
 
   @ApiProperty({
     example: 'Abcd123',
     description: 'Contraseña del usuario',
     type: 'string',
+    writeOnly: true,
   })
   @Column({ type: 'text', select: false })
-  @Field(() => String)
+  @HideField()
   password: string;
 
   @ApiProperty({

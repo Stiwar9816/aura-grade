@@ -11,7 +11,6 @@ import { InstitutionApprovalStatus } from 'src/institution';
 describe('UserResolver', () => {
   const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   let resolver: UserResolver;
-  let userService: UserService;
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -43,6 +42,8 @@ describe('UserResolver', () => {
     findAll: jest.fn(),
     findOneById: jest.fn(),
     findOneByEmail: jest.fn(),
+    findOneForActor: jest.fn(),
+    findOneByEmailForActor: jest.fn(),
     update: jest.fn(),
     updateOwnProfile: jest.fn(),
     block: jest.fn(),
@@ -68,7 +69,6 @@ describe('UserResolver', () => {
       .compile();
 
     resolver = module.get<UserResolver>(UserResolver);
-    userService = module.get<UserService>(UserService);
 
     // Clear all mocks before each test
     jest.clearAllMocks();
@@ -117,17 +117,17 @@ describe('UserResolver', () => {
   describe('findOne', () => {
     it('should return a user by id', async () => {
       const userId = '123e4567-e89b-12d3-a456-426614174000';
-      mockUserService.findOneById.mockResolvedValue(mockUser);
+      mockUserService.findOneForActor.mockResolvedValue(mockUser);
 
       const result = await resolver.findOne(userId, mockUser);
 
-      expect(mockUserService.findOneById).toHaveBeenCalledWith(userId);
+      expect(mockUserService.findOneForActor).toHaveBeenCalledWith(userId, mockUser);
       expect(result).toEqual(mockUser);
     });
 
     it('should handle UUID validation', async () => {
       const userId = '123e4567-e89b-12d3-a456-426614174000';
-      mockUserService.findOneById.mockResolvedValue(mockUser);
+      mockUserService.findOneForActor.mockResolvedValue(mockUser);
 
       const result = await resolver.findOne(userId, mockUser);
 
@@ -138,11 +138,11 @@ describe('UserResolver', () => {
   describe('findOneByEmail', () => {
     it('should return a user by email', async () => {
       const email = 'john.doe@example.com';
-      mockUserService.findOneByEmail.mockResolvedValue(mockUser);
+      mockUserService.findOneByEmailForActor.mockResolvedValue(mockUser);
 
       const result = await resolver.findOneByEmail(email, mockUser);
 
-      expect(mockUserService.findOneByEmail).toHaveBeenCalledWith(email);
+      expect(mockUserService.findOneByEmailForActor).toHaveBeenCalledWith(email, mockUser);
       expect(result).toEqual(mockUser);
     });
   });
@@ -236,6 +236,60 @@ describe('UserResolver', () => {
 
       expect(mockUserService.assignCourses).toHaveBeenCalledWith(input, mockUser);
       expect(result).toEqual(mockUser);
+    });
+  });
+
+  describe('personal field privacy', () => {
+    const student = {
+      ...mockUser,
+      id: '971715a2-d37f-45c4-b4ab-866f87e7ce60',
+      role: UserRoles.Estudiante,
+      isPlatformAdmin: false,
+    } as User;
+    const teacher = {
+      ...mockUser,
+      id: '7882f5d0-c0cb-47f0-8b5e-4cbd1df0475f',
+      role: UserRoles.Docente,
+      isPlatformAdmin: false,
+    } as User;
+
+    it('allows a teacher to read student contact data but not identity documents', () => {
+      const context = { req: { user: teacher } };
+
+      expect(resolver.email(student, context)).toBe(student.email);
+      expect(resolver.phone(student, context)).toBe(student.phone);
+      expect(resolver.document_num(student, context)).toBeNull();
+      expect(resolver.document_type(student, context)).toBeNull();
+    });
+
+    it('hides another user personal data from a student', () => {
+      const otherStudent = { ...student, id: '25bb0e9d-7075-4d7f-9684-a95afe02d3ae' } as User;
+      const context = { req: { user: student } };
+
+      expect(resolver.email(otherStudent, context)).toBeNull();
+      expect(resolver.phone(otherStudent, context)).toBeNull();
+      expect(resolver.document_num(otherStudent, context)).toBeNull();
+      expect(resolver.courses(otherStudent, context)).toEqual([]);
+      expect(resolver.submissions(otherStudent, context)).toEqual([]);
+    });
+
+    it('returns to a teacher only submissions from assignments owned by that teacher', () => {
+      const ownSubmission = {
+        id: 'own-submission',
+        assignment: { user: { id: teacher.id } },
+      };
+      const foreignSubmission = {
+        id: 'foreign-submission',
+        assignment: { user: { id: 'other-teacher-id' } },
+      };
+      const context = { req: { user: teacher } };
+
+      expect(
+        resolver.submissions(
+          { ...student, submissions: [ownSubmission, foreignSubmission] } as User,
+          context
+        )
+      ).toEqual([ownSubmission]);
     });
   });
 });
