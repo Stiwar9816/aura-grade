@@ -7,6 +7,8 @@ import { AssignmentResolver } from './assignment.resolver';
 import { TypeOrmModule } from '@nestjs/typeorm';
 // Entities
 import { Assignment } from './entities/assignment.entity';
+import { Course } from 'src/course/entities/course.entity';
+import { Rubric } from 'src/rubric/entities/rubric.entity';
 // Modules
 import { UserModule } from 'src/user/user.module';
 import { RubricModule } from 'src/rubric/rubric.module';
@@ -15,7 +17,7 @@ import { SubmissionModule } from 'src/submission/submission.module';
 @Module({
   providers: [AssignmentResolver, AssignmentService],
   imports: [
-    TypeOrmModule.forFeature([Assignment]),
+    TypeOrmModule.forFeature([Assignment, Course, Rubric]),
     forwardRef(() => UserModule),
     forwardRef(() => RubricModule),
     forwardRef(() => SubmissionModule),

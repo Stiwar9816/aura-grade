@@ -455,8 +455,6 @@ input CreateAssignmentInput {
   """Course ID"""
   courseId: ID!
 
-  """Teacher ID"""
-  userId: ID!
   isActive: Boolean = true
 }
 
@@ -476,8 +474,6 @@ input UpdateAssignmentInput {
   """Course ID"""
   courseId: ID
 
-  """Teacher ID"""
-  userId: ID
   isActive: Boolean = true
 
   """ID of the assignment to update"""

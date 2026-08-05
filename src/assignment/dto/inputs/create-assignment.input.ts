@@ -28,10 +28,6 @@ export class CreateAssignmentInput {
   @IsUUID('4')
   courseId: string;
 
-  @Field(() => ID, { description: 'Teacher ID' })
-  @IsUUID('4')
-  userId: string;
-
   @Field(() => Boolean, { nullable: true, defaultValue: true })
   @IsOptional()
   @IsBoolean()

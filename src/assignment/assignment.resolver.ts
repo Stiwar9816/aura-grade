@@ -23,9 +23,9 @@ export class AssignmentResolver {
   @UseGuards(JwtAuthGuard)
   createAssignment(
     @Args('createAssignmentInput') createAssignmentInput: CreateAssignmentInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.assignmentService.create(createAssignmentInput);
+    return this.assignmentService.create(createAssignmentInput, user);
   }
 
   @Query(() => [Assignment], { name: 'assignments' })
@@ -33,7 +33,7 @@ export class AssignmentResolver {
   findAll(
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
-    return this.assignmentService.findAll();
+    return this.assignmentService.findAll(user);
   }
 
   @Query(() => Assignment, { name: 'assignment' })
@@ -42,24 +42,24 @@ export class AssignmentResolver {
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
-    return this.assignmentService.findOne(id);
+    return this.assignmentService.findOne(id, user);
   }
 
   @Mutation(() => Assignment, { name: 'updateAssignment' })
   @UseGuards(JwtAuthGuard)
   updateAssignment(
     @Args('updateAssignmentInput') updateAssignmentInput: UpdateAssignmentInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.assignmentService.update(updateAssignmentInput.id, updateAssignmentInput);
+    return this.assignmentService.update(updateAssignmentInput.id, updateAssignmentInput, user);
   }
 
   @Mutation(() => Assignment, { name: 'removeAssignment' })
   @UseGuards(JwtAuthGuard)
   removeAssignment(
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.assignmentService.remove(id);
+    return this.assignmentService.remove(id, user);
   }
 }
