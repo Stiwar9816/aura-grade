@@ -8,7 +8,7 @@ import { EvaluationService } from './evaluation.service';
 import { Evaluation } from './entities/evaluation.entity';
 import { User } from 'src/user/entities/user.entity';
 // DTOs
-import { CreateEvaluationInput, UpdateEvaluationInput } from './dto';
+import { UpdateEvaluationInput } from './dto';
 // Guards
 import { JwtAuthGuard } from 'src/auth/guards';
 // Decorators
@@ -20,29 +20,12 @@ import { UserRoles } from 'src/auth/enums';
 export class EvaluationResolver {
   constructor(private readonly evaluationService: EvaluationService) {}
 
-  @Mutation(() => Evaluation, { name: 'createEvaluation' })
-  @UseGuards(JwtAuthGuard)
-  createEvaluation(
-    @Args('createEvaluationInput') createEvaluationInput: CreateEvaluationInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
-  ): Promise<Evaluation> {
-    return this.evaluationService.create(createEvaluationInput);
-  }
-
   @Query(() => [Evaluation], { name: 'evaluations' })
   @UseGuards(JwtAuthGuard)
   findAll(
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Evaluation[]> {
-    if (user.role === UserRoles.Administrador) {
-      return this.evaluationService.findAll();
-    }
-
-    if (user.role === UserRoles.Docente) {
-      return this.evaluationService.findAllByTeacher(user.id);
-    }
-
-    return this.evaluationService.findAllByStudent(user.id);
+    return this.evaluationService.findAll(user);
   }
 
   @Query(() => Evaluation, { name: 'Evaluation' })
@@ -51,7 +34,7 @@ export class EvaluationResolver {
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Evaluation> {
-    return this.evaluationService.findOne(id);
+    return this.evaluationService.findOne(id, user);
   }
 
   @Query(() => Evaluation, { name: 'evaluationBySubmission' })
@@ -60,16 +43,7 @@ export class EvaluationResolver {
     @Args('submissionId', { type: () => ID }, ParseUUIDPipe) submissionId: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Evaluation> {
-    return this.evaluationService.findBySubmission(submissionId);
-  }
-
-  @Mutation(() => Evaluation, { name: 'updateEvaluation' })
-  @UseGuards(JwtAuthGuard)
-  updateEvaluation(
-    @Args('updateEvaluationInput') updateEvaluationInput: UpdateEvaluationInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
-  ): Promise<Evaluation> {
-    return this.evaluationService.update(updateEvaluationInput.id, updateEvaluationInput);
+    return this.evaluationService.findBySubmission(submissionId, user);
   }
 
   @Mutation(() => Evaluation, { name: 'publishEvaluation' })
@@ -78,17 +52,8 @@ export class EvaluationResolver {
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
     @Args('updateEvaluationInput', { nullable: true })
     updateEvaluationInput: UpdateEvaluationInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ): Promise<Evaluation> {
-    return this.evaluationService.publish(id, updateEvaluationInput);
-  }
-
-  @Mutation(() => Boolean, { name: 'removeEvaluation' })
-  @UseGuards(JwtAuthGuard)
-  removeEvaluation(
-    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
-  ): Promise<boolean> {
-    return this.evaluationService.remove(id);
+    return this.evaluationService.publish(id, updateEvaluationInput, user);
   }
 }

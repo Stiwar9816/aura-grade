@@ -81,6 +81,27 @@ describe('AssignmentService', () => {
     expect(result[0].course.users).toEqual([{ id: 'student-id' }]);
   });
 
+  it('hides draft evaluation details from the authenticated student', async () => {
+    const student = { id: 'student-id', role: UserRoles.Estudiante } as User;
+    assignmentRepository.find.mockResolvedValue([
+      {
+        id: 'assignment-id',
+        course: { users: [student] },
+        submissions: [
+          {
+            id: 'submission-id',
+            student,
+            evaluation: { id: 'evaluation-id', status: 'DRAFT', totalScore: 5 },
+          },
+        ],
+      },
+    ]);
+
+    const [assignment] = await service.findAll(student);
+
+    expect(assignment.submissions?.[0].evaluation).toBeUndefined();
+  });
+
   it('creates the assignment under the authenticated teacher identity', async () => {
     const course = { id: 'course-id', user: teacher };
     const rubric = { id: 'rubric-id', user: teacher };

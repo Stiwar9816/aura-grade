@@ -8,7 +8,7 @@ import { SubmissionService } from './submission.service';
 // Entities
 import { Submission } from './entities/submission.entity';
 // DTOs
-import { CreateSubmissionInput, UpdateSubmissionInput } from './dto';
+import { CreateSubmissionInput } from './dto';
 // Graphql
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 // Guards
@@ -25,12 +25,12 @@ export class SubmissionResolver {
   constructor(private readonly submissionService: SubmissionService) {}
 
   @Mutation(() => Submission, { name: 'createSubmission' })
-  // @Throttle({ submission: { limit: 5, ttl: 3600000 } })
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
   async createSubmission(
     @Args('createSubmissionInput') createSubmissionInput: CreateSubmissionInput,
     @Args('file', { type: () => GraphQLUpload }) file: FileUpload,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
+    @CurrentUser([UserRoles.Estudiante]) user: User
   ): Promise<Submission> {
     return this.submissionService.create(file, createSubmissionInput, user);
   }
@@ -40,15 +40,7 @@ export class SubmissionResolver {
   findAll(
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Submission[]> {
-    // Administradores ven todas las entregas
-    if (user.role === UserRoles.Administrador) {
-      return this.submissionService.findAll();
-    }
-    if (user.role === UserRoles.Docente) {
-      return this.submissionService.findAllByTeacher(user.id);
-    }
-
-    return this.submissionService.findAllByStudent(user.id);
+    return this.submissionService.findAll(user);
   }
 
   @Query(() => Submission, { name: 'submission' })
@@ -57,24 +49,6 @@ export class SubmissionResolver {
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ): Promise<Submission> {
-    return this.submissionService.findOne(id);
-  }
-
-  @Mutation(() => Submission, { name: 'updateSubmission' })
-  @UseGuards(JwtAuthGuard)
-  updateSubmission(
-    @Args('updateSubmissionInput') updateSubmissionInput: UpdateSubmissionInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
-  ): Promise<Submission> {
-    return this.submissionService.update(updateSubmissionInput.id, updateSubmissionInput);
-  }
-
-  @Mutation(() => Submission, { name: 'removeSubmission' })
-  @UseGuards(JwtAuthGuard)
-  removeSubmission(
-    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
-  ): Promise<Submission> {
-    return this.submissionService.remove(id);
+    return this.submissionService.findOne(id, user);
   }
 }

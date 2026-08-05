@@ -23,15 +23,15 @@ export class CriterionResolver {
   @UseGuards(JwtAuthGuard)
   createCriterion(
     @Args('createCriterionInput') createCriterionInput: CreateCriterionInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.criterionService.create(createCriterionInput);
+    return this.criterionService.create(createCriterionInput, user);
   }
 
   @Query(() => [Criterion], { name: 'criteria' })
   @UseGuards(JwtAuthGuard)
   findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
-    return this.criterionService.findAll();
+    return this.criterionService.findAll(user);
   }
 
   @Query(() => Criterion, { name: 'criterion' })
@@ -40,24 +40,24 @@ export class CriterionResolver {
     @Args('id', { type: () => String }) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ) {
-    return this.criterionService.findOne(id);
+    return this.criterionService.findOne(id, user);
   }
 
   @Mutation(() => Criterion, { name: 'updateCriterion' })
   @UseGuards(JwtAuthGuard)
   updateCriterion(
     @Args('updateCriterionInput') updateCriterionInput: UpdateCriterionInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.criterionService.update(updateCriterionInput.id, updateCriterionInput);
+    return this.criterionService.update(updateCriterionInput.id, updateCriterionInput, user);
   }
 
   @Mutation(() => Criterion, { name: 'removeCriterion' })
   @UseGuards(JwtAuthGuard)
   removeCriterion(
     @Args('id', { type: () => String }) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.criterionService.remove(id);
+    return this.criterionService.remove(id, user);
   }
 }

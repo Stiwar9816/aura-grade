@@ -1,5 +1,5 @@
 import { Field, ID, InputType } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 @InputType()
 export class CreateReEvaluationRequestInput {
@@ -9,6 +9,7 @@ export class CreateReEvaluationRequestInput {
 
   @Field(() => String, { description: 'Reason for requesting a re-evaluation' })
   @IsString()
-  @IsNotEmpty()
+  @MinLength(20)
+  @MaxLength(2000)
   reason: string;
 }

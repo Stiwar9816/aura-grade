@@ -1,16 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 // TypeORM
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 // DTOs
-import { CreateSubmissionInput, UpdateSubmissionInput } from './dto';
+import { CreateSubmissionInput } from './dto';
 // Entities
 import { Submission } from './entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 // Enums
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 import { UserRoles } from 'src/auth/enums';
 // FileUpload
 import { FileUpload } from 'graphql-upload-ts';
@@ -18,6 +24,22 @@ import { FileUpload } from 'graphql-upload-ts';
 import { v2 as cloudinary } from 'cloudinary';
 import { User } from 'src/user/entities/user.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { randomUUID } from 'crypto';
+import { Readable } from 'stream';
+
+const MAX_SUBMISSION_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_DOCX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
+const ALLOWED_DOCX_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
+]);
+
+type StoredFile = {
+  secureUrl: string;
+  publicId: string;
+};
 
 @Injectable()
 export class SubmissionService {
@@ -50,77 +72,76 @@ export class SubmissionService {
     createSubmissionInput: CreateSubmissionInput,
     user: User
   ): Promise<Submission> {
-    const { createReadStream, filename } = file;
-    const { assignmentId, studentId, ...submissionData } = createSubmissionInput;
-    const effectiveStudentId =
-      user.role === UserRoles.Estudiante ? user.id : (studentId ?? user.id);
-    if (!effectiveStudentId) {
-      throw new BadRequestException('El identificador del estudiante es obligatorio.');
-    }
+    this.assertStudent(user);
+    const { assignmentId, ...submissionData } = createSubmissionInput;
     // 1. Validaciones previas
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
-      relations: ['user', 'course', 'course.user'],
+      relations: ['user', 'course', 'course.user', 'course.users'],
     });
     if (!assignment)
       throw new NotFoundException(`No se encontró la tarea con identificador ${assignmentId}.`);
+    if (!assignment.isActive)
+      throw new BadRequestException('Esta tarea no está activa y no acepta entregas.');
+    if (!assignment.course?.users?.some((student) => student.id === user.id))
+      throw new ForbiddenException('No estás matriculado en el curso de esta tarea.');
     if (new Date() > assignment.dueDate)
       throw new BadRequestException('La fecha límite de esta tarea ya pasó.');
 
-    const extension = filename.split('.').pop()?.toLowerCase();
-    if (extension !== 'docx') {
-      throw new BadRequestException('Solo se permiten archivos .docx para las entregas.');
-    }
+    const fileBuffer = await this.readAndValidateDocx(file);
+    const storedFile = await this.uploadToCloudinary(fileBuffer);
 
-    // 2. SUBIDA A CLOUDINARY MEDIANTE STREAMS
-    const cloudinaryResponse: any = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'auragrade/submissions',
-          resource_type: 'auto', // Permite DOCX, etc.
-          // USAR EL NOMBRE ORIGINAL (quitando la extensión para el public_id)
-          public_id: filename.split('.')[0],
-          // FORZAR QUE SE MANTENGA EL FORMATO ORIGINAL
-          use_filename: true,
-          unique_filename: true,
-          format: extension,
-        },
-        (error, result) => (result ? resolve(result) : reject(error))
-      );
-      createReadStream().pipe(uploadStream);
-    });
-
-    // 3. Crear registro en base de datos con la URL de Cloudinary
     const submission = this.submissionRepository.create({
       ...submissionData,
-      fileUrl: cloudinaryResponse.secure_url, // URL pública de Cloudinary
+      fileUrl: storedFile.secureUrl,
       assignment: { id: assignmentId },
-      student: { id: effectiveStudentId },
+      student: { id: user.id },
       status: SubmissionStatus.PENDING,
     });
 
-    const savedSubmission = await this.submissionRepository.save(submission);
+    let savedSubmission: Submission | undefined;
+    try {
+      savedSubmission = await this.submissionRepository.save(submission);
 
-    // 4. Iniciar proceso asíncrono mediante BullMQ (Extracción -> IA -> Evaluación)
-    await this.gradingQueue.add(
-      'grade-submission',
-      { id: savedSubmission.id, url: savedSubmission.fileUrl },
-      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
-    );
+      await this.gradingQueue.add(
+        'grade-submission',
+        { id: savedSubmission.id, url: savedSubmission.fileUrl },
+        {
+          jobId: savedSubmission.id,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 86400, count: 1000 },
+          removeOnFail: { age: 604800, count: 5000 },
+        }
+      );
+    } catch (error) {
+      await this.cleanupFailedSubmission(storedFile.publicId, savedSubmission);
+      throw error;
+    }
 
-    const teacher = assignment.user ?? assignment.course?.user;
+    const teacher = assignment.user;
     void this.notificationsService.sendNewSubmissionEmail(teacher, user, assignment);
 
     return savedSubmission;
   }
 
-  async findAll(): Promise<Submission[]> {
-    return await this.submissionRepository.find({
+  async findAll(actor: User): Promise<Submission[]> {
+    const where = actor.isPlatformAdmin
+      ? {}
+      : actor.role === UserRoles.Docente
+        ? { assignment: { user: { id: actor.id } } }
+        : actor.role === UserRoles.Administrador
+          ? { assignment: { user: { institutionId: actor.institutionId } } }
+          : { student: { id: actor.id } };
+
+    const submissions = await this.submissionRepository.find({
+      where,
       relations: this.submissionRelations,
     });
+    return submissions.map((submission) => this.hideStudentDraft(submission, actor));
   }
 
-  async findOne(id: string): Promise<Submission> {
+  async findOne(id: string, actor: User): Promise<Submission> {
     const submission = await this.submissionRepository.findOne({
       where: { id },
       relations: this.submissionRelations,
@@ -128,55 +149,154 @@ export class SubmissionService {
 
     if (!submission)
       throw new NotFoundException(`No se encontró la entrega con identificador ${id}.`);
-    return submission;
+
+    const canAccess =
+      actor.isPlatformAdmin ||
+      (actor.role === UserRoles.Docente && submission.assignment?.user?.id === actor.id) ||
+      (actor.role === UserRoles.Administrador &&
+        submission.assignment?.user?.institutionId === actor.institutionId) ||
+      (actor.role === UserRoles.Estudiante && submission.student?.id === actor.id);
+    if (!canAccess) throw new ForbiddenException('No puedes acceder a esta entrega.');
+
+    return this.hideStudentDraft(submission, actor);
   }
 
-  async update(id: string, updateSubmissionInput: UpdateSubmissionInput): Promise<Submission> {
-    const { id: _, ...toUpdate } = updateSubmissionInput;
-
-    const submission = await this.submissionRepository.preload({
-      id,
-      ...toUpdate,
-    });
-
-    if (!submission)
-      throw new NotFoundException(`No se encontró la entrega con identificador ${id}.`);
-
-    return await this.submissionRepository.save(submission);
+  private assertStudent(actor: User): void {
+    if (actor.role !== UserRoles.Estudiante)
+      throw new ForbiddenException('Solo un estudiante puede crear entregas.');
   }
 
-  async remove(id: string): Promise<Submission> {
-    const submission = await this.findOne(id);
-    await this.submissionRepository.remove(submission);
-    return { ...submission, id };
+  private hideStudentDraft(submission: Submission, actor: User): Submission {
+    if (
+      actor.role !== UserRoles.Estudiante ||
+      submission.evaluation?.status === EvaluationStatus.PUBLISHED
+    )
+      return submission;
+    return { ...submission, evaluation: undefined };
   }
 
-  async findAllByTeacher(teacherId: string): Promise<Submission[]> {
-    return await this.submissionRepository.find({
-      where: [
+  private async readAndValidateDocx(file: FileUpload): Promise<Buffer> {
+    const { filename, mimetype, createReadStream } = file;
+    if (!filename?.toLowerCase().endsWith('.docx'))
+      throw new BadRequestException('Solo se permiten archivos .docx para las entregas.');
+    if (mimetype && !ALLOWED_DOCX_MIME_TYPES.has(mimetype.toLowerCase()))
+      throw new BadRequestException('El tipo MIME del archivo no corresponde a un DOCX.');
+
+    const stream = createReadStream();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    try {
+      for await (const chunk of stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += buffer.length;
+        if (size > MAX_SUBMISSION_FILE_SIZE) {
+          stream.destroy();
+          throw new BadRequestException('El archivo supera el límite de 15 MB.');
+        }
+        chunks.push(buffer);
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('No se pudo leer el archivo cargado.');
+    }
+
+    if (size === 0) throw new BadRequestException('El archivo está vacío.');
+    const content = Buffer.concat(chunks, size);
+    if (!this.hasValidDocxDirectory(content))
+      throw new BadRequestException('El contenido del archivo no corresponde a un DOCX válido.');
+
+    return content;
+  }
+
+  private hasValidDocxDirectory(content: Buffer): boolean {
+    if (content.length < 22 || content.readUInt32LE(0) !== 0x04034b50) return false;
+
+    const searchStart = Math.max(0, content.length - 65557);
+    let endOfCentralDirectory = -1;
+    for (let offset = content.length - 22; offset >= searchStart; offset -= 1) {
+      if (content.readUInt32LE(offset) === 0x06054b50) {
+        endOfCentralDirectory = offset;
+        break;
+      }
+    }
+    if (endOfCentralDirectory < 0) return false;
+
+    const totalEntries = content.readUInt16LE(endOfCentralDirectory + 10);
+    const centralDirectorySize = content.readUInt32LE(endOfCentralDirectory + 12);
+    const centralDirectoryOffset = content.readUInt32LE(endOfCentralDirectory + 16);
+    if (totalEntries === 0 || centralDirectoryOffset + centralDirectorySize > endOfCentralDirectory)
+      return false;
+
+    const entries = new Set<string>();
+    let totalUncompressedSize = 0;
+    let cursor = centralDirectoryOffset;
+    for (let index = 0; index < totalEntries; index += 1) {
+      if (cursor + 46 > endOfCentralDirectory || content.readUInt32LE(cursor) !== 0x02014b50)
+        return false;
+
+      const flags = content.readUInt16LE(cursor + 8);
+      const compressionMethod = content.readUInt16LE(cursor + 10);
+      const uncompressedSize = content.readUInt32LE(cursor + 24);
+      const fileNameLength = content.readUInt16LE(cursor + 28);
+      const extraLength = content.readUInt16LE(cursor + 30);
+      const commentLength = content.readUInt16LE(cursor + 32);
+      const nextCursor = cursor + 46 + fileNameLength + extraLength + commentLength;
+      if (
+        (flags & 0x1) !== 0 ||
+        ![0, 8].includes(compressionMethod) ||
+        uncompressedSize === 0xffffffff ||
+        nextCursor > endOfCentralDirectory
+      )
+        return false;
+
+      totalUncompressedSize += uncompressedSize;
+      if (totalUncompressedSize > MAX_DOCX_UNCOMPRESSED_SIZE) return false;
+      entries.add(content.toString('utf8', cursor + 46, cursor + 46 + fileNameLength));
+      cursor = nextCursor;
+    }
+
+    return entries.has('[Content_Types].xml') && entries.has('word/document.xml');
+  }
+
+  private async uploadToCloudinary(content: Buffer): Promise<StoredFile> {
+    const publicId = `${randomUUID()}.docx`;
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
         {
-          assignment: {
-            user: { id: teacherId },
-          },
+          folder: 'auragrade/submissions',
+          resource_type: 'raw',
+          public_id: publicId,
+          use_filename: false,
+          unique_filename: false,
+          overwrite: false,
         },
-        {
-          assignment: {
-            course: {
-              user: { id: teacherId },
-            },
-          },
-        },
-      ],
-      relations: this.submissionRelations,
+        (error, result) => {
+          if (error || !result?.secure_url || !result.public_id)
+            return reject(error ?? new Error('Cloudinary no devolvió un archivo válido.'));
+          resolve({ secureUrl: result.secure_url, publicId: result.public_id });
+        }
+      );
+      uploadStream.on('error', reject);
+      Readable.from(content).pipe(uploadStream);
     });
   }
 
-  async findAllByStudent(studentId: string): Promise<Submission[]> {
-    return await this.submissionRepository.find({
-      where: {
-        student: { id: studentId },
-      },
-      relations: this.submissionRelations,
+  private async cleanupFailedSubmission(
+    cloudinaryPublicId: string,
+    submission?: Submission
+  ): Promise<void> {
+    const cleanupResults = await Promise.allSettled([
+      cloudinary.uploader.destroy(cloudinaryPublicId, {
+        resource_type: 'raw',
+        invalidate: true,
+      }),
+      ...(submission ? [this.submissionRepository.remove(submission)] : []),
+    ]);
+    cleanupResults.forEach((result) => {
+      if (result.status === 'rejected')
+        this.logger.error(
+          `No se pudo completar la limpieza: ${result.reason?.message ?? result.reason}`
+        );
     });
   }
 }

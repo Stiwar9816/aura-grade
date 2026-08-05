@@ -16,6 +16,7 @@ import { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
+import { EvaluationStatus } from 'src/enums';
 
 const ASSIGNMENT_RELATIONS = [
   'rubric',
@@ -166,9 +167,15 @@ export class AssignmentService {
             users: (assignment.course.users ?? []).filter((student) => student.id === actor.id),
           }
         : assignment.course,
-      submissions: (assignment.submissions ?? []).filter(
-        (submission) => submission.student?.id === actor.id
-      ),
+      submissions: (assignment.submissions ?? [])
+        .filter((submission) => submission.student?.id === actor.id)
+        .map((submission) => ({
+          ...submission,
+          evaluation:
+            submission.evaluation?.status === EvaluationStatus.PUBLISHED
+              ? submission.evaluation
+              : undefined,
+        })),
     };
   }
 

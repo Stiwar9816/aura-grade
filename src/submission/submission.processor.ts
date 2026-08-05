@@ -19,6 +19,17 @@ import { SubmissionStatus } from 'src/enums';
 // Helpers
 import { AiSanitizer } from 'src/common/helpers/ai-sanitizer.helper';
 
+type GradingJobData = {
+  id: string;
+  url: string;
+};
+
+type GradingJobResult = {
+  status: 'SUBMISSION_NOT_FOUND' | 'DRAFT_ALREADY_EXISTS' | 'DRAFT_SAVED';
+  evaluationId?: string;
+  score?: number;
+};
+
 @Processor('grading', { concurrency: 2 })
 export class SubmissionProcessor extends WorkerHost {
   private readonly logger = new Logger(SubmissionProcessor.name);
@@ -35,28 +46,35 @@ export class SubmissionProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<any, any, string>): Promise<any> {
+  async process(job: Job<GradingJobData, GradingJobResult, string>): Promise<GradingJobResult> {
     const { id, url } = job.data;
+    if (!id || !url) throw new Error('El trabajo de calificación no tiene datos válidos.');
     this.logger.log(`Procesando el trabajo de calificación ${job.id} para la entrega ${id}.`);
 
     try {
-      // 1. Extracción de texto
+      const submission = await this.submissionRepository.findOne({
+        where: { id },
+        relations: ['student', 'assignment', 'assignment.rubric', 'evaluation'],
+      });
+
+      if (!submission) {
+        this.logger.warn(`No se encontró la entrega con identificador ${id}.`);
+        return { status: 'SUBMISSION_NOT_FOUND' };
+      }
+
+      if (submission.evaluation) {
+        await job.updateProgress(100);
+        return {
+          evaluationId: submission.evaluation.id,
+          score: submission.evaluation.totalScore,
+          status: 'DRAFT_ALREADY_EXISTS',
+        };
+      }
+
       await job.updateProgress(10);
       const text = await this.extractorService.extractTextFromUrl(url);
       await job.updateProgress(30);
 
-      // 2. Obtener datos de la entrega
-      const submission = await this.submissionRepository.findOne({
-        where: { id },
-        relations: ['student', 'assignment', 'assignment.rubric'],
-      });
-
-      if (!submission) {
-        this.logger.error(`No se encontró la entrega con identificador ${id}.`);
-        return;
-      }
-
-      // 3. Actualización de estado
       await this.submissionRepository.update(id, {
         extractedText: text,
         status: SubmissionStatus.IN_PROGRESS,
@@ -64,7 +82,6 @@ export class SubmissionProcessor extends WorkerHost {
 
       await job.updateProgress(40);
 
-      // 4. Ejecutar la Evaluación con IA
       this.logger.log(`Solicitando a la IA la calificación de la entrega ${id}.`);
       const cleanText = AiSanitizer.clean(text);
 
@@ -75,8 +92,7 @@ export class SubmissionProcessor extends WorkerHost {
       );
       await job.updateProgress(80);
 
-      // 5. Guardar la evaluación
-      const evaluation = await this.evaluationService.create({
+      const evaluation = await this.evaluationService.createDraft({
         submissionId: id,
         totalScore: aiResponse.totalScore,
         generalFeedback: aiResponse.generalFeedback,
@@ -85,13 +101,12 @@ export class SubmissionProcessor extends WorkerHost {
       });
       await job.updateProgress(90);
 
-      // 6. Notificación y progreso final
       await job.updateProgress(100);
       this.logger.log(
         `Borrador de calificación guardado con identificador ${evaluation.id}. Esperando revisión del docente.`
       );
 
-      this.notificationsGateway.notifyStudent('gradingCompleted', {
+      this.notificationsGateway.notifyStudent(submission.student.id, {
         submissionId: id,
         status: 'DRAFT_SAVED',
       });
@@ -101,11 +116,9 @@ export class SubmissionProcessor extends WorkerHost {
         score: evaluation.totalScore,
         status: 'DRAFT_SAVED',
       };
-    } catch (error) {
-      this.logger.error(`Falló el procesamiento de la entrega ${id}: ${error.message}`);
-      await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
-
-      // Lanza el error para que BullMQ registre el fallo y pueda reintentar según la configuración
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Falló el procesamiento de la entrega ${id}: ${message}`);
       throw error;
     }
   }

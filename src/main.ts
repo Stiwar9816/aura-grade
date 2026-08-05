@@ -34,7 +34,7 @@ async function bootstrap() {
       crossOriginResourcePolicy: isDev ? false : true,
     })
   );
-  app.use(graphqlUploadExpress({ maxFileSize: 20971520, maxFiles: 1 }));
+  app.use(graphqlUploadExpress({ maxFileSize: 15 * 1024 * 1024, maxFiles: 1 }));
   app.setGlobalPrefix('api', {
     exclude: ['queues', 'queues/*path'],
   });

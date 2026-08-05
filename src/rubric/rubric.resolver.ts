@@ -23,15 +23,15 @@ export class RubricResolver {
   @UseGuards(JwtAuthGuard)
   createRubric(
     @Args('createRubricInput') createRubricInput: CreateRubricInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.rubricService.create(createRubricInput);
+    return this.rubricService.create(createRubricInput, user);
   }
 
   @Query(() => [Rubric], { name: 'rubrics' })
   @UseGuards(JwtAuthGuard)
   findAll(@CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User) {
-    return this.rubricService.findAll();
+    return this.rubricService.findAll(user);
   }
 
   @Query(() => Rubric, { name: 'rubric' })
@@ -40,24 +40,24 @@ export class RubricResolver {
     @Args('id', { type: () => String }) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
   ) {
-    return this.rubricService.findOne(id);
+    return this.rubricService.findOne(id, user);
   }
 
   @Mutation(() => Rubric, { name: 'updateRubric' })
   @UseGuards(JwtAuthGuard)
   updateRubric(
     @Args('updateRubricInput') updateRubricInput: UpdateRubricInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.rubricService.update(updateRubricInput.id, updateRubricInput);
+    return this.rubricService.update(updateRubricInput.id, updateRubricInput, user);
   }
 
   @Mutation(() => Rubric, { name: 'removeRubric' })
   @UseGuards(JwtAuthGuard)
   removeRubric(
     @Args('id', { type: () => String }) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.rubricService.remove(id);
+    return this.rubricService.remove(id, user);
   }
 }

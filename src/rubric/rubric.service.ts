@@ -1,116 +1,77 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-// TypeORM
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
-// Dto
+import { Repository } from 'typeorm';
 import { CreateRubricInput, UpdateRubricInput } from './dto';
-// Entities
 import { Rubric } from './entities/rubric.entity';
-import { Criterion } from 'src/criterion/entities/criterion.entity';
+import { User } from 'src/user/entities/user.entity';
+import { UserRoles } from 'src/auth/enums';
+
+const RUBRIC_RELATIONS = ['user', 'criteria'];
 
 @Injectable()
 export class RubricService {
   constructor(
     @InjectRepository(Rubric)
-    private rubricRepository: Repository<Rubric>,
-    private readonly dataSource: DataSource
+    private readonly rubricRepository: Repository<Rubric>
   ) {}
 
-  async create(createRubricInput: CreateRubricInput): Promise<Rubric> {
-    const { criteria, userId, ...rubricData } = createRubricInput;
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // 1. Crear la rúbrica vinculando el userId
-      const rubric = queryRunner.manager.create(Rubric, {
-        ...rubricData,
-        user: { id: userId } as any, // Asignamos el ID directamente a la relación
-      });
-
-      const savedRubric = await queryRunner.manager.save(rubric);
-
-      // 2. Crear los criterios vinculados
-      if (criteria && criteria.length > 0) {
-        const criteriaToSave = criteria.map((c) =>
-          queryRunner.manager.create(Criterion, {
-            ...c,
-            rubric: savedRubric,
-          })
-        );
-        await queryRunner.manager.save(Criterion, criteriaToSave);
-      }
-
-      await queryRunner.commitTransaction();
-      return this.findOne(savedRubric.id);
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+  async create(input: CreateRubricInput, teacher: User): Promise<Rubric> {
+    this.assertTeacher(teacher);
+    const rubric = this.rubricRepository.create({
+      ...input,
+      user: teacher,
+    });
+    const savedRubric = await this.rubricRepository.save(rubric);
+    return this.findOne(savedRubric.id, teacher);
   }
 
-  async findAll(): Promise<Rubric[]> {
-    return await this.rubricRepository.find({ relations: ['user', 'criteria'] });
-  }
+  async findAll(actor: User): Promise<Rubric[]> {
+    const where = actor.isPlatformAdmin
+      ? undefined
+      : actor.role === UserRoles.Docente
+        ? { user: { id: actor.id } }
+        : { user: { institutionId: actor.institutionId } };
 
-  async findOne(id: string): Promise<Rubric> {
-    return await this.rubricRepository.findOneOrFail({
-      where: { id },
-      relations: ['user', 'criteria'],
+    return this.rubricRepository.find({
+      where,
+      relations: RUBRIC_RELATIONS,
     });
   }
 
-  async update(id: string, updateRubricInput: UpdateRubricInput): Promise<Rubric> {
-    const { criteria, ...toUpdate } = updateRubricInput;
-
-    // 1. Buscamos la rúbrica existente con sus criterios
+  async findOne(id: string, actor: User): Promise<Rubric> {
     const rubric = await this.rubricRepository.findOne({
       where: { id },
-      relations: ['user', 'criteria'],
+      relations: RUBRIC_RELATIONS,
     });
-
     if (!rubric) throw new NotFoundException(`No se encontró la rúbrica con identificador ${id}.`);
 
-    // Iniciar transacción
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    try {
-      // 2. Actualizar datos básicos de la rúbrica
-      await queryRunner.manager.update(Rubric, id, toUpdate);
-
-      // 3. Si se enviaron criterios, gestionamos la actualización
-      if (criteria) {
-        // Opción recomendada: Eliminar criterios antiguos y crear los nuevos
-        // (Esto simplifica mucho la lógica de los niveles JSONB)
-        await queryRunner.manager.delete(Criterion, { rubric: { id } });
-
-        const newCriteria = criteria.map((c) =>
-          queryRunner.manager.create(Criterion, {
-            ...c,
-            rubric: { id },
-          })
-        );
-        await queryRunner.manager.save(Criterion, newCriteria);
-      }
-
-      await queryRunner.commitTransaction();
-      return this.findOne(id);
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+    const canAccess =
+      actor.isPlatformAdmin ||
+      (actor.role === UserRoles.Docente && rubric.user?.id === actor.id) ||
+      (actor.role === UserRoles.Administrador &&
+        rubric.user?.institutionId === actor.institutionId);
+    if (!canAccess) throw new ForbiddenException('No puedes acceder a esta rúbrica.');
+    return rubric;
   }
 
-  async remove(id: string): Promise<Rubric> {
-    const rubric = await this.findOne(id);
+  async update(id: string, input: UpdateRubricInput, teacher: User): Promise<Rubric> {
+    this.assertTeacher(teacher);
+    await this.findOne(id, teacher);
+    const { id: _, ...toUpdate } = input;
+    const rubric = await this.rubricRepository.preload({ id, ...toUpdate });
+    if (!rubric) throw new NotFoundException(`No se encontró la rúbrica con identificador ${id}.`);
+    return this.rubricRepository.save(rubric);
+  }
+
+  async remove(id: string, teacher: User): Promise<Rubric> {
+    this.assertTeacher(teacher);
+    const rubric = await this.findOne(id, teacher);
     await this.rubricRepository.remove(rubric);
     return { ...rubric, id };
+  }
+
+  private assertTeacher(actor: User): void {
+    if (actor.role !== UserRoles.Docente)
+      throw new ForbiddenException('Solo un docente puede administrar rúbricas.');
   }
 }

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 // TypeORM
 import { TypeOrmModule } from '@nestjs/typeorm';
 // Resolvers
@@ -7,12 +7,10 @@ import { CriterionResolver } from './criterion.resolver';
 import { CriterionService } from './criterion.service';
 // Entities
 import { Criterion } from './entities/criterion.entity';
-// Modules
-import { RubricModule } from 'src/rubric/rubric.module';
-
+import { Rubric } from 'src/rubric/entities/rubric.entity';
 @Module({
   providers: [CriterionResolver, CriterionService],
-  imports: [TypeOrmModule.forFeature([Criterion]), forwardRef(() => RubricModule)],
+  imports: [TypeOrmModule.forFeature([Criterion, Rubric])],
   exports: [CriterionService],
 })
 export class CriterionModule {}

@@ -57,6 +57,7 @@ export class GradingQueueEvents extends QueueEventsHost {
       });
 
       if (submission) {
+        await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
         this.notificationsGateway.notifyStudent(submission.student.id, {
           submissionId: id,
           status: SubmissionStatus.FAILED,

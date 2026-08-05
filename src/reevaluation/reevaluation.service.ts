@@ -48,6 +48,12 @@ export class ReEvaluationService {
     user: User
   ): Promise<ReEvaluationRequest> {
     const { evaluationId, reason } = createReEvaluationRequestInput;
+    if (user.role !== UserRoles.Estudiante)
+      throw new ForbiddenException('Solo un estudiante puede solicitar una reevaluación.');
+
+    const normalizedReason = reason.trim();
+    if (normalizedReason.length < 20 || normalizedReason.length > 2000)
+      throw new BadRequestException('El motivo debe tener entre 20 y 2000 caracteres.');
 
     const evaluation = await this.evaluationRepository.findOne({
       where: { id: evaluationId },
@@ -85,14 +91,13 @@ export class ReEvaluationService {
       );
     }
 
-    const teacher =
-      evaluation.submission.assignment.user ?? evaluation.submission.assignment.course.user;
+    const teacher = evaluation.submission.assignment.user;
     if (!teacher) {
       throw new BadRequestException('La evaluación no tiene un docente asignado.');
     }
 
     const request = this.requestRepository.create({
-      reason: reason.trim(),
+      reason: normalizedReason,
       status: ReEvaluationStatus.PENDING,
       evaluation: { id: evaluationId } as Evaluation,
       student: { id: user.id } as User,
@@ -104,33 +109,22 @@ export class ReEvaluationService {
   }
 
   async findAll(user: User): Promise<ReEvaluationRequest[]> {
-    if (user.role === UserRoles.Administrador) {
-      return this.requestRepository.find({ relations: this.requestRelations });
-    }
-
-    if (user.role === UserRoles.Docente) {
-      return this.requestRepository.find({
-        where: [
-          { teacher: { id: user.id } },
-          { evaluation: { submission: { assignment: { user: { id: user.id } } } } },
-          {
+    const where = user.isPlatformAdmin
+      ? {}
+      : user.role === UserRoles.Administrador
+        ? {
             evaluation: {
               submission: {
-                assignment: {
-                  course: {
-                    user: { id: user.id },
-                  },
-                },
+                assignment: { user: { institutionId: user.institutionId } },
               },
             },
-          },
-        ],
-        relations: this.requestRelations,
-      });
-    }
+          }
+        : user.role === UserRoles.Docente
+          ? { evaluation: { submission: { assignment: { user: { id: user.id } } } } }
+          : { student: { id: user.id } };
 
     return this.requestRepository.find({
-      where: { student: { id: user.id } },
+      where,
       relations: this.requestRelations,
     });
   }
@@ -164,13 +158,18 @@ export class ReEvaluationService {
     }
 
     const request = await this.findOne(id, user);
+    this.assertCanResolve(request, user);
 
     if (request.status !== ReEvaluationStatus.PENDING) {
       throw new BadRequestException('Esta solicitud de reevaluación ya fue resuelta.');
     }
 
     request.status = status;
-    request.teacherResponse = teacherResponse?.trim();
+    const normalizedResponse = teacherResponse.trim();
+    if (normalizedResponse.length < 10 || normalizedResponse.length > 2000)
+      throw new BadRequestException('La respuesta debe tener entre 10 y 2000 caracteres.');
+
+    request.teacherResponse = normalizedResponse;
     request.reviewedAt = new Date();
 
     const savedRequest = await this.requestRepository.save(request);
@@ -178,19 +177,33 @@ export class ReEvaluationService {
   }
 
   private assertCanAccess(request: ReEvaluationRequest, user: User) {
-    if (user.role === UserRoles.Administrador) return;
+    if (user.isPlatformAdmin) return;
+
+    if (
+      user.role === UserRoles.Administrador &&
+      request.evaluation.submission.assignment.user.institutionId === user.institutionId
+    )
+      return;
 
     if (user.role === UserRoles.Estudiante && request.student.id === user.id) return;
 
     if (
       user.role === UserRoles.Docente &&
-      (request.teacher.id === user.id ||
-        request.evaluation.submission.assignment.user.id === user.id ||
-        request.evaluation.submission.assignment.course.user.id === user.id)
+      request.evaluation.submission.assignment.user.id === user.id
     ) {
       return;
     }
 
     throw new ForbiddenException('No tienes acceso a esta solicitud de reevaluación.');
+  }
+
+  private assertCanResolve(request: ReEvaluationRequest, user: User): void {
+    if (
+      user.role !== UserRoles.Docente ||
+      request.evaluation.submission.assignment.user.id !== user.id
+    )
+      throw new ForbiddenException(
+        'Solo el docente propietario de la tarea puede resolver esta solicitud.'
+      );
   }
 }

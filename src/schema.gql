@@ -103,21 +103,6 @@ type Course {
   assignments: [Assignment!]
 }
 
-type CriterionLevel {
-  score: Int!
-  description: String!
-}
-
-type Criterion {
-  id: String!
-  title: String!
-  maxPoints: Int!
-
-  """Performance levels with description and score."""
-  levels: [CriterionLevel!]!
-  rubric: Rubric!
-}
-
 type Assignment {
   """Assignment ID"""
   id: ID!
@@ -191,6 +176,21 @@ enum EvaluationStatus {
   PUBLISHED
 }
 
+type CriterionLevel {
+  score: Int!
+  description: String!
+}
+
+type Criterion {
+  id: String!
+  title: String!
+  maxPoints: Int!
+
+  """Performance levels with description and score."""
+  levels: [CriterionLevel!]!
+  rubric: Rubric!
+}
+
 type ReEvaluationRequest {
   id: ID!
   reason: String!
@@ -231,11 +231,11 @@ type Query {
   assignment(id: ID!): Assignment!
   submissions: [Submission!]!
   submission(id: ID!): Submission!
-  criteria: [Criterion!]!
-  criterion(id: String!): Criterion!
   evaluations: [Evaluation!]!
   Evaluation(id: ID!): Evaluation!
   evaluationBySubmission(submissionId: ID!): Evaluation!
+  criteria: [Criterion!]!
+  criterion(id: String!): Criterion!
   reEvaluationRequests: [ReEvaluationRequest!]!
   reEvaluationRequest(id: ID!): ReEvaluationRequest!
 }
@@ -273,15 +273,10 @@ type Mutation {
   updateAssignment(updateAssignmentInput: UpdateAssignmentInput!): Assignment!
   removeAssignment(id: ID!): Assignment!
   createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
-  updateSubmission(updateSubmissionInput: UpdateSubmissionInput!): Submission!
-  removeSubmission(id: ID!): Submission!
+  publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
   updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!
   removeCriterion(id: String!): Criterion!
-  createEvaluation(createEvaluationInput: CreateEvaluationInput!): Evaluation!
-  updateEvaluation(updateEvaluationInput: UpdateEvaluationInput!): Evaluation!
-  publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
-  removeEvaluation(id: ID!): Boolean!
   createReEvaluationRequest(createReEvaluationRequestInput: CreateReEvaluationRequestInput!): ReEvaluationRequest!
   resolveReEvaluationRequest(resolveReEvaluationRequestInput: ResolveReEvaluationRequestInput!): ReEvaluationRequest!
 }
@@ -387,12 +382,83 @@ input CreateRubricInput {
 
   """Max total score of the rubric"""
   maxTotalScore: Float!
+}
 
-  """List of criteria"""
-  criteria: [CreateCriterionInput!]
+input UpdateRubricInput {
+  """Title of the rubric"""
+  title: String
 
-  """Owner User ID"""
-  userId: ID!
+  """Description of the rubric"""
+  description: String
+
+  """Max total score of the rubric"""
+  maxTotalScore: Float
+
+  """
+  Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
+  """
+  id: ID!
+}
+
+input CreateAssignmentInput {
+  """title of the task"""
+  title: String!
+
+  """Detailed instructions"""
+  description: String!
+
+  """Due date"""
+  dueDate: DateTime!
+
+  """Rubric ID"""
+  rubricId: ID!
+
+  """Course ID"""
+  courseId: ID!
+  isActive: Boolean = true
+}
+
+input UpdateAssignmentInput {
+  """title of the task"""
+  title: String
+
+  """Detailed instructions"""
+  description: String
+
+  """Due date"""
+  dueDate: DateTime
+
+  """Rubric ID"""
+  rubricId: ID
+
+  """Course ID"""
+  courseId: ID
+  isActive: Boolean = true
+
+  """ID of the assignment to update"""
+  id: ID!
+}
+
+input CreateSubmissionInput {
+  """ID of the assignment"""
+  assignmentId: ID!
+}
+
+"""The `Upload` scalar type represents a file upload."""
+scalar Upload
+
+input UpdateEvaluationInput {
+  """ID de la evaluación a actualizar"""
+  id: ID!
+
+  """Calificación final"""
+  totalScore: Float
+
+  """Retroalimentación final"""
+  generalFeedback: String
+
+  """Retroalimentación detallada"""
+  detailedFeedback: JSON
 }
 
 input CreateCriterionInput {
@@ -417,101 +483,6 @@ input CreateCriterionLevelsInput {
   description: String!
 }
 
-input UpdateRubricInput {
-  """Title of the rubric"""
-  title: String
-
-  """Description of the rubric"""
-  description: String
-
-  """Max total score of the rubric"""
-  maxTotalScore: Float
-
-  """List of criteria"""
-  criteria: [CreateCriterionInput!]
-
-  """Owner User ID"""
-  userId: ID
-
-  """
-  Id automatically generated in integer format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
-  """
-  id: ID!
-}
-
-input CreateAssignmentInput {
-  """title of the task"""
-  title: String!
-
-  """Detailed instructions"""
-  description: String!
-
-  """Due date"""
-  dueDate: DateTime!
-
-  """Rubric ID"""
-  rubricId: ID!
-
-  """Course ID"""
-  courseId: ID!
-
-  isActive: Boolean = true
-}
-
-input UpdateAssignmentInput {
-  """title of the task"""
-  title: String
-
-  """Detailed instructions"""
-  description: String
-
-  """Due date"""
-  dueDate: DateTime
-
-  """Rubric ID"""
-  rubricId: ID
-
-  """Course ID"""
-  courseId: ID
-
-  isActive: Boolean = true
-
-  """ID of the assignment to update"""
-  id: ID!
-}
-
-input CreateSubmissionInput {
-  fileSize: Int
-
-  """ID of the assignment"""
-  assignmentId: ID!
-
-  """ID of the student"""
-  studentId: ID
-}
-
-"""The `Upload` scalar type represents a file upload."""
-scalar Upload
-
-input UpdateSubmissionInput {
-  fileSize: Int
-
-  """ID of the assignment"""
-  assignmentId: ID
-
-  """ID of the student"""
-  studentId: ID
-
-  """Submission ID"""
-  id: ID!
-
-  """Submission status"""
-  status: SubmissionStatus
-
-  """Extracted text from the document for the AI"""
-  extractedText: String
-}
-
 input UpdateCriterionInput {
   """Criterion title"""
   title: String
@@ -522,50 +493,9 @@ input UpdateCriterionInput {
   """Criterion levels"""
   levels: [CreateCriterionLevelsInput!]
 
-  """Rubric ID"""
-  rubric: String
-
   """
   Id automatically generated in uuid format eg: 2ad0bc6e-7c63-43bd-ad90-feb291d985b4
   """
-  id: ID!
-  criteria: [UpdateCriterionInput!]
-}
-
-input CreateEvaluationInput {
-  """Total Score"""
-  totalScore: Float!
-
-  """General Feedback"""
-  generalFeedback: String!
-
-  """Detailed Feedback"""
-  detailedFeedback: JSON!
-
-  """Submission ID"""
-  submissionId: ID!
-
-  """AI Model Used"""
-  aiModelUsed: String
-}
-
-input UpdateEvaluationInput {
-  """Total Score"""
-  totalScore: Float
-
-  """General Feedback"""
-  generalFeedback: String
-
-  """Detailed Feedback"""
-  detailedFeedback: JSON
-
-  """Submission ID"""
-  submissionId: ID
-
-  """AI Model Used"""
-  aiModelUsed: String
-
-  """ID de la evaluación a actualizar"""
   id: ID!
 }
 
@@ -585,5 +515,5 @@ input ResolveReEvaluationRequestInput {
   status: ReEvaluationStatus!
 
   """Teacher response"""
-  teacherResponse: String
+  teacherResponse: String!
 }

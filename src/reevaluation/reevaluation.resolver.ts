@@ -27,7 +27,7 @@ export class ReEvaluationResolver {
   resolveReEvaluationRequest(
     @Args('resolveReEvaluationRequestInput')
     resolveReEvaluationRequestInput: ResolveReEvaluationRequestInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ): Promise<ReEvaluationRequest> {
     return this.reEvaluationService.resolve(resolveReEvaluationRequestInput, user);
   }
