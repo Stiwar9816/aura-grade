@@ -68,6 +68,7 @@ describe('UserService', () => {
 
   const mockCourseRepository = {
     findBy: jest.fn(),
+    find: jest.fn(),
   };
 
   const mockMailService = {
@@ -325,11 +326,16 @@ describe('UserService', () => {
       mockUserRepository.preload.mockResolvedValue(updatedUser);
       mockUserRepository.save.mockResolvedValue(updatedUser);
 
-      const result = await service.update(mockUser.id, updateUserInput);
+      const result = await service.update(mockUser.id, updateUserInput, mockUser);
 
       expect(mockUserRepository.preload).toHaveBeenCalledWith({
         id: mockUser.id,
-        ...updateUserInput,
+        name: updateUserInput.name,
+        last_name: updateUserInput.last_name,
+        document_type: updateUserInput.document_type,
+        document_num: updateUserInput.document_num,
+        phone: updateUserInput.phone,
+        email: updateUserInput.email,
       });
       expect(mockMailService.sendUpdatePassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalledWith(updatedUser);
@@ -356,7 +362,7 @@ describe('UserService', () => {
       mockUserRepository.save.mockResolvedValue(updatedUser);
       mockMailService.sendUpdatePassword.mockResolvedValue(true);
 
-      const result = await service.update(mockUser.id, updateUserInput);
+      const result = await service.update(mockUser.id, updateUserInput, mockUser);
 
       expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(
         updatedUser,
@@ -377,23 +383,154 @@ describe('UserService', () => {
       mockUserRepository.preload.mockResolvedValue({ ...mockUser });
       mockMailService.sendUpdatePassword.mockRejectedValue(new Error('Email delivery failed'));
 
-      await expect(service.update(mockUser.id, updateUserInput)).rejects.toThrow(
+      await expect(service.update(mockUser.id, updateUserInput, mockUser)).rejects.toThrow(
         'Email delivery failed'
       );
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('allows every authenticated role to update only its own personal data', async () => {
+      const teacher = {
+        ...mockUser,
+        id: '0a0bde0c-496d-4b36-86e3-c27a7f3765d3',
+        role: UserRoles.Docente,
+      } as User;
+      const updatedTeacher = { ...teacher, name: 'Andrea' };
+      mockUserRepository.findOne.mockResolvedValue(teacher);
+      mockUserRepository.preload.mockResolvedValue(updatedTeacher);
+      mockUserRepository.save.mockResolvedValue(updatedTeacher);
+
+      const result = await service.updateOwnProfile({ name: 'Andrea' }, teacher);
+
+      expect(mockUserRepository.preload).toHaveBeenCalledWith({
+        id: teacher.id,
+        name: 'Andrea',
+      });
+      expect(result).toEqual(updatedTeacher);
+    });
+
+    it('prevents a teacher from updating a student', async () => {
+      const teacher = {
+        ...mockUser,
+        id: '0a0bde0c-496d-4b36-86e3-c27a7f3765d3',
+        role: UserRoles.Docente,
+      } as User;
+
+      await expect(
+        service.update(
+          mockUser.id,
+          { id: mockUser.id, name: 'Alterado', role: UserRoles.Estudiante },
+          teacher
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents a student from updating another user', async () => {
+      const anotherUserId = '0a0bde0c-496d-4b36-86e3-c27a7f3765d3';
+
+      await expect(
+        service.update(
+          anotherUserId,
+          { id: anotherUserId, name: 'Alterado', role: UserRoles.Docente },
+          mockUser
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('prevents an institution administrator from overwriting another user personal data', async () => {
+      const administrator = {
+        ...mockUser,
+        id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+        role: UserRoles.Administrador,
+      } as User;
+
+      await expect(
+        service.update(
+          mockUser.id,
+          { id: mockUser.id, name: 'Alterado', role: UserRoles.Estudiante },
+          administrator
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents a user from changing its own role', async () => {
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        service.update(mockUser.id, { id: mockUser.id, role: UserRoles.Administrador }, mockUser)
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.preload).not.toHaveBeenCalled();
       expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 
   describe('block', () => {
     it('should block a user by setting isActive to false', async () => {
-      const blockedUser = { ...mockUser, isActive: false };
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      const administrator = {
+        ...mockUser,
+        id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+        role: UserRoles.Administrador,
+      } as User;
+      const target = { ...mockUser };
+      const blockedUser = { ...target, isActive: false };
+      mockUserRepository.findOne.mockResolvedValue(target);
       mockUserRepository.save.mockResolvedValue(blockedUser);
 
-      const result = await service.block(mockUser.id);
+      const result = await service.block(target.id, administrator);
 
       expect(result.isActive).toBe(false);
       expect(mockUserRepository.save).toHaveBeenCalled();
+    });
+
+    it('prevents a teacher from blocking a student', async () => {
+      const teacher = {
+        ...mockUser,
+        id: '0a0bde0c-496d-4b36-86e3-c27a7f3765d3',
+        role: UserRoles.Docente,
+      } as User;
+
+      await expect(service.block(mockUser.id, teacher)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('prevents an institution administrator from blocking a cross-institution user', async () => {
+      const administrator = {
+        ...mockUser,
+        id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+        role: UserRoles.Administrador,
+      } as User;
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        institutionId: '46dcda76-9df1-421c-866d-23e95de2e639',
+      });
+
+      await expect(service.block(mockUser.id, administrator)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents administrators from blocking another administrator', async () => {
+      const administrator = {
+        ...mockUser,
+        id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+        role: UserRoles.Administrador,
+      } as User;
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        id: '0a0bde0c-496d-4b36-86e3-c27a7f3765d3',
+        role: UserRoles.Administrador,
+      });
+
+      await expect(
+        service.block('0a0bde0c-496d-4b36-86e3-c27a7f3765d3', administrator)
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 
@@ -428,6 +565,135 @@ describe('UserService', () => {
       expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
+    });
+  });
+
+  describe('assignCourses', () => {
+    const teacher = {
+      ...mockUser,
+      id: '0a0bde0c-496d-4b36-86e3-c27a7f3765d3',
+      role: UserRoles.Docente,
+    } as User;
+    const administrator = {
+      ...mockUser,
+      id: '63933a5f-aac8-4093-a287-30b570cc0d9d',
+      role: UserRoles.Administrador,
+    } as User;
+    const input = {
+      userId: mockUser.id,
+      courseIds: ['b8a98148-5341-4d8e-a968-d4601ec38522'],
+    };
+
+    it('allows an institution administrator to assign courses from the same institution', async () => {
+      const target = { ...mockUser, courses: [] };
+      const courses = [{ id: input.courseIds[0], user: teacher }] as Course[];
+      mockUserRepository.findOne.mockResolvedValue(target);
+      mockCourseRepository.find.mockResolvedValue(courses);
+      mockUserRepository.save.mockImplementation(async (user) => user);
+
+      const result = await service.assignCourses(input, administrator);
+
+      expect(mockCourseRepository.find).toHaveBeenCalledWith({
+        where: {
+          id: expect.anything(),
+          user: { institutionId },
+        },
+        relations: ['user'],
+      });
+      expect(result.courses).toEqual(courses);
+    });
+
+    it('allows a teacher to assign only owned courses and preserves other teacher courses', async () => {
+      const otherTeacher = {
+        ...teacher,
+        id: '42f9ae9e-e718-4d33-a229-f7cd8a877db9',
+      } as User;
+      const otherCourse = {
+        id: '74b68ad8-2747-4d3c-af4e-23d67a43d906',
+        user: otherTeacher,
+      } as Course;
+      const ownCourse = { id: input.courseIds[0], user: teacher } as Course;
+      const target = { ...mockUser, courses: [otherCourse] };
+      mockUserRepository.findOne.mockResolvedValue(target);
+      mockCourseRepository.find.mockResolvedValue([ownCourse]);
+      mockUserRepository.save.mockImplementation(async (user) => user);
+
+      const result = await service.assignCourses(input, teacher);
+
+      expect(mockCourseRepository.find).toHaveBeenCalledWith({
+        where: {
+          id: expect.anything(),
+          user: { id: teacher.id, institutionId },
+        },
+        relations: ['user'],
+      });
+      expect(result.courses).toEqual([otherCourse, ownCourse]);
+    });
+
+    it('lets a teacher clear only owned courses without removing other teacher enrollments', async () => {
+      const otherTeacher = {
+        ...teacher,
+        id: '42f9ae9e-e718-4d33-a229-f7cd8a877db9',
+      } as User;
+      const otherCourse = {
+        id: '74b68ad8-2747-4d3c-af4e-23d67a43d906',
+        user: otherTeacher,
+      } as Course;
+      const previousOwnCourse = { id: input.courseIds[0], user: teacher } as Course;
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        courses: [otherCourse, previousOwnCourse],
+      });
+      mockCourseRepository.find.mockResolvedValue([]);
+      mockUserRepository.save.mockImplementation(async (user) => user);
+
+      const result = await service.assignCourses({ ...input, courseIds: [] }, teacher);
+
+      expect(result.courses).toEqual([otherCourse]);
+    });
+
+    it('prevents a teacher from assigning a course owned by another teacher', async () => {
+      mockUserRepository.findOne.mockResolvedValue({ ...mockUser, courses: [] });
+      mockCourseRepository.find.mockResolvedValue([]);
+
+      await expect(service.assignCourses(input, teacher)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents a teacher from assigning courses to a cross-institution student', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        institutionId: '46dcda76-9df1-421c-866d-23e95de2e639',
+        courses: [],
+      });
+
+      await expect(service.assignCourses(input, teacher)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+      expect(mockCourseRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('prevents a student from assigning courses', async () => {
+      await expect(service.assignCourses(input, mockUser)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('prevents an institution administrator from assigning courses cross-institution', async () => {
+      mockUserRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        institutionId: '46dcda76-9df1-421c-866d-23e95de2e639',
+        courses: [],
+      });
+
+      await expect(service.assignCourses(input, administrator)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+      expect(mockCourseRepository.find).not.toHaveBeenCalled();
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 

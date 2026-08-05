@@ -20,6 +20,7 @@ import {
   AssignCoursesInput,
   CreateUserInput,
   ReviewInstitutionUserInput,
+  UpdateOwnProfileInput,
   UpdateUserInput,
 } from './dto';
 // Entities
@@ -74,6 +75,9 @@ export class UserService {
   }
 
   async findPendingInstitutionUsers(administrator: User): Promise<User[]> {
+    if (administrator.role !== UserRoles.Administrador)
+      throw new ForbiddenException('Solo un administrador puede revisar solicitudes de usuarios.');
+
     return this.userRepository.find({
       where: {
         institutionId: administrator.institutionId,
@@ -88,6 +92,8 @@ export class UserService {
     { userId, status }: ReviewInstitutionUserInput,
     administrator: User
   ): Promise<User> {
+    if (administrator.role !== UserRoles.Administrador)
+      throw new ForbiddenException('Solo un administrador puede revisar solicitudes de usuarios.');
     if (status === InstitutionApprovalStatus.PENDING)
       throw new BadRequestException('La revisión debe aprobar o rechazar la solicitud.');
 
@@ -127,33 +133,75 @@ export class UserService {
     return user;
   }
 
-  async update(id: string, updateUserInput: UpdateUserInput): Promise<User> {
-    const currentUser = await this.findOneById(id);
+  async updateOwnProfile(input: UpdateOwnProfileInput, actor: User): Promise<User> {
+    await this.findOneById(actor.id);
     const user = await this.userRepository.preload({
-      id,
-      ...updateUserInput,
+      id: actor.id,
+      ...input,
     });
-    if (!user) throw new NotFoundException(`No se encontró el usuario ${id}.`);
-    const mustInvalidateSessions =
-      Boolean(updateUserInput.password) ||
-      (updateUserInput.role !== undefined && updateUserInput.role !== currentUser.role) ||
-      (updateUserInput.isActive !== undefined && updateUserInput.isActive !== currentUser.isActive);
-    if (mustInvalidateSessions) user.authVersion = (currentUser.authVersion ?? 1) + 1;
-    if (updateUserInput.password) {
-      // Encrypt password
-      user.password = bcrypt.hashSync(updateUserInput.password, 10);
-      await this.mailService.sendUpdatePassword(user, updateUserInput.password);
+    if (!user) throw new NotFoundException(`No se encontró el usuario ${actor.id}.`);
+
+    try {
+      return await this.userRepository.save(user);
+    } catch (error) {
+      this.handleDBException(error);
     }
-    const savedUser = await this.userRepository.save(user);
+  }
+
+  /**
+   * Compatibility path for the existing frontend. It is deliberately self-only;
+   * institutional administration must use its dedicated status/approval operations.
+   */
+  async update(id: string, updateUserInput: UpdateUserInput, actor: User): Promise<User> {
+    if (id !== actor.id)
+      throw new ForbiddenException('Solo puedes actualizar los datos de tu propia cuenta.');
+
+    const currentUser = await this.findOneById(actor.id);
+    if (updateUserInput.role !== undefined && updateUserInput.role !== currentUser.role)
+      throw new ForbiddenException('No puedes cambiar el rol de tu propia cuenta.');
+
+    const { id: _, role: __, isActive, password, ...personalData } = updateUserInput;
+    const user = await this.userRepository.preload({
+      id: actor.id,
+      ...personalData,
+      ...(isActive === false ? { isActive: false } : {}),
+    });
+    if (!user) throw new NotFoundException(`No se encontró el usuario ${actor.id}.`);
+
+    const mustInvalidateSessions =
+      Boolean(password) || (isActive === false && currentUser.isActive !== false);
+    if (mustInvalidateSessions) user.authVersion = (currentUser.authVersion ?? 1) + 1;
+    if (password) {
+      // Encrypt password
+      user.password = bcrypt.hashSync(password, 10);
+      await this.mailService.sendUpdatePassword(user, password);
+    }
+
+    let savedUser: User;
+    try {
+      savedUser = await this.userRepository.save(user);
+    } catch (error) {
+      this.handleDBException(error);
+    }
     if (mustInvalidateSessions)
       this.logger.log(
-        `La versión de autenticación del usuario ${id} cambió a ${savedUser.authVersion}.`
+        `La versión de autenticación del usuario ${actor.id} cambió a ${savedUser.authVersion}.`
       );
     return savedUser;
   }
 
-  async block(id: string): Promise<User> {
+  async block(id: string, administrator: User): Promise<User> {
+    if (administrator.role !== UserRoles.Administrador)
+      throw new ForbiddenException('Solo un administrador puede desactivar usuarios.');
+    if (id === administrator.id)
+      throw new ForbiddenException('No puedes desactivar tu cuenta desde la administración.');
+
     const userToBlock = await this.findOneById(id);
+    if (!administrator.isPlatformAdmin && userToBlock.institutionId !== administrator.institutionId)
+      throw new ForbiddenException('No puedes administrar usuarios de otra institución.');
+    if (userToBlock.isPlatformAdmin || userToBlock.role === UserRoles.Administrador)
+      throw new ForbiddenException('No puedes desactivar otra cuenta administrativa.');
+
     userToBlock.isActive = false;
     userToBlock.authVersion = (userToBlock.authVersion ?? 1) + 1;
     const savedUser = await this.userRepository.save(userToBlock);
@@ -177,24 +225,51 @@ export class UserService {
     return savedUser;
   }
 
-  async assignCourses({ userId, courseIds }: AssignCoursesInput): Promise<User> {
+  async assignCourses({ userId, courseIds }: AssignCoursesInput, actor: User): Promise<User> {
+    const isAdministrator = actor.role === UserRoles.Administrador;
+    const isTeacher = actor.role === UserRoles.Docente;
+    if (!isAdministrator && !isTeacher)
+      throw new ForbiddenException('No tienes permisos para asignar cursos.');
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['courses'],
+      relations: ['courses', 'courses.user'],
     });
 
     if (!user)
       throw new BadRequestException(`No se encontró el usuario con identificador ${userId}.`);
+    if (!actor.isPlatformAdmin && user.institutionId !== actor.institutionId)
+      throw new ForbiddenException('No puedes administrar usuarios de otra institución.');
+    if (user.isPlatformAdmin || user.role !== UserRoles.Estudiante)
+      throw new ForbiddenException('Los cursos solo pueden asignarse a estudiantes.');
+    if (isTeacher && (!user.isActive || user.approvalStatus !== InstitutionApprovalStatus.APPROVED))
+      throw new ForbiddenException('Solo puedes asignar cursos a estudiantes activos y aprobados.');
 
-    const courses = await this.courseRepository.findBy({
-      id: In(courseIds),
+    const courses = await this.courseRepository.find({
+      where: {
+        id: In(courseIds),
+        user: isTeacher
+          ? { id: actor.id, institutionId: actor.institutionId }
+          : { institutionId: user.institutionId },
+      },
+      relations: ['user'],
     });
 
     if (courses.length !== courseIds.length)
-      throw new BadRequestException('Algunos cursos no existen.');
+      throw new BadRequestException(
+        isTeacher
+          ? 'Algunos cursos no existen o no pertenecen al docente actual.'
+          : 'Algunos cursos no existen o pertenecen a otra institución.'
+      );
 
-    // Asignación
-    user.courses = courses;
+    if (isTeacher) {
+      const coursesFromOtherTeachers = (user.courses ?? []).filter(
+        (course) => course.user?.id !== actor.id
+      );
+      user.courses = [...coursesFromOtherTeachers, ...courses];
+    } else {
+      user.courses = courses;
+    }
 
     return await this.userRepository.save(user);
   }

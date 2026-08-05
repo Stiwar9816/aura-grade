@@ -24,9 +24,9 @@ export class CourseResolver {
   @UseGuards(JwtAuthGuard)
   createCourse(
     @Args('createCourseInput') createCourseInput: CreateCourseInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.courseService.create(createCourseInput);
+    return this.courseService.create(createCourseInput, user);
   }
 
   @Query(() => [Course], { name: 'courses' })
@@ -43,24 +43,24 @@ export class CourseResolver {
     @Args('id', { type: () => String }) id: string,
     @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
-    return this.courseService.findOne(id);
+    return this.courseService.findOne(id, user);
   }
 
   @Mutation(() => Course, { name: 'updateCourse' })
   @UseGuards(JwtAuthGuard)
   updateCourse(
     @Args('updateCourseInput') updateCourseInput: UpdateCourseInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.courseService.update(updateCourseInput.id, updateCourseInput);
+    return this.courseService.update(updateCourseInput.id, updateCourseInput, user);
   }
 
   @Mutation(() => Course, { name: 'removeCourse' })
   @UseGuards(JwtAuthGuard)
   removeCourse(
     @Args('id', { type: () => String }) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Docente]) user: User
   ) {
-    return this.courseService.remove(id);
+    return this.courseService.remove(id, user);
   }
 }

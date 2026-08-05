@@ -9,7 +9,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // Services
 import { UserService } from './user.service';
 // Dto
-import { AssignCoursesInput, ReviewInstitutionUserInput, UpdateUserInput } from './dto';
+import {
+  AssignCoursesInput,
+  ReviewInstitutionUserInput,
+  UpdateOwnProfileInput,
+  UpdateUserInput,
+} from './dto';
 // Entities
 import { User } from './entities/user.entity';
 // Enums
@@ -79,14 +84,27 @@ export class UserResolver {
 
   @Mutation(() => User, {
     name: 'updateUser',
-    description: 'Updates the data of a user by a unique ID',
+    description: 'Deprecated compatibility operation. Users may only update their own account.',
+    deprecationReason: 'Use updateMyProfile for personal information.',
   })
   @UseGuards(JwtAuthGuard)
   updateUser(
     @Args('updateUserInput') updateUserInput: UpdateUserInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
   ) {
-    return this.userService.update(updateUserInput.id, updateUserInput);
+    return this.userService.update(updateUserInput.id, updateUserInput, user);
+  }
+
+  @Mutation(() => User, {
+    name: 'updateMyProfile',
+    description: 'Updates only the personal information of the authenticated user.',
+  })
+  @UseGuards(JwtAuthGuard)
+  updateMyProfile(
+    @Args('input') input: UpdateOwnProfileInput,
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante]) user: User
+  ): Promise<User> {
+    return this.userService.updateOwnProfile(input, user);
   }
 
   @Mutation(() => User, {
@@ -96,9 +114,9 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   blockUser(
     @Args('id', { type: () => String }, ParseUUIDPipe) id: string,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Administrador]) administrator: User
   ): Promise<User> {
-    return this.userService.block(id);
+    return this.userService.block(id, administrator);
   }
 
   @Mutation(() => User, {
@@ -130,8 +148,8 @@ export class UserResolver {
   @UseGuards(JwtAuthGuard)
   assignCoursesToUser(
     @Args('assignCoursesInput') assignCoursesInput: AssignCoursesInput,
-    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) user: User
+    @CurrentUser([UserRoles.Administrador, UserRoles.Docente]) actor: User
   ) {
-    return this.userService.assignCourses(assignCoursesInput);
+    return this.userService.assignCourses(assignCoursesInput, actor);
   }
 }

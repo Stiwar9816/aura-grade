@@ -44,11 +44,13 @@ describe('UserResolver', () => {
     findOneById: jest.fn(),
     findOneByEmail: jest.fn(),
     update: jest.fn(),
+    updateOwnProfile: jest.fn(),
     block: jest.fn(),
     resetPassword: jest.fn(),
     resetPasswordAuth: jest.fn(),
     findPendingInstitutionUsers: jest.fn(),
     reviewInstitutionUser: jest.fn(),
+    assignCourses: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -164,7 +166,22 @@ describe('UserResolver', () => {
 
       const result = await resolver.updateUser(updateUserInput, mockUser);
 
-      expect(mockUserService.update).toHaveBeenCalledWith(updateUserInput.id, updateUserInput);
+      expect(mockUserService.update).toHaveBeenCalledWith(
+        updateUserInput.id,
+        updateUserInput,
+        mockUser
+      );
+      expect(result).toEqual(updatedUser);
+    });
+
+    it('should update only the authenticated user profile through the dedicated operation', async () => {
+      const input = { name: 'Jane', last_name: 'Doe' };
+      const updatedUser = { ...mockUser, ...input };
+      mockUserService.updateOwnProfile.mockResolvedValue(updatedUser);
+
+      const result = await resolver.updateMyProfile(input, mockUser);
+
+      expect(mockUserService.updateOwnProfile).toHaveBeenCalledWith(input, mockUser);
       expect(result).toEqual(updatedUser);
     });
   });
@@ -177,7 +194,7 @@ describe('UserResolver', () => {
 
       const result = await resolver.blockUser(userId, mockUser);
 
-      expect(mockUserService.block).toHaveBeenCalledWith(userId);
+      expect(mockUserService.block).toHaveBeenCalledWith(userId, mockUser);
       expect(result).toEqual(blockedUser);
       expect(result.isActive).toBe(false);
     });
@@ -203,6 +220,21 @@ describe('UserResolver', () => {
       const result = await resolver.resetPasswordAuth(newPassword, mockUser);
 
       expect(mockUserService.resetPasswordAuth).toHaveBeenCalledWith(newPassword, mockUser);
+      expect(result).toEqual(mockUser);
+    });
+  });
+
+  describe('assignCoursesToUser', () => {
+    it('passes the authenticated administrator or teacher to the service authorization boundary', async () => {
+      const input = {
+        userId: mockUser.id,
+        courseIds: ['b8a98148-5341-4d8e-a968-d4601ec38522'],
+      };
+      mockUserService.assignCourses.mockResolvedValue(mockUser);
+
+      const result = await resolver.assignCoursesToUser(input, mockUser);
+
+      expect(mockUserService.assignCourses).toHaveBeenCalledWith(input, mockUser);
       expect(result).toEqual(mockUser);
     });
   });

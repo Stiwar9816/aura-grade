@@ -244,8 +244,13 @@ type Mutation {
   """Approve or reject a pending user from the administrator institution"""
   reviewInstitutionUser(input: ReviewInstitutionUserInput!): User!
 
-  """Updates the data of a user by a unique ID"""
-  updateUser(updateUserInput: UpdateUserInput!): User!
+  """
+  Deprecated compatibility operation. Users may only update their own account.
+  """
+  updateUser(updateUserInput: UpdateUserInput!): User! @deprecated(reason: "Use updateMyProfile for personal information.")
+
+  """Updates only the personal information of the authenticated user."""
+  updateMyProfile(input: UpdateOwnProfileInput!): User!
 
   """Inactivate a user"""
   blockUser(id: String!): User!
@@ -320,6 +325,26 @@ input UpdateUserInput {
 
   """User roles wich can Administrator, User by default takes the user role"""
   isActive: Boolean!
+}
+
+input UpdateOwnProfileInput {
+  """User name"""
+  name: String
+
+  """User Last_name"""
+  last_name: String
+
+  """User document type"""
+  document_type: DocumentType
+
+  """User document number"""
+  document_num: Float
+
+  """User Phone"""
+  phone: Float
+
+  """User Email"""
+  email: String
 }
 
 input AssignCoursesInput {

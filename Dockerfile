@@ -1,16 +1,16 @@
 # Base stage
 FROM node:22-alpine AS base
-ARG PNPM_VERSION=10.33.0
+ARG PNPM_VERSION=11.20.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && \
-    for attempt in 1 2 3 4 5; do \
-      corepack install --global "pnpm@${PNPM_VERSION}" && break; \
-      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
-      sleep "$((attempt * 2))"; \
-    done && \
-    apk update && apk upgrade --no-cache && \
-    apk add --no-cache dumb-init tzdata libc6-compat
+  for attempt in 1 2 3 4 5; do \
+  corepack install --global "pnpm@${PNPM_VERSION}" && break; \
+  if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+  sleep "$((attempt * 2))"; \
+  done && \
+  apk update && apk upgrade --no-cache && \
+  apk add --no-cache dumb-init tzdata libc6-compat
 ENV TZ=America/Bogota
 WORKDIR /app
 
@@ -36,18 +36,18 @@ ENV NODE_ENV=production
 
 # Security: non-root user
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nestjs && \
-    rm -rf /usr/local/lib/node_modules/npm \
-           /usr/local/lib/node_modules/corepack \
-           /opt/yarn-* \
-           /pnpm && \
-    rm -f /usr/local/bin/npm \
-          /usr/local/bin/npx \
-          /usr/local/bin/yarn \
-          /usr/local/bin/yarnpkg \
-          /usr/local/bin/corepack \
-          /usr/local/bin/pnpm \
-          /usr/local/bin/pnpx
+  adduser --system --uid 1001 nestjs && \
+  rm -rf /usr/local/lib/node_modules/npm \
+  /usr/local/lib/node_modules/corepack \
+  /opt/yarn-* \
+  /pnpm && \
+  rm -f /usr/local/bin/npm \
+  /usr/local/bin/npx \
+  /usr/local/bin/yarn \
+  /usr/local/bin/yarnpkg \
+  /usr/local/bin/corepack \
+  /usr/local/bin/pnpm \
+  /usr/local/bin/pnpx
 
 COPY --from=builder /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
