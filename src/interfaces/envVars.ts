@@ -40,4 +40,7 @@ export interface EnvVars {
   SESSION_ADMIN_ABSOLUTE_SECONDS?: number;
   SESSION_REFRESH_INTERVAL_SECONDS?: number;
   SESSION_MAX_PER_USER?: number;
+  VAPID_SUBJECT?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 }

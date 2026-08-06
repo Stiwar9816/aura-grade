@@ -122,6 +122,13 @@ RESEND_API_KEY=re_tu_api_key
 RESEND_CONFIRMATION_TEMPLATE_ID=tmpl_xxxxxxxxx
 RESEND_UPDATE_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
 RESEND_RESET_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_NEW_SUBMISSION_TEMPLATE_ID=tmpl_xxxxxxxxx
+RESEND_GRADE_PUBLISHED_TEMPLATE_ID=tmpl_xxxxxxxxx
+
+# Web Push
+VAPID_SUBJECT=mailto:admin@tu-dominio.com
+VAPID_PUBLIC_KEY=tu-clave-publica-vapid
+VAPID_PRIVATE_KEY=tu-clave-privada-vapid
 
 # Cloudinary (Archivos)
 CLOUDINARY_NAME=tu-cloud-name
@@ -185,6 +192,11 @@ Genera `BFF_SHARED_SECRET` y `METRICS_TOKEN` con un alfabeto seguro para
 archivos `.env` (por ejemplo, `openssl rand -hex 32`). Evita valores con `$`
 sin escapar, porque Docker Compose y Next.js pueden interpretarlos como
 expansión de variables.
+
+Genera el par VAPID una sola vez con
+`./node_modules/.bin/web-push generate-vapid-keys --json`. Conserva la clave
+privada únicamente en el gestor de secretos de cada entorno y publica solo
+`VAPID_PUBLIC_KEY` a través del endpoint autenticado de notificaciones.
 
 ### 3. Iniciar Servicios (Docker)
 

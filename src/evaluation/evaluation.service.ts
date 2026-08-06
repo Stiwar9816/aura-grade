@@ -113,7 +113,7 @@ export class EvaluationService {
       message: '¡Tu calificación ha sido revisada y publicada!',
       evaluationId: evaluation.id,
     });
-    void this.notificationsService.sendPublishedGradeEmail(
+    void this.notificationsService.sendPublishedGradeNotifications(
       evaluation.submission.student,
       evaluation.submission.assignment,
       savedEvaluation

@@ -6,6 +6,8 @@ import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { MailService } from 'src/mail/mail.service';
 import { User } from 'src/user/entities/user.entity';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+import { SavePushSubscriptionDto } from './dto/push-subscription.dto';
+import { WebPushService } from './web-push.service';
 
 export type NotificationPreferences = {
   emailEnabled: boolean;
@@ -21,7 +23,8 @@ export class NotificationsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly webPushService: WebPushService
   ) {}
 
   getPreferences(user: User): NotificationPreferences {
@@ -31,6 +34,41 @@ export class NotificationsService {
       newSubmissionsEnabled: user.submissionNotificationsEnabled ?? true,
       gradesEnabled: user.gradeNotificationsEnabled ?? true,
     };
+  }
+
+  getPushPublicKey(): string {
+    return this.webPushService.getPublicKey();
+  }
+
+  subscribePush(user: User, input: SavePushSubscriptionDto, userAgent?: string): Promise<void> {
+    return this.webPushService.subscribe(user, input, userAgent);
+  }
+
+  unsubscribePush(user: User, endpoint: string): Promise<boolean> {
+    return this.webPushService.unsubscribe(user, endpoint);
+  }
+
+  async sendNewSubmissionNotifications(
+    teacher: User | undefined,
+    student: User,
+    assignment: Assignment,
+    submissionId: string
+  ): Promise<void> {
+    await Promise.all([
+      this.sendNewSubmissionEmail(teacher, student, assignment),
+      this.sendNewSubmissionPush(teacher, student, assignment, submissionId),
+    ]);
+  }
+
+  async sendPublishedGradeNotifications(
+    student: User,
+    assignment: Assignment,
+    evaluation: Evaluation
+  ): Promise<void> {
+    await Promise.all([
+      this.sendPublishedGradeEmail(student, assignment, evaluation),
+      this.sendPublishedGradePush(student, assignment, evaluation),
+    ]);
   }
 
   async updatePreferences(
@@ -91,5 +129,42 @@ export class NotificationsService {
         error instanceof Error ? error.stack : undefined
       );
     }
+  }
+
+  private async sendNewSubmissionPush(
+    teacher: User | undefined,
+    student: User,
+    assignment: Assignment,
+    submissionId: string
+  ): Promise<void> {
+    if (
+      !teacher ||
+      teacher.browserNotificationsEnabled !== true ||
+      teacher.submissionNotificationsEnabled === false
+    )
+      return;
+
+    await this.webPushService.sendToUser(teacher.id, {
+      title: 'Nueva entrega',
+      body: `${student.name} ${student.last_name} envió “${assignment.title}” para revisión.`,
+      url: `/teacher/assignments/${assignment.id}`,
+      tag: `submission:${submissionId}`,
+    });
+  }
+
+  private async sendPublishedGradePush(
+    student: User,
+    assignment: Assignment,
+    evaluation: Evaluation
+  ): Promise<void> {
+    if (student.browserNotificationsEnabled !== true || student.gradeNotificationsEnabled === false)
+      return;
+
+    await this.webPushService.sendToUser(student.id, {
+      title: 'Calificación publicada',
+      body: `Ya puedes consultar la calificación de “${assignment.title}”.`,
+      url: `/evaluation?submission=${evaluation.submission.id}`,
+      tag: `grade:${evaluation.id}`,
+    });
   }
 }

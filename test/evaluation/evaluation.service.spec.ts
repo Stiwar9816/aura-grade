@@ -15,7 +15,7 @@ describe('EvaluationService', () => {
     update: jest.fn(),
   };
   const notificationsGateway = { notifyStudent: jest.fn() };
-  const notificationsService = { sendPublishedGradeEmail: jest.fn() };
+  const notificationsService = { sendPublishedGradeNotifications: jest.fn() };
   const service = new EvaluationService(
     evaluationRepository as never,
     submissionRepository as never,
@@ -200,7 +200,7 @@ describe('EvaluationService', () => {
       student.id,
       expect.objectContaining({ evaluationId: draftEvaluation.id })
     );
-    expect(notificationsService.sendPublishedGradeEmail).toHaveBeenCalledWith(
+    expect(notificationsService.sendPublishedGradeNotifications).toHaveBeenCalledWith(
       student,
       assignment,
       result

@@ -18,7 +18,7 @@ describe('SubmissionService', () => {
     uploadSubmission: jest.fn(),
     deleteSubmission: jest.fn(),
   };
-  const notificationsService = { sendNewSubmissionEmail: jest.fn() };
+  const notificationsService = { sendNewSubmissionNotifications: jest.fn() };
   const service = new SubmissionService(
     submissionRepository as never,
     assignmentRepository as never,
@@ -111,10 +111,11 @@ describe('SubmissionService', () => {
       { id: 'submission-id', url: 'https://example.com/entrega.docx' },
       expect.objectContaining({ jobId: 'submission-id', attempts: 3 })
     );
-    expect(notificationsService.sendNewSubmissionEmail).toHaveBeenCalledWith(
+    expect(notificationsService.sendNewSubmissionNotifications).toHaveBeenCalledWith(
       teacher,
       student,
-      assignment
+      assignment,
+      'submission-id'
     );
     expect(cloudinaryService.uploadSubmission).toHaveBeenCalledWith(validDocxContent);
     expect(result.id).toBe('submission-id');
@@ -175,7 +176,7 @@ describe('SubmissionService', () => {
 
     expect(submissionRepository.save).not.toHaveBeenCalled();
     expect(gradingQueue.add).not.toHaveBeenCalled();
-    expect(notificationsService.sendNewSubmissionEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendNewSubmissionNotifications).not.toHaveBeenCalled();
   });
 
   it('cleans Cloudinary and the database when queueing fails', async () => {
@@ -191,7 +192,7 @@ describe('SubmissionService', () => {
     expect(submissionRepository.remove).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'submission-id' })
     );
-    expect(notificationsService.sendNewSubmissionEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendNewSubmissionNotifications).not.toHaveBeenCalled();
   });
 
   it('scopes each role when listing submissions', async () => {

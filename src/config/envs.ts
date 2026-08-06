@@ -79,6 +79,12 @@ const envsSchema = joi
     SESSION_ADMIN_ABSOLUTE_SECONDS: joi.number().integer().positive().optional(),
     SESSION_REFRESH_INTERVAL_SECONDS: joi.number().integer().positive().optional(),
     SESSION_MAX_PER_USER: joi.number().integer().positive().optional(),
+    VAPID_SUBJECT: joi
+      .string()
+      .pattern(/^(mailto:|https:\/\/)/)
+      .optional(),
+    VAPID_PUBLIC_KEY: joi.string().min(40).optional(),
+    VAPID_PRIVATE_KEY: joi.string().min(40).optional(),
   })
   .unknown(true);
 
@@ -126,4 +132,7 @@ export const envs = {
   session_admin_absolute_seconds: envVars.SESSION_ADMIN_ABSOLUTE_SECONDS,
   session_refresh_interval_seconds: envVars.SESSION_REFRESH_INTERVAL_SECONDS,
   session_max_per_user: envVars.SESSION_MAX_PER_USER,
+  vapid_subject: envVars.VAPID_SUBJECT,
+  vapid_public_key: envVars.VAPID_PUBLIC_KEY,
+  vapid_private_key: envVars.VAPID_PRIVATE_KEY,
 };

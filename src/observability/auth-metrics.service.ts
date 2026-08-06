@@ -11,7 +11,12 @@ type CounterName =
   | 'audit_persisted_total'
   | 'audit_duplicate_total'
   | 'audit_fallback_total'
-  | 'audit_failed_total';
+  | 'audit_failed_total'
+  | 'push_subscribed_total'
+  | 'push_unsubscribed_total'
+  | 'push_sent_total'
+  | 'push_expired_total'
+  | 'push_failed_total';
 
 const COUNTERS: CounterName[] = [
   'auth_login_success_total',
@@ -25,6 +30,11 @@ const COUNTERS: CounterName[] = [
   'audit_duplicate_total',
   'audit_fallback_total',
   'audit_failed_total',
+  'push_subscribed_total',
+  'push_unsubscribed_total',
+  'push_sent_total',
+  'push_expired_total',
+  'push_failed_total',
 ];
 
 const VALIDATION_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];

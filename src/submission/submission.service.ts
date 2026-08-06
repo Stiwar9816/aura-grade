@@ -113,7 +113,12 @@ export class SubmissionService {
     }
 
     const teacher = assignment.user;
-    void this.notificationsService.sendNewSubmissionEmail(teacher, user, assignment);
+    void this.notificationsService.sendNewSubmissionNotifications(
+      teacher,
+      user,
+      assignment,
+      savedSubmission.id
+    );
 
     return savedSubmission;
   }

@@ -11,7 +11,17 @@ describe('NotificationsService', () => {
     sendNewSubmissionNotification: jest.fn(),
     sendGradePublishedNotification: jest.fn(),
   };
-  const service = new NotificationsService(repository as any, mailService as any);
+  const webPushService = {
+    getPublicKey: jest.fn(),
+    subscribe: jest.fn(),
+    unsubscribe: jest.fn(),
+    sendToUser: jest.fn(),
+  };
+  const service = new NotificationsService(
+    repository as any,
+    mailService as any,
+    webPushService as any
+  );
   const user = {
     id: '123e4567-e89b-12d3-a456-426614174000',
     name: 'Andrea',
@@ -26,7 +36,11 @@ describe('NotificationsService', () => {
     gradeNotificationsEnabled: true,
   } as User;
   const assignment = { id: 'assignment-id', title: 'Ensayo final' } as Assignment;
-  const evaluation = { id: 'evaluation-id', totalScore: 4.5 } as Evaluation;
+  const evaluation = {
+    id: 'evaluation-id',
+    totalScore: 4.5,
+    submission: { id: 'submission-id' },
+  } as Evaluation;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -86,5 +100,63 @@ describe('NotificationsService', () => {
       assignment,
       evaluation
     );
+  });
+
+  it('sends email and Web Push for a new submission when both channels are enabled', async () => {
+    const teacher = { ...user, browserNotificationsEnabled: true } as User;
+
+    await service.sendNewSubmissionNotifications(teacher, user, assignment, 'submission-id');
+
+    expect(mailService.sendNewSubmissionNotification).toHaveBeenCalledWith(
+      teacher,
+      user,
+      assignment
+    );
+    expect(webPushService.sendToUser).toHaveBeenCalledWith(
+      teacher.id,
+      expect.objectContaining({
+        title: 'Nueva entrega',
+        url: `/teacher/assignments/${assignment.id}`,
+        tag: 'submission:submission-id',
+      })
+    );
+  });
+
+  it('does not send Web Push when browser notifications are disabled', async () => {
+    await service.sendPublishedGradeNotifications(user, assignment, evaluation);
+
+    expect(mailService.sendGradePublishedNotification).toHaveBeenCalled();
+    expect(webPushService.sendToUser).not.toHaveBeenCalled();
+  });
+
+  it('sends a published grade Web Push to the evaluation submission', async () => {
+    const student = { ...user, browserNotificationsEnabled: true } as User;
+
+    await service.sendPublishedGradeNotifications(student, assignment, evaluation);
+
+    expect(webPushService.sendToUser).toHaveBeenCalledWith(
+      student.id,
+      expect.objectContaining({
+        title: 'Calificación publicada',
+        url: '/evaluation?submission=submission-id',
+        tag: 'grade:evaluation-id',
+      })
+    );
+  });
+
+  it('delegates device subscription lifecycle to WebPushService', async () => {
+    webPushService.getPublicKey.mockReturnValue('public-key');
+    webPushService.subscribe.mockResolvedValue(undefined);
+    webPushService.unsubscribe.mockResolvedValue(true);
+    const subscription = {
+      endpoint: 'https://push.example/subscription',
+      keys: { p256dh: 'a'.repeat(32), auth: 'b'.repeat(16) },
+    };
+
+    expect(service.getPushPublicKey()).toBe('public-key');
+    await service.subscribePush(user, subscription, 'Test Browser');
+    await expect(service.unsubscribePush(user, subscription.endpoint)).resolves.toBe(true);
+    expect(webPushService.subscribe).toHaveBeenCalledWith(user, subscription, 'Test Browser');
+    expect(webPushService.unsubscribe).toHaveBeenCalledWith(user, subscription.endpoint);
   });
 });
