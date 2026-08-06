@@ -15,12 +15,12 @@ describe('EvaluationService', () => {
     update: jest.fn(),
   };
   const notificationsGateway = { notifyStudent: jest.fn() };
-  const notificationsService = { sendPublishedGradeNotifications: jest.fn() };
+  const notificationQueue = { enqueuePublishedGrade: jest.fn() };
   const service = new EvaluationService(
     evaluationRepository as never,
     submissionRepository as never,
     notificationsGateway as never,
-    notificationsService as never
+    notificationQueue as never
   );
 
   const teacher = {
@@ -56,6 +56,7 @@ describe('EvaluationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    notificationQueue.enqueuePublishedGrade.mockResolvedValue('grade-published-evaluation-id');
   });
 
   it('creates an internal draft and marks the submission for teacher review', async () => {
@@ -200,10 +201,23 @@ describe('EvaluationService', () => {
       student.id,
       expect.objectContaining({ evaluationId: draftEvaluation.id })
     );
-    expect(notificationsService.sendPublishedGradeNotifications).toHaveBeenCalledWith(
-      student,
-      assignment,
-      result
+    expect(notificationQueue.enqueuePublishedGrade).toHaveBeenCalledWith(result.id);
+  });
+
+  it('keeps a published grade when notification queueing fails', async () => {
+    evaluationRepository.findOne.mockResolvedValue({
+      ...draftEvaluation,
+      totalScore: 8,
+      submission: {
+        ...draftEvaluation.submission,
+        assignment: { ...assignment, rubric: { maxTotalScore: 10 } },
+      },
+    });
+    evaluationRepository.save.mockImplementation((value) => value);
+    notificationQueue.enqueuePublishedGrade.mockRejectedValueOnce(new Error('Queue unavailable'));
+
+    await expect(service.publish(draftEvaluation.id, undefined, teacher)).resolves.toEqual(
+      expect.objectContaining({ status: EvaluationStatus.PUBLISHED })
     );
   });
 });

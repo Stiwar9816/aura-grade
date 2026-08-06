@@ -16,7 +16,16 @@ type CounterName =
   | 'push_unsubscribed_total'
   | 'push_sent_total'
   | 'push_expired_total'
-  | 'push_failed_total';
+  | 'push_failed_total'
+  | 'notification_queued_total'
+  | 'notification_duplicate_total'
+  | 'notification_enqueue_failed_total'
+  | 'notification_channel_sent_total'
+  | 'notification_channel_skipped_total'
+  | 'notification_retry_total'
+  | 'notification_exhausted_total'
+  | 'notification_job_completed_total'
+  | 'notification_source_missing_total';
 
 const COUNTERS: CounterName[] = [
   'auth_login_success_total',
@@ -35,6 +44,15 @@ const COUNTERS: CounterName[] = [
   'push_sent_total',
   'push_expired_total',
   'push_failed_total',
+  'notification_queued_total',
+  'notification_duplicate_total',
+  'notification_enqueue_failed_total',
+  'notification_channel_sent_total',
+  'notification_channel_skipped_total',
+  'notification_retry_total',
+  'notification_exhausted_total',
+  'notification_job_completed_total',
+  'notification_source_missing_total',
 ];
 
 const VALIDATION_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];

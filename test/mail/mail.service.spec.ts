@@ -125,6 +125,21 @@ describe('MailService', () => {
       );
     });
 
+    it('uses a stable Resend idempotency key for retry-safe notification email', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+
+      await service.sendNewSubmissionNotification(
+        mockUser,
+        { ...mockUser, name: 'Ana', last_name: 'Estudiante' } as User,
+        { title: 'Ensayo final' } as Assignment,
+        'new-submission-submission-id-email'
+      );
+
+      expect(mockResend.emails.send).toHaveBeenCalledWith(expect.any(Object), {
+        idempotencyKey: 'new-submission-submission-id-email',
+      });
+    });
+
     it('uses the assignment and evaluation entities in the published grade notification', async () => {
       mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
       const assignment = { title: 'Ensayo final' } as Assignment;

@@ -21,7 +21,7 @@ import { UserRoles } from 'src/auth/enums';
 // FileUpload
 import { FileUpload } from 'graphql-upload-ts';
 import { User } from 'src/user/entities/user.entity';
-import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 const MAX_SUBMISSION_FILE_SIZE = 15 * 1024 * 1024;
@@ -57,7 +57,7 @@ export class SubmissionService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectQueue('grading') private readonly gradingQueue: Queue,
     private readonly cloudinaryService: CloudinaryService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationQueue: NotificationQueueService
   ) {}
 
   async create(
@@ -112,13 +112,15 @@ export class SubmissionService {
       throw error;
     }
 
-    const teacher = assignment.user;
-    void this.notificationsService.sendNewSubmissionNotifications(
-      teacher,
-      user,
-      assignment,
-      savedSubmission.id
-    );
+    try {
+      await this.notificationQueue.enqueueNewSubmission(savedSubmission.id);
+    } catch (error) {
+      this.logger.error(
+        `La entrega ${savedSubmission.id} fue creada, pero no se pudo encolar su notificación: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`
+      );
+    }
 
     return savedSubmission;
   }

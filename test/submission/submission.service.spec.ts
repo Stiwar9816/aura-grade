@@ -18,13 +18,13 @@ describe('SubmissionService', () => {
     uploadSubmission: jest.fn(),
     deleteSubmission: jest.fn(),
   };
-  const notificationsService = { sendNewSubmissionNotifications: jest.fn() };
+  const notificationQueue = { enqueueNewSubmission: jest.fn() };
   const service = new SubmissionService(
     submissionRepository as never,
     assignmentRepository as never,
     gradingQueue as never,
     cloudinaryService as never,
-    notificationsService as never
+    notificationQueue as never
   );
 
   const student = {
@@ -90,6 +90,7 @@ describe('SubmissionService', () => {
     submissionRepository.save.mockImplementation((value) => ({ ...value, id: 'submission-id' }));
     submissionRepository.remove.mockResolvedValue(undefined);
     gradingQueue.add.mockResolvedValue(undefined);
+    notificationQueue.enqueueNewSubmission.mockResolvedValue('new-submission-submission-id');
   });
 
   it('creates a submission with the authenticated student identity', async () => {
@@ -111,12 +112,7 @@ describe('SubmissionService', () => {
       { id: 'submission-id', url: 'https://example.com/entrega.docx' },
       expect.objectContaining({ jobId: 'submission-id', attempts: 3 })
     );
-    expect(notificationsService.sendNewSubmissionNotifications).toHaveBeenCalledWith(
-      teacher,
-      student,
-      assignment,
-      'submission-id'
-    );
+    expect(notificationQueue.enqueueNewSubmission).toHaveBeenCalledWith('submission-id');
     expect(cloudinaryService.uploadSubmission).toHaveBeenCalledWith(validDocxContent);
     expect(result.id).toBe('submission-id');
   });
@@ -176,7 +172,7 @@ describe('SubmissionService', () => {
 
     expect(submissionRepository.save).not.toHaveBeenCalled();
     expect(gradingQueue.add).not.toHaveBeenCalled();
-    expect(notificationsService.sendNewSubmissionNotifications).not.toHaveBeenCalled();
+    expect(notificationQueue.enqueueNewSubmission).not.toHaveBeenCalled();
   });
 
   it('cleans Cloudinary and the database when queueing fails', async () => {
@@ -192,7 +188,18 @@ describe('SubmissionService', () => {
     expect(submissionRepository.remove).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'submission-id' })
     );
-    expect(notificationsService.sendNewSubmissionNotifications).not.toHaveBeenCalled();
+    expect(notificationQueue.enqueueNewSubmission).not.toHaveBeenCalled();
+  });
+
+  it('keeps the created submission when notification queueing fails', async () => {
+    notificationQueue.enqueueNewSubmission.mockRejectedValueOnce(new Error('Queue unavailable'));
+
+    await expect(
+      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+    ).resolves.toEqual(expect.objectContaining({ id: 'submission-id' }));
+
+    expect(submissionRepository.remove).not.toHaveBeenCalled();
+    expect(cloudinaryService.deleteSubmission).not.toHaveBeenCalled();
   });
 
   it('scopes each role when listing submissions', async () => {

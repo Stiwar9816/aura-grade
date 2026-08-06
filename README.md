@@ -44,8 +44,9 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 ### ⚙️ Procesamiento Asíncrono y Colas
 
-- **BullMQ**: Procesamiento asíncrono en segundo plano para tareas pesadas como las evaluaciones con IA.
+- **BullMQ**: Procesamiento asíncrono y durable para evaluaciones con IA y notificaciones de nuevas entregas y calificaciones publicadas.
 - **Bull Board**: Panel de control interactivo para monitorizar el estado de los trabajos (jobs) en tiempo real.
+- **Entrega idempotente**: Registro por evento y canal para reintentar solo el correo o push pendiente sin duplicar el canal ya completado.
 
 ### 🔐 Autenticación y Autorización
 
@@ -197,6 +198,13 @@ Genera el par VAPID una sola vez con
 `./node_modules/.bin/web-push generate-vapid-keys --json`. Conserva la clave
 privada únicamente en el gestor de secretos de cada entorno y publica solo
 `VAPID_PUBLIC_KEY` a través del endpoint autenticado de notificaciones.
+
+Las notificaciones académicas se encolan en `notifications` con cinco intentos
+y backoff exponencial. Cada entrega queda registrada por evento y canal en
+`notification_deliveries`; un reintento omite los canales ya enviados o
+deshabilitados. Los trabajos completados se conservan siete días y los fallidos
+treinta días. `/api/metrics` expone contadores de trabajos encolados, duplicados,
+reintentos, agotados y resultados por canal.
 
 ### 3. Iniciar Servicios (Docker)
 
@@ -496,7 +504,7 @@ src/
 ├── evaluation/           # Lógica de calificaciones y feedback
 ├── extractor/            # Extracción de texto (DOCX)
 ├── mail/                 # Envío de correos electrónicos
-├── notifications/        # Gateway de WebSockets
+├── notifications/        # WebSockets, Web Push y cola durable de notificaciones
 ├── rubric/               # Gestión de rúbricas dinámicas
 ├── seed/                 # Poblado de datos iniciales
 ├── submission/           # Gestión de entregas de estudiantes

@@ -48,6 +48,7 @@ describe('NotificationsService', () => {
     user.browserNotificationsEnabled = false;
     user.submissionNotificationsEnabled = true;
     user.gradeNotificationsEnabled = true;
+    webPushService.sendToUser.mockResolvedValue(1);
   });
 
   it('returns safe defaults for users created before the preference migration', () => {
@@ -98,19 +99,22 @@ describe('NotificationsService', () => {
     expect(mailService.sendGradePublishedNotification).toHaveBeenCalledWith(
       user,
       assignment,
-      evaluation
+      evaluation,
+      undefined
     );
   });
 
-  it('sends email and Web Push for a new submission when both channels are enabled', async () => {
+  it('sends email and Web Push channels for a new submission when both are enabled', async () => {
     const teacher = { ...user, browserNotificationsEnabled: true } as User;
 
-    await service.sendNewSubmissionNotifications(teacher, user, assignment, 'submission-id');
+    await service.sendNewSubmissionEmail(teacher, user, assignment, 'submission-email-key');
+    await service.sendNewSubmissionPush(teacher, user, assignment, 'submission-id');
 
     expect(mailService.sendNewSubmissionNotification).toHaveBeenCalledWith(
       teacher,
       user,
-      assignment
+      assignment,
+      'submission-email-key'
     );
     expect(webPushService.sendToUser).toHaveBeenCalledWith(
       teacher.id,
@@ -123,16 +127,19 @@ describe('NotificationsService', () => {
   });
 
   it('does not send Web Push when browser notifications are disabled', async () => {
-    await service.sendPublishedGradeNotifications(user, assignment, evaluation);
+    await expect(service.sendPublishedGradePush(user, assignment, evaluation)).resolves.toBe(
+      false
+    );
 
-    expect(mailService.sendGradePublishedNotification).toHaveBeenCalled();
     expect(webPushService.sendToUser).not.toHaveBeenCalled();
   });
 
   it('sends a published grade Web Push to the evaluation submission', async () => {
     const student = { ...user, browserNotificationsEnabled: true } as User;
 
-    await service.sendPublishedGradeNotifications(student, assignment, evaluation);
+    await expect(
+      service.sendPublishedGradePush(student, assignment, evaluation)
+    ).resolves.toBe(true);
 
     expect(webPushService.sendToUser).toHaveBeenCalledWith(
       student.id,

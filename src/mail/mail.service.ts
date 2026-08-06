@@ -57,11 +57,17 @@ export class MailService {
     });
   }
 
-  async sendNewSubmissionNotification(teacher: User, student: User, assignment: Assignment) {
+  async sendNewSubmissionNotification(
+    teacher: User,
+    student: User,
+    assignment: Assignment,
+    idempotencyKey?: string
+  ) {
     await this.sendEmail({
       to: teacher.email,
       subject: `Nueva entrega en ${assignment.title}`,
       templateId: envs.resend_new_submission_template_id,
+      idempotencyKey,
       variables: {
         student_name: `${student.name} ${student.last_name}`,
         assignment_title: assignment.title,
@@ -71,11 +77,17 @@ export class MailService {
     });
   }
 
-  async sendGradePublishedNotification(student: User, assignment: Assignment, score: Evaluation) {
+  async sendGradePublishedNotification(
+    student: User,
+    assignment: Assignment,
+    score: Evaluation,
+    idempotencyKey?: string
+  ) {
     await this.sendEmail({
       to: student.email,
       subject: `Calificación publicada: ${assignment.title}`,
       templateId: envs.resend_grade_published_template_id,
+      idempotencyKey,
       variables: {
         student_name: `${student.name} ${student.last_name}`,
         assignment_title: assignment.title,
@@ -91,13 +103,15 @@ export class MailService {
     subject,
     templateId,
     variables,
+    idempotencyKey,
   }: {
     to: string;
     subject: string;
     templateId: string;
     variables: MailTemplateVariables;
+    idempotencyKey?: string;
   }) {
-    const { error } = await this.resend.emails.send({
+    const payload = {
       from: envs.mail_from,
       to,
       subject,
@@ -105,7 +119,10 @@ export class MailService {
         id: templateId,
         variables,
       },
-    });
+    };
+    const { error } = idempotencyKey
+      ? await this.resend.emails.send(payload, { idempotencyKey })
+      : await this.resend.emails.send(payload);
 
     if (error) {
       throw new InternalServerErrorException(`No se pudo enviar el correo: ${error.message}`);

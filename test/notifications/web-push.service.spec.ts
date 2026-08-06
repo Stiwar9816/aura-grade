@@ -72,12 +72,14 @@ describe('WebPushService', () => {
   });
 
   it('sends an encrypted payload to every stored device', async () => {
-    await service.sendToUser(user.id, {
-      title: 'Nueva entrega',
-      body: 'Tienes una entrega.',
-      url: '/teacher/assignments/1',
-      tag: 'submission:1',
-    });
+    await expect(
+      service.sendToUser(user.id, {
+        title: 'Nueva entrega',
+        body: 'Tienes una entrega.',
+        url: '/teacher/assignments/1',
+        tag: 'submission:1',
+      })
+    ).resolves.toBe(1);
 
     expect(client.sendNotification).toHaveBeenCalledWith(
       {
@@ -99,12 +101,14 @@ describe('WebPushService', () => {
     async (statusCode) => {
       client.sendNotification.mockRejectedValueOnce({ statusCode });
 
-      await service.sendToUser(user.id, {
-        title: 'Calificación',
-        body: 'Publicada',
-        url: '/student',
-        tag: 'grade:1',
-      });
+      await expect(
+        service.sendToUser(user.id, {
+          title: 'Calificación',
+          body: 'Publicada',
+          url: '/student',
+          tag: 'grade:1',
+        })
+      ).resolves.toBe(0);
 
       expect(repository.delete).toHaveBeenCalledWith(storedSubscription.id);
       expect(metrics.increment).toHaveBeenCalledWith('push_expired_total');
@@ -114,12 +118,14 @@ describe('WebPushService', () => {
   it('keeps a subscription after a transient upstream failure', async () => {
     client.sendNotification.mockRejectedValueOnce({ statusCode: 503 });
 
-    await service.sendToUser(user.id, {
-      title: 'Calificación',
-      body: 'Publicada',
-      url: '/student',
-      tag: 'grade:1',
-    });
+    await expect(
+      service.sendToUser(user.id, {
+        title: 'Calificación',
+        body: 'Publicada',
+        url: '/student',
+        tag: 'grade:1',
+      })
+    ).rejects.toThrow('será reintentado');
 
     expect(repository.delete).not.toHaveBeenCalled();
     expect(metrics.increment).toHaveBeenCalledWith('push_failed_total');

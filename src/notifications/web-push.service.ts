@@ -78,21 +78,32 @@ export class WebPushService {
     return removed;
   }
 
-  async sendToUser(userId: string, payload: PushPayload): Promise<void> {
-    if (!this.configured) return;
+  async sendToUser(userId: string, payload: PushPayload): Promise<number> {
+    if (!this.configured) return 0;
+    let subscriptions: PushSubscriptionEntity[];
     try {
-      const subscriptions = await this.subscriptionRepository.find({ where: { userId } });
-      await Promise.all(subscriptions.map((subscription) => this.deliver(subscription, payload)));
+      subscriptions = await this.subscriptionRepository.find({ where: { userId } });
     } catch (error) {
       this.metrics.increment('push_failed_total');
       this.logger.error(
         `No se pudieron procesar las suscripciones Web Push del usuario ${userId}.`,
         error instanceof Error ? error.stack : undefined
       );
+      throw error;
     }
+
+    const results = await Promise.all(
+      subscriptions.map((subscription) => this.deliver(subscription, payload))
+    );
+    if (results.includes('FAILED'))
+      throw new ServiceUnavailableException('Web Push falló temporalmente y será reintentado.');
+    return results.filter((result) => result === 'SENT').length;
   }
 
-  private async deliver(subscription: PushSubscriptionEntity, payload: PushPayload): Promise<void> {
+  private async deliver(
+    subscription: PushSubscriptionEntity,
+    payload: PushPayload
+  ): Promise<'SENT' | 'EXPIRED' | 'FAILED'> {
     try {
       await this.client.sendNotification(
         {
@@ -116,18 +127,20 @@ export class WebPushService {
           }`
         );
       }
+      return 'SENT';
     } catch (error) {
       const statusCode = (error as { statusCode?: number })?.statusCode;
       if (statusCode === 404 || statusCode === 410) {
         await this.subscriptionRepository.delete(subscription.id);
         this.metrics.increment('push_expired_total');
-        return;
+        return 'EXPIRED';
       }
       this.metrics.increment('push_failed_total');
       this.logger.error(
         `No se pudo entregar Web Push para la suscripción ${subscription.id}.`,
         error instanceof Error ? error.stack : undefined
       );
+      return 'FAILED';
     }
   }
 }

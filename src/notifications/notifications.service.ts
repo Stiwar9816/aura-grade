@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
@@ -18,8 +18,6 @@ export type NotificationPreferences = {
 
 @Injectable()
 export class NotificationsService {
-  private readonly logger = new Logger(NotificationsService.name);
-
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -48,29 +46,6 @@ export class NotificationsService {
     return this.webPushService.unsubscribe(user, endpoint);
   }
 
-  async sendNewSubmissionNotifications(
-    teacher: User | undefined,
-    student: User,
-    assignment: Assignment,
-    submissionId: string
-  ): Promise<void> {
-    await Promise.all([
-      this.sendNewSubmissionEmail(teacher, student, assignment),
-      this.sendNewSubmissionPush(teacher, student, assignment, submissionId),
-    ]);
-  }
-
-  async sendPublishedGradeNotifications(
-    student: User,
-    assignment: Assignment,
-    evaluation: Evaluation
-  ): Promise<void> {
-    await Promise.all([
-      this.sendPublishedGradeEmail(student, assignment, evaluation),
-      this.sendPublishedGradePush(student, assignment, evaluation),
-    ]);
-  }
-
   async updatePreferences(
     user: User,
     input: UpdateNotificationPreferencesDto
@@ -94,77 +69,79 @@ export class NotificationsService {
   async sendNewSubmissionEmail(
     teacher: User | undefined,
     student: User,
-    assignment: Assignment
-  ): Promise<void> {
+    assignment: Assignment,
+    idempotencyKey?: string
+  ): Promise<boolean> {
     if (
       !teacher ||
       teacher.emailNotificationsEnabled === false ||
       teacher.submissionNotificationsEnabled === false
     )
-      return;
+      return false;
 
-    try {
-      await this.mailService.sendNewSubmissionNotification(teacher, student, assignment);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo enviar la notificación de nueva entrega al usuario ${teacher.id}.`,
-        error instanceof Error ? error.stack : undefined
-      );
-    }
+    await this.mailService.sendNewSubmissionNotification(
+      teacher,
+      student,
+      assignment,
+      idempotencyKey
+    );
+    return true;
   }
 
   async sendPublishedGradeEmail(
     student: User,
     assignment: Assignment,
-    evaluation: Evaluation
-  ): Promise<void> {
+    evaluation: Evaluation,
+    idempotencyKey?: string
+  ): Promise<boolean> {
     if (student.emailNotificationsEnabled === false || student.gradeNotificationsEnabled === false)
-      return;
+      return false;
 
-    try {
-      await this.mailService.sendGradePublishedNotification(student, assignment, evaluation);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo enviar la notificación de calificación al usuario ${student.id}.`,
-        error instanceof Error ? error.stack : undefined
-      );
-    }
+    await this.mailService.sendGradePublishedNotification(
+      student,
+      assignment,
+      evaluation,
+      idempotencyKey
+    );
+    return true;
   }
 
-  private async sendNewSubmissionPush(
+  async sendNewSubmissionPush(
     teacher: User | undefined,
     student: User,
     assignment: Assignment,
     submissionId: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (
       !teacher ||
       teacher.browserNotificationsEnabled !== true ||
       teacher.submissionNotificationsEnabled === false
     )
-      return;
+      return false;
 
-    await this.webPushService.sendToUser(teacher.id, {
+    const delivered = await this.webPushService.sendToUser(teacher.id, {
       title: 'Nueva entrega',
       body: `${student.name} ${student.last_name} envió “${assignment.title}” para revisión.`,
       url: `/teacher/assignments/${assignment.id}`,
       tag: `submission:${submissionId}`,
     });
+    return delivered > 0;
   }
 
-  private async sendPublishedGradePush(
+  async sendPublishedGradePush(
     student: User,
     assignment: Assignment,
     evaluation: Evaluation
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (student.browserNotificationsEnabled !== true || student.gradeNotificationsEnabled === false)
-      return;
+      return false;
 
-    await this.webPushService.sendToUser(student.id, {
+    const delivered = await this.webPushService.sendToUser(student.id, {
       title: 'Calificación publicada',
       body: `Ya puedes consultar la calificación de “${assignment.title}”.`,
       url: `/evaluation?submission=${evaluation.submission.id}`,
       tag: `grade:${evaluation.id}`,
     });
+    return delivered > 0;
   }
 }

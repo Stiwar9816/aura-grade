@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 // DTOs
@@ -16,12 +17,13 @@ import { Submission } from 'src/submission/entities/submission.entity';
 import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
-import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
 
 @Injectable()
 export class EvaluationService {
+  private readonly logger = new Logger(EvaluationService.name);
   private readonly evaluationRelations = [
     'submission',
     'submission.student',
@@ -42,7 +44,7 @@ export class EvaluationService {
     @InjectRepository(Submission)
     private readonly submissionRepository: Repository<Submission>,
     private readonly notificationsGateway: NotificationsGateway,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationQueue: NotificationQueueService
   ) {}
 
   async createDraft(createEvaluationInput: CreateEvaluationInput): Promise<Evaluation> {
@@ -113,11 +115,15 @@ export class EvaluationService {
       message: '¡Tu calificación ha sido revisada y publicada!',
       evaluationId: evaluation.id,
     });
-    void this.notificationsService.sendPublishedGradeNotifications(
-      evaluation.submission.student,
-      evaluation.submission.assignment,
-      savedEvaluation
-    );
+    try {
+      await this.notificationQueue.enqueuePublishedGrade(savedEvaluation.id);
+    } catch (error) {
+      this.logger.error(
+        `La calificación ${savedEvaluation.id} fue publicada, pero no se pudo encolar su notificación: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`
+      );
+    }
 
     return savedEvaluation;
   }
