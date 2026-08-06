@@ -23,7 +23,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (this.isTypeORMError(exception)) {
       const { code, detail } = exception as any;
       if (code === '23505') {
-        status = HttpStatus.BAD_REQUEST;
+        status = HttpStatus.CONFLICT;
         message = detail ? detail.replace('Key ', '') : 'Violación de clave duplicada.';
       } else if (code === '23503') {
         status = HttpStatus.BAD_REQUEST;
@@ -55,18 +55,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if ((host.getType() as string) === 'graphql') {
       if (exception instanceof GraphQLError) throw exception;
       const errorMessage =
-        typeof message === 'string' ? message : (message as any).message || message;
-      const code =
-        status === HttpStatus.UNAUTHORIZED
-          ? 'UNAUTHENTICATED'
-          : status === HttpStatus.FORBIDDEN
-            ? 'FORBIDDEN'
-            : status === HttpStatus.SERVICE_UNAVAILABLE
-              ? 'SERVICE_UNAVAILABLE'
-              : 'INTERNAL_SERVER_ERROR';
+        status >= HttpStatus.INTERNAL_SERVER_ERROR
+          ? 'Error interno del servidor.'
+          : this.normalizeMessage(message);
       throw new GraphQLError(errorMessage, {
         extensions: {
-          code,
+          code: this.graphqlCode(status),
           statusCode: status,
         },
       });
@@ -80,6 +74,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof error === 'object' &&
       (error.code === '23505' || error.code === '23503' || error.code === 'error-001')
     );
+  }
+
+  private graphqlCode(status: number): string {
+    if (status === HttpStatus.BAD_REQUEST || status === HttpStatus.UNPROCESSABLE_ENTITY)
+      return 'BAD_USER_INPUT';
+    if (status === HttpStatus.UNAUTHORIZED) return 'UNAUTHENTICATED';
+    if (status === HttpStatus.FORBIDDEN) return 'FORBIDDEN';
+    if (status === HttpStatus.NOT_FOUND) return 'NOT_FOUND';
+    if (status === HttpStatus.CONFLICT) return 'CONFLICT';
+    if (status === HttpStatus.TOO_MANY_REQUESTS) return 'TOO_MANY_REQUESTS';
+    if (status === HttpStatus.SERVICE_UNAVAILABLE) return 'SERVICE_UNAVAILABLE';
+    return 'INTERNAL_SERVER_ERROR';
+  }
+
+  private normalizeMessage(message: string | object): string {
+    if (typeof message === 'string') return message;
+    const candidate = (message as { message?: unknown }).message;
+    if (Array.isArray(candidate)) return candidate.map(String).join('; ');
+    if (typeof candidate === 'string') return candidate;
+    return 'La solicitud no pudo procesarse.';
   }
 
   private getErrorSource(stack: string | undefined): string {

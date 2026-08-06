@@ -6,7 +6,26 @@ type CounterName =
   | 'auth_session_created_total'
   | 'auth_session_invalid_total'
   | 'auth_session_revoked_total'
-  | 'auth_redis_error_total';
+  | 'auth_redis_error_total'
+  | 'audit_enqueued_total'
+  | 'audit_persisted_total'
+  | 'audit_duplicate_total'
+  | 'audit_fallback_total'
+  | 'audit_failed_total';
+
+const COUNTERS: CounterName[] = [
+  'auth_login_success_total',
+  'auth_login_failure_total',
+  'auth_session_created_total',
+  'auth_session_invalid_total',
+  'auth_session_revoked_total',
+  'auth_redis_error_total',
+  'audit_enqueued_total',
+  'audit_persisted_total',
+  'audit_duplicate_total',
+  'audit_fallback_total',
+  'audit_failed_total',
+];
 
 const VALIDATION_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
@@ -34,14 +53,7 @@ export class AuthMetricsService {
 
   renderPrometheus(): string {
     const lines: string[] = [];
-    for (const name of [
-      'auth_login_success_total',
-      'auth_login_failure_total',
-      'auth_session_created_total',
-      'auth_session_invalid_total',
-      'auth_session_revoked_total',
-      'auth_redis_error_total',
-    ] as CounterName[]) {
+    for (const name of COUNTERS) {
       lines.push(`# TYPE ${name} counter`, `${name} ${this.counters.get(name) ?? 0}`);
     }
     lines.push('# TYPE auth_session_validation_duration_ms histogram');

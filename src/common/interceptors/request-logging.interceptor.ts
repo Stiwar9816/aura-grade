@@ -7,9 +7,11 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { GraphQLError } from 'graphql';
 import { isIP } from 'net';
-import { Observable, tap } from 'rxjs';
+import { catchError, finalize, from, map, mergeMap, Observable, of, throwError } from 'rxjs';
 import { AuditService } from '../../audit/audit.service';
+import { AuditOutcome } from '../../audit/enums';
 
 const MUTATING_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const SENSITIVE_KEY_PATTERN =
@@ -30,39 +32,70 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     let errorStatus: number | undefined;
 
     return next.handle().pipe(
-      tap({
-        next: (result: unknown) => {
-          const auditEntry = this.createAuditEntry(context, request, result);
-          if (auditEntry) {
-            void this.auditService.record(auditEntry).catch((error: unknown) => {
-              this.logger.error(
-                `No fue posible persistir auditoría ${request?.requestId ?? ''}: ${
-                  error instanceof Error ? error.message : 'error desconocido'
-                }`
-              );
-            });
-          }
-        },
-        error: (error: unknown) => {
-          errorStatus = error instanceof HttpException ? error.getStatus() : 500;
-        },
-        finalize: () => {
-          const entry = JSON.stringify({
-            requestId: request?.requestId,
-            method: request?.method,
-            path: request?.originalUrl,
-            statusCode: errorStatus ?? response?.statusCode,
-            durationMs: Date.now() - startedAt,
-          });
-          if (errorStatus && errorStatus >= 500) this.logger.error(entry);
-          else if (errorStatus) this.logger.warn(entry);
-          else this.logger.log(entry);
-        },
+      mergeMap((result: unknown) => {
+        const auditEntry = this.createAuditEntry(
+          context,
+          request,
+          result,
+          AuditOutcome.SUCCESS,
+          undefined,
+          startedAt
+        );
+        if (!auditEntry) return of(result);
+        return from(this.auditService.enqueue(auditEntry)).pipe(
+          catchError((error: unknown) => {
+            this.logAuditFailure(request, error);
+            return of(undefined);
+          }),
+          map(() => result)
+        );
+      }),
+      catchError((error: unknown) => {
+        errorStatus = this.statusFromError(error);
+        const outcome = [401, 403].includes(errorStatus)
+          ? AuditOutcome.DENIED
+          : AuditOutcome.FAILED;
+        const auditEntry = this.createAuditEntry(
+          context,
+          request,
+          undefined,
+          outcome,
+          this.errorCode(errorStatus, error),
+          startedAt
+        );
+        const auditResult = auditEntry
+          ? from(this.auditService.enqueue(auditEntry)).pipe(
+              catchError((auditError: unknown) => {
+                this.logAuditFailure(request, auditError);
+                return of(undefined);
+              })
+            )
+          : of(undefined);
+        return auditResult.pipe(mergeMap(() => throwError(() => error)));
+      }),
+      finalize(() => {
+        const entry = JSON.stringify({
+          requestId: request?.requestId,
+          method: request?.method,
+          path: request?.originalUrl,
+          statusCode: errorStatus ?? response?.statusCode,
+          durationMs: Date.now() - startedAt,
+        });
+        if (errorStatus && errorStatus >= 500) this.logger.error(entry);
+        else if (errorStatus) this.logger.warn(entry);
+        else this.logger.log(entry);
       })
     );
   }
 
-  private createAuditEntry(context: ExecutionContext, request: any, result: unknown) {
+  private createAuditEntry(
+    context: ExecutionContext,
+    request: any,
+    result: unknown,
+    outcome: AuditOutcome,
+    errorCode: string | undefined,
+    startedAt: number
+  ) {
     const user = request?.user;
     if (!user?.id || !user?.institutionId) return null;
 
@@ -99,7 +132,39 @@ export class RequestLoggingInterceptor implements NestInterceptor {
       changes,
       requestId: request?.requestId,
       path: request?.originalUrl,
+      outcome,
+      errorCode,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      occurredAt: new Date(startedAt),
     };
+  }
+
+  private statusFromError(error: unknown): number {
+    if (error instanceof HttpException) return error.getStatus();
+    if (error instanceof GraphQLError && typeof error.extensions?.statusCode === 'number')
+      return error.extensions.statusCode;
+    return 500;
+  }
+
+  private errorCode(status: number, error: unknown): string {
+    if (error instanceof GraphQLError && typeof error.extensions?.code === 'string')
+      return error.extensions.code;
+    if (status === 400 || status === 422) return 'BAD_USER_INPUT';
+    if (status === 401) return 'UNAUTHENTICATED';
+    if (status === 403) return 'FORBIDDEN';
+    if (status === 404) return 'NOT_FOUND';
+    if (status === 409) return 'CONFLICT';
+    if (status === 429) return 'TOO_MANY_REQUESTS';
+    if (status === 503) return 'SERVICE_UNAVAILABLE';
+    return 'INTERNAL_SERVER_ERROR';
+  }
+
+  private logAuditFailure(request: any, error: unknown): void {
+    this.logger.error(
+      `No fue posible encolar ni persistir auditoría ${request?.requestId ?? ''}: ${
+        error instanceof Error ? error.message : 'error desconocido'
+      }`
+    );
   }
 
   private clientIp(request: any): string | undefined {

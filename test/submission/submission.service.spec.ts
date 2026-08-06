@@ -1,18 +1,8 @@
-import { v2 as cloudinary } from 'cloudinary';
 import { SubmissionService } from 'src/submission/submission.service';
 import { UserRoles } from 'src/auth/enums';
 import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 import type { User } from 'src/user/entities/user.entity';
-import { Readable, Writable } from 'stream';
-
-jest.mock('cloudinary', () => ({
-  v2: {
-    uploader: {
-      upload_stream: jest.fn(),
-      destroy: jest.fn(),
-    },
-  },
-}));
+import { Readable } from 'stream';
 
 describe('SubmissionService', () => {
   const submissionRepository = {
@@ -24,11 +14,16 @@ describe('SubmissionService', () => {
   };
   const assignmentRepository = { findOne: jest.fn() };
   const gradingQueue = { add: jest.fn() };
+  const cloudinaryService = {
+    uploadSubmission: jest.fn(),
+    deleteSubmission: jest.fn(),
+  };
   const notificationsService = { sendNewSubmissionEmail: jest.fn() };
   const service = new SubmissionService(
     submissionRepository as never,
     assignmentRepository as never,
     gradingQueue as never,
+    cloudinaryService as never,
     notificationsService as never
   );
 
@@ -86,22 +81,11 @@ describe('SubmissionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     assignmentRepository.findOne.mockResolvedValue(assignment);
-    (cloudinary.uploader.upload_stream as jest.Mock).mockImplementation(
-      (_options, callback) =>
-        new Writable({
-          write(_chunk, _encoding, done) {
-            done();
-          },
-          final(done) {
-            callback(null, {
-              secure_url: 'https://example.com/entrega.docx',
-              public_id: 'auragrade/submissions/generated.docx',
-            });
-            done();
-          },
-        })
-    );
-    (cloudinary.uploader.destroy as jest.Mock).mockResolvedValue({ result: 'ok' });
+    cloudinaryService.uploadSubmission.mockResolvedValue({
+      secureUrl: 'https://example.com/entrega.docx',
+      publicId: 'auragrade/submissions/generated.docx',
+    });
+    cloudinaryService.deleteSubmission.mockResolvedValue(undefined);
     submissionRepository.create.mockImplementation((value) => value);
     submissionRepository.save.mockImplementation((value) => ({ ...value, id: 'submission-id' }));
     submissionRepository.remove.mockResolvedValue(undefined);
@@ -132,17 +116,7 @@ describe('SubmissionService', () => {
       student,
       assignment
     );
-    expect(cloudinary.uploader.upload_stream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resource_type: 'raw',
-        use_filename: false,
-        unique_filename: false,
-      }),
-      expect.any(Function)
-    );
-    const uploadOptions = (cloudinary.uploader.upload_stream as jest.Mock).mock.calls[0][0];
-    expect(uploadOptions.public_id).toMatch(/^[0-9a-f-]+\.docx$/);
-    expect(uploadOptions.public_id).not.toContain('entrega');
+    expect(cloudinaryService.uploadSubmission).toHaveBeenCalledWith(validDocxContent);
     expect(result.id).toBe('submission-id');
   });
 
@@ -165,7 +139,7 @@ describe('SubmissionService', () => {
     await expect(
       service.create(makeFile() as never, { assignmentId: 'assignment-id' }, student)
     ).rejects.toThrow('No estás matriculado en el curso de esta tarea.');
-    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects a renamed file whose content is not a DOCX', async () => {
@@ -176,7 +150,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('contenido del archivo no corresponde a un DOCX válido');
-    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects a file above the real 15 MB stream limit', async () => {
@@ -189,7 +163,19 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('supera el límite de 15 MB');
-    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+  });
+
+  it('does not persist or queue a submission when storage fails', async () => {
+    cloudinaryService.uploadSubmission.mockRejectedValue(new Error('Cloudinary unavailable'));
+
+    await expect(
+      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+    ).rejects.toThrow('Cloudinary unavailable');
+
+    expect(submissionRepository.save).not.toHaveBeenCalled();
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+    expect(notificationsService.sendNewSubmissionEmail).not.toHaveBeenCalled();
   });
 
   it('cleans Cloudinary and the database when queueing fails', async () => {
@@ -199,9 +185,8 @@ describe('SubmissionService', () => {
       service.create(makeFile() as never, { assignmentId: assignment.id }, student)
     ).rejects.toThrow('Redis unavailable');
 
-    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith(
-      'auragrade/submissions/generated.docx',
-      { resource_type: 'raw', invalidate: true }
+    expect(cloudinaryService.deleteSubmission).toHaveBeenCalledWith(
+      'auragrade/submissions/generated.docx'
     );
     expect(submissionRepository.remove).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'submission-id' })

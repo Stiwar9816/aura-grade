@@ -20,12 +20,9 @@ import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 import { UserRoles } from 'src/auth/enums';
 // FileUpload
 import { FileUpload } from 'graphql-upload-ts';
-// Cloudinary
-import { v2 as cloudinary } from 'cloudinary';
 import { User } from 'src/user/entities/user.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { randomUUID } from 'crypto';
-import { Readable } from 'stream';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 const MAX_SUBMISSION_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_DOCX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
@@ -35,11 +32,6 @@ const ALLOWED_DOCX_MIME_TYPES = new Set([
   'application/zip',
   'application/x-zip-compressed',
 ]);
-
-type StoredFile = {
-  secureUrl: string;
-  publicId: string;
-};
 
 @Injectable()
 export class SubmissionService {
@@ -64,6 +56,7 @@ export class SubmissionService {
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectQueue('grading') private readonly gradingQueue: Queue,
+    private readonly cloudinaryService: CloudinaryService,
     private readonly notificationsService: NotificationsService
   ) {}
 
@@ -89,7 +82,7 @@ export class SubmissionService {
       throw new BadRequestException('La fecha límite de esta tarea ya pasó.');
 
     const fileBuffer = await this.readAndValidateDocx(file);
-    const storedFile = await this.uploadToCloudinary(fileBuffer);
+    const storedFile = await this.cloudinaryService.uploadSubmission(fileBuffer);
 
     const submission = this.submissionRepository.create({
       ...submissionData,
@@ -258,38 +251,12 @@ export class SubmissionService {
     return entries.has('[Content_Types].xml') && entries.has('word/document.xml');
   }
 
-  private async uploadToCloudinary(content: Buffer): Promise<StoredFile> {
-    const publicId = `${randomUUID()}.docx`;
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'auragrade/submissions',
-          resource_type: 'raw',
-          public_id: publicId,
-          use_filename: false,
-          unique_filename: false,
-          overwrite: false,
-        },
-        (error, result) => {
-          if (error || !result?.secure_url || !result.public_id)
-            return reject(error ?? new Error('Cloudinary no devolvió un archivo válido.'));
-          resolve({ secureUrl: result.secure_url, publicId: result.public_id });
-        }
-      );
-      uploadStream.on('error', reject);
-      Readable.from(content).pipe(uploadStream);
-    });
-  }
-
   private async cleanupFailedSubmission(
     cloudinaryPublicId: string,
     submission?: Submission
   ): Promise<void> {
     const cleanupResults = await Promise.allSettled([
-      cloudinary.uploader.destroy(cloudinaryPublicId, {
-        resource_type: 'raw',
-        invalidate: true,
-      }),
+      this.cloudinaryService.deleteSubmission(cloudinaryPublicId),
       ...(submission ? [this.submissionRepository.remove(submission)] : []),
     ]);
     cleanupResults.forEach((result) => {

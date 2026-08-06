@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { AuditOutcome } from '../enums';
 
 @Entity({ name: 'audit_logs' })
 @Index('IDX_audit_logs_institution_created', ['institutionId', 'createdAt'])
@@ -26,6 +27,21 @@ export class AuditLog {
 
   @Column({ type: 'text' })
   resource: string;
+
+  @Column({ name: 'event_key', type: 'text', unique: true })
+  eventKey: string;
+
+  @Column({ type: 'text', default: AuditOutcome.SUCCESS })
+  outcome: AuditOutcome;
+
+  @Column({ name: 'error_code', type: 'text', nullable: true })
+  errorCode?: string;
+
+  @Column({ name: 'duration_ms', type: 'integer', nullable: true })
+  durationMs?: number;
+
+  @Column({ name: 'occurred_at', type: 'timestamp with time zone' })
+  occurredAt: Date;
 
   @Column({ name: 'resource_id', type: 'text', nullable: true })
   resourceId?: string;

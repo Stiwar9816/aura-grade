@@ -1,11 +1,12 @@
-import { CallHandler, ExecutionContext } from '@nestjs/common';
-import { lastValueFrom, of } from 'rxjs';
+import { CallHandler, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { lastValueFrom, of, throwError } from 'rxjs';
+import { AuditOutcome } from 'src/audit/enums';
 import { RequestLoggingInterceptor } from 'src/common/interceptors/request-logging.interceptor';
 
 class InstitutionController {}
 
 describe('RequestLoggingInterceptor audit', () => {
-  const auditService = { record: jest.fn().mockResolvedValue(undefined) };
+  const auditService = { enqueue: jest.fn().mockResolvedValue(undefined) };
   const interceptor = new RequestLoggingInterceptor(auditService as any);
 
   beforeEach(() => jest.clearAllMocks());
@@ -42,7 +43,7 @@ describe('RequestLoggingInterceptor audit', () => {
 
     await lastValueFrom(interceptor.intercept(context, next));
 
-    expect(auditService.record).toHaveBeenCalledWith(
+    expect(auditService.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'CREATE',
         resource: 'Institution',
@@ -53,8 +54,78 @@ describe('RequestLoggingInterceptor audit', () => {
           password: '[REDACTED]',
           nested: { sessionToken: '[REDACTED]' },
         },
+        outcome: AuditOutcome.SUCCESS,
+        errorCode: undefined,
+        durationMs: expect.any(Number),
+        occurredAt: expect.any(Date),
       })
     );
+  });
+
+  it('records denied mutations and rethrows the original error', async () => {
+    const request = {
+      requestId: 'request-denied',
+      method: 'DELETE',
+      originalUrl: '/api/users/student-1',
+      user: {
+        id: '1553d33b-798b-4ce5-b943-1fa8bf8ea01c',
+        name: 'Aura',
+        last_name: 'Teacher',
+        email: 'teacher@aura.edu.co',
+        institutionId: '73a8fa1d-626e-4081-bad4-6e131d288bd5',
+      },
+    };
+    const context = {
+      getType: jest.fn().mockReturnValue('http'),
+      getClass: jest.fn().mockReturnValue(InstitutionController),
+      switchToHttp: jest.fn().mockReturnValue({
+        getRequest: () => request,
+        getResponse: () => ({ statusCode: 200 }),
+      }),
+    } as unknown as ExecutionContext;
+    const denied = new ForbiddenException('No autorizado');
+
+    await expect(
+      lastValueFrom(
+        interceptor.intercept(context, {
+          handle: () => throwError(() => denied),
+        } as CallHandler)
+      )
+    ).rejects.toBe(denied);
+
+    expect(auditService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'DELETE',
+        outcome: AuditOutcome.DENIED,
+        errorCode: 'FORBIDDEN',
+      })
+    );
+  });
+
+  it('does not replace the business result if both audit persistence paths fail', async () => {
+    auditService.enqueue.mockRejectedValueOnce(new Error('audit unavailable'));
+    const context = {
+      getType: jest.fn().mockReturnValue('http'),
+      getClass: jest.fn().mockReturnValue(InstitutionController),
+      switchToHttp: jest.fn().mockReturnValue({
+        getRequest: () => ({
+          requestId: 'request-1234',
+          method: 'PATCH',
+          originalUrl: '/api/institutions/1',
+          user: {
+            id: '1553d33b-798b-4ce5-b943-1fa8bf8ea01c',
+            institutionId: '73a8fa1d-626e-4081-bad4-6e131d288bd5',
+          },
+        }),
+        getResponse: () => ({ statusCode: 200 }),
+      }),
+    } as unknown as ExecutionContext;
+
+    await expect(
+      lastValueFrom(
+        interceptor.intercept(context, { handle: () => of({ id: '1' }) } as CallHandler)
+      )
+    ).resolves.toEqual({ id: '1' });
   });
 
   it('does not create audit records for reads', async () => {
@@ -69,6 +140,6 @@ describe('RequestLoggingInterceptor audit', () => {
 
     await lastValueFrom(interceptor.intercept(context, { handle: () => of([]) } as CallHandler));
 
-    expect(auditService.record).not.toHaveBeenCalled();
+    expect(auditService.enqueue).not.toHaveBeenCalled();
   });
 });
