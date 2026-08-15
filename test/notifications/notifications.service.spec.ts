@@ -5,6 +5,7 @@ import { InstitutionApprovalStatus } from 'src/institution';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationResourceType } from 'src/notifications/entities/in-app-notification.entity';
 import { User } from 'src/user/entities/user.entity';
+import { AssignmentReminderKind } from 'src/notifications/notification-queue.constants';
 
 describe('NotificationsService', () => {
   const repository = { update: jest.fn() };
@@ -333,6 +334,40 @@ describe('NotificationsService', () => {
       )
     ).resolves.toEqual(
       expect.objectContaining({ queuedCount: 0, cooldownCount: 1, canSendCount: 0 })
+    );
+  });
+
+  it('uses an individual extension when queueing a manual reminder after the general deadline', async () => {
+    const teacher = { ...user, role: UserRoles.Docente, id: 'teacher-id' } as User;
+    const student = { ...user, id: 'pending-id', role: UserRoles.Estudiante } as User;
+    const extendedDueDate = new Date('2026-08-17T12:00:00.000Z');
+    assignmentRepository.findOne.mockResolvedValue({
+      id: 'assignment-id',
+      isActive: true,
+      dueDate: new Date('2026-08-14T12:00:00.000Z'),
+      user: teacher,
+      course: { users: [student] },
+      submissions: [],
+      extensions: [{ student, extendedDueDate }],
+    });
+    notificationQueue.enqueueAssignmentReminder.mockResolvedValue({
+      eventKey: 'extended-reminder-key',
+      queued: true,
+    });
+
+    await expect(
+      service.sendManualAssignmentReminders(
+        teacher,
+        'assignment-id',
+        new Date('2026-08-15T12:00:00.000Z')
+      )
+    ).resolves.toEqual(expect.objectContaining({ queuedCount: 1, eligibleCount: 1 }));
+    expect(notificationQueue.enqueueAssignmentReminder).toHaveBeenCalledWith(
+      'assignment-id',
+      student.id,
+      extendedDueDate,
+      AssignmentReminderKind.MANUAL,
+      new Date('2026-08-15T12:00:00.000Z')
     );
   });
 

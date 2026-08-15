@@ -139,6 +139,41 @@ describe('SubmissionService', () => {
     expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
 
+  it('accepts a submission after the general deadline when the student has an active extension', async () => {
+    assignmentRepository.findOne.mockResolvedValue({
+      ...assignment,
+      dueDate: new Date(Date.now() - 60_000),
+      extensions: [
+        {
+          student,
+          extendedDueDate: new Date(Date.now() + 60_000),
+        },
+      ],
+    });
+
+    await expect(
+      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+    ).resolves.toEqual(expect.objectContaining({ id: 'submission-id' }));
+  });
+
+  it('does not apply another student extension to a late submission', async () => {
+    assignmentRepository.findOne.mockResolvedValue({
+      ...assignment,
+      dueDate: new Date(Date.now() - 60_000),
+      extensions: [
+        {
+          student: { id: 'other-student-id' },
+          extendedDueDate: new Date(Date.now() + 60_000),
+        },
+      ],
+    });
+
+    await expect(
+      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+    ).rejects.toThrow('fecha límite');
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+  });
+
   it('rejects a renamed file whose content is not a DOCX', async () => {
     await expect(
       service.create(

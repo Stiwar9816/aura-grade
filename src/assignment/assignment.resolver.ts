@@ -5,9 +5,14 @@ import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { AssignmentService } from './assignment.service';
 // Entities
 import { Assignment } from './entities/assignment.entity';
+import { AssignmentExtension } from './entities/assignment-extension.entity';
 import { User } from 'src/user/entities/user.entity';
 // DTO
-import { CreateAssignmentInput, UpdateAssignmentInput } from './dto';
+import {
+  CreateAssignmentInput,
+  UpdateAssignmentInput,
+  UpsertAssignmentExtensionInput,
+} from './dto';
 // Guards
 import { JwtAuthGuard } from 'src/auth/guards';
 // Enums
@@ -61,5 +66,24 @@ export class AssignmentResolver {
     @CurrentUser([UserRoles.Docente]) user: User
   ) {
     return this.assignmentService.remove(id, user);
+  }
+
+  @Mutation(() => AssignmentExtension, { name: 'upsertAssignmentExtension' })
+  @UseGuards(JwtAuthGuard)
+  upsertAssignmentExtension(
+    @Args('input') input: UpsertAssignmentExtensionInput,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ) {
+    return this.assignmentService.upsertExtension(input, user);
+  }
+
+  @Mutation(() => Boolean, { name: 'removeAssignmentExtension' })
+  @UseGuards(JwtAuthGuard)
+  removeAssignmentExtension(
+    @Args('assignmentId', { type: () => ID }, ParseUUIDPipe) assignmentId: string,
+    @Args('studentId', { type: () => ID }, ParseUUIDPipe) studentId: string,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ) {
+    return this.assignmentService.removeExtension(assignmentId, studentId, user);
   }
 }

@@ -17,6 +17,7 @@ import { User } from 'src/user/entities/user.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Course } from 'src/course/entities/course.entity';
+import type { AssignmentExtension } from './assignment-extension.entity';
 
 @Entity({ name: 'assignments' })
 @ObjectType()
@@ -54,6 +55,12 @@ export class Assignment {
   @Column({ type: 'timestamp with time zone' })
   @Field(() => Date, { description: 'Deadline for the assignment' })
   dueDate: Date;
+
+  @Field(() => Date, {
+    description: 'Deadline applicable to the authenticated student',
+    nullable: true,
+  })
+  effectiveDueDate?: Date;
 
   @ApiProperty({
     example: true,
@@ -102,4 +109,13 @@ export class Assignment {
     nullable: true,
   })
   submissions?: Submission[];
+
+  @OneToMany(
+    () => require('./assignment-extension.entity').AssignmentExtension,
+    (extension: AssignmentExtension) => extension.assignment
+  )
+  @Field(() => [require('./assignment-extension.entity').AssignmentExtension], {
+    nullable: true,
+  })
+  extensions?: AssignmentExtension[];
 }

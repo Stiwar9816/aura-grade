@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Job } from 'bullmq';
 import { And, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { getEffectiveAssignmentDueDate } from 'src/assignment/assignment-deadline';
 import { UserRoles } from 'src/auth/enums';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { AuthMetricsService } from 'src/observability';
@@ -138,22 +139,25 @@ export class NotificationProcessor extends WorkerHost {
   }
 
   private async processDeadlineReminderScan(now = new Date()): Promise<NotificationJobResult> {
+    const upperDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const upcomingWindow = And(MoreThan(now), LessThanOrEqual(upperDeadline));
     const assignments = await this.assignmentRepository.find({
-      where: {
-        isActive: true,
-        dueDate: And(MoreThan(now), LessThanOrEqual(new Date(now.getTime() + 48 * 60 * 60 * 1000))),
-      },
-      relations: ['course', 'course.users', 'submissions', 'submissions.student'],
+      where: [
+        { isActive: true, dueDate: upcomingWindow },
+        { isActive: true, extensions: { extendedDueDate: upcomingWindow } },
+      ],
+      relations: [
+        'course',
+        'course.users',
+        'submissions',
+        'submissions.student',
+        'extensions',
+        'extensions.student',
+      ],
     });
     let queuedCount = 0;
 
     for (const assignment of assignments) {
-      const dueDate = new Date(assignment.dueDate);
-      const remainingMs = dueDate.getTime() - now.getTime();
-      const reminderKind =
-        remainingMs <= 24 * 60 * 60 * 1000
-          ? AssignmentReminderKind.AUTO_24H
-          : AssignmentReminderKind.AUTO_48H;
       const submittedStudentIds = new Set(
         (assignment.submissions ?? [])
           .map((submission) => submission.student?.id)
@@ -172,15 +176,24 @@ export class NotificationProcessor extends WorkerHost {
       );
 
       const results = await Promise.all(
-        [...students.values()].map((student) =>
-          this.notificationQueue.enqueueAssignmentReminder(
-            assignment.id,
-            student.id,
-            dueDate,
-            reminderKind,
-            now
-          )
-        )
+        [...students.values()].flatMap((student) => {
+          const dueDate = getEffectiveAssignmentDueDate(assignment, student.id);
+          const remainingMs = dueDate.getTime() - now.getTime();
+          if (remainingMs <= 0 || dueDate.getTime() > upperDeadline.getTime()) return [];
+          const reminderKind =
+            remainingMs <= 24 * 60 * 60 * 1000
+              ? AssignmentReminderKind.AUTO_24H
+              : AssignmentReminderKind.AUTO_48H;
+          return [
+            this.notificationQueue.enqueueAssignmentReminder(
+              assignment.id,
+              student.id,
+              dueDate,
+              reminderKind,
+              now
+            ),
+          ];
+        })
       );
       queuedCount += results.filter((result) => result.queued).length;
     }
@@ -194,7 +207,14 @@ export class NotificationProcessor extends WorkerHost {
   ): Promise<NotificationJobResult> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id: data.aggregateId },
-      relations: ['course', 'course.users', 'submissions', 'submissions.student'],
+      relations: [
+        'course',
+        'course.users',
+        'submissions',
+        'submissions.student',
+        'extensions',
+        'extensions.student',
+      ],
     });
     if (!assignment) {
       this.metrics.increment('notification_source_missing_total');
@@ -207,7 +227,7 @@ export class NotificationProcessor extends WorkerHost {
     const hasSubmitted = (assignment.submissions ?? []).some(
       (submission) => submission.student?.id === data.recipientId
     );
-    const currentDueDate = new Date(assignment.dueDate);
+    const currentDueDate = getEffectiveAssignmentDueDate(assignment, data.recipientId!);
     const isEligible =
       assignment.isActive &&
       currentDueDate.getTime() > Date.now() &&
@@ -221,20 +241,26 @@ export class NotificationProcessor extends WorkerHost {
       return { status: 'RECIPIENT_INELIGIBLE' };
     }
 
+    const assignmentWithEffectiveDueDate = { ...assignment, dueDate: currentDueDate };
+
     await this.notificationsService.createAssignmentReminderInApp(
       student,
-      assignment,
+      assignmentWithEffectiveDueDate,
       data.eventKey
     );
     const channels = await this.processChannels(data, {
       email: () =>
         this.notificationsService.sendAssignmentReminderEmail(
           student,
-          assignment,
+          assignmentWithEffectiveDueDate,
           `${data.eventKey}-email`
         ),
       push: () =>
-        this.notificationsService.sendAssignmentReminderPush(student, assignment, data.eventKey),
+        this.notificationsService.sendAssignmentReminderPush(
+          student,
+          assignmentWithEffectiveDueDate,
+          data.eventKey
+        ),
     });
     return { status: 'DELIVERED', channels };
   }

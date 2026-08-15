@@ -8,6 +8,7 @@ import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { User } from 'src/user/entities/user.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { AssignmentExtension } from 'src/assignment/entities/assignment-extension.entity';
 // Gateways
 import { NotificationDeliveryEntity } from './entities/notification-delivery.entity';
 import { InAppNotificationEntity } from './entities/in-app-notification.entity';
@@ -42,6 +43,7 @@ class NodeWebPushClient {
       NotificationDeliveryEntity,
       InAppNotificationEntity,
       Assignment,
+      AssignmentExtension,
     ]),
     BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
     BullBoardModule.forFeature({ name: NOTIFICATIONS_QUEUE, adapter: BullMQAdapter }),

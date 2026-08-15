@@ -23,6 +23,7 @@ import { FileUpload } from 'graphql-upload-ts';
 import { User } from 'src/user/entities/user.entity';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { getEffectiveAssignmentDueDate } from 'src/assignment/assignment-deadline';
 
 const MAX_SUBMISSION_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_DOCX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
@@ -70,7 +71,14 @@ export class SubmissionService {
     // 1. Validaciones previas
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
-      relations: ['user', 'course', 'course.user', 'course.users'],
+      relations: [
+        'user',
+        'course',
+        'course.user',
+        'course.users',
+        'extensions',
+        'extensions.student',
+      ],
     });
     if (!assignment)
       throw new NotFoundException(`No se encontró la tarea con identificador ${assignmentId}.`);
@@ -78,7 +86,7 @@ export class SubmissionService {
       throw new BadRequestException('Esta tarea no está activa y no acepta entregas.');
     if (!assignment.course?.users?.some((student) => student.id === user.id))
       throw new ForbiddenException('No estás matriculado en el curso de esta tarea.');
-    if (new Date() > assignment.dueDate)
+    if (new Date() > getEffectiveAssignmentDueDate(assignment, user.id))
       throw new BadRequestException('La fecha límite de esta tarea ya pasó.');
 
     const fileBuffer = await this.readAndValidateDocx(file);

@@ -7,6 +7,7 @@ import {
   notificationEventKey,
 } from 'src/notifications/notification-queue.constants';
 import { NotificationProcessor } from 'src/notifications/notification.processor';
+import { UserRoles } from 'src/auth/enums';
 
 describe('NotificationProcessor', () => {
   const submission = {
@@ -255,7 +256,7 @@ describe('NotificationProcessor', () => {
     );
     expect(notificationsService.createAssignmentReminderInApp).toHaveBeenCalledWith(
       student,
-      reminderAssignment,
+      expect.objectContaining({ dueDate }),
       data.eventKey
     );
 
@@ -264,5 +265,61 @@ describe('NotificationProcessor', () => {
       status: 'RECIPIENT_INELIGIBLE',
     });
     expect(notificationsService.sendAssignmentReminderEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('queues and delivers reminders using the individual extended deadline', async () => {
+    const now = Date.now();
+    const student = {
+      id: 'extended-student-id',
+      role: UserRoles.Estudiante,
+      isActive: true,
+      reminderNotificationsEnabled: true,
+    };
+    const extendedDueDate = new Date(now + 20 * 60 * 60 * 1000);
+    const reminderAssignment = {
+      id: 'assignment-id',
+      title: 'Proyecto',
+      isActive: true,
+      dueDate: new Date(now - 24 * 60 * 60 * 1000),
+      course: { users: [student] },
+      submissions: [],
+      extensions: [{ student, extendedDueDate }],
+    };
+    assignmentRepository.find.mockResolvedValue([reminderAssignment]);
+
+    await processor.process({
+      data: {
+        type: NotificationJobType.DEADLINE_REMINDER_SCAN,
+        aggregateId: 'scheduled-scan',
+        eventKey: 'assignment-deadline-reminder-scan',
+      },
+    } as any);
+
+    expect(notificationQueue.enqueueAssignmentReminder).toHaveBeenCalledWith(
+      reminderAssignment.id,
+      student.id,
+      extendedDueDate,
+      AssignmentReminderKind.AUTO_24H,
+      expect.any(Date)
+    );
+
+    assignmentRepository.findOne.mockResolvedValue(reminderAssignment);
+    await expect(
+      processor.process({
+        data: {
+          type: NotificationJobType.ASSIGNMENT_REMINDER,
+          aggregateId: reminderAssignment.id,
+          recipientId: student.id,
+          reminderKind: AssignmentReminderKind.AUTO_24H,
+          dueDateEpoch: extendedDueDate.getTime(),
+          eventKey: 'extended-reminder-key',
+        },
+      } as any)
+    ).resolves.toEqual(expect.objectContaining({ status: 'DELIVERED' }));
+    expect(notificationsService.sendAssignmentReminderEmail).toHaveBeenLastCalledWith(
+      student,
+      expect.objectContaining({ dueDate: extendedDueDate }),
+      'extended-reminder-key-email'
+    );
   });
 });

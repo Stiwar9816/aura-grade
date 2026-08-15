@@ -115,6 +115,9 @@ type Assignment {
   """Deadline for the assignment"""
   dueDate: DateTime!
 
+  """Deadline applicable to the authenticated student"""
+  effectiveDueDate: DateTime
+
   """Is the assignment active?"""
   isActive: Boolean!
   createdAt: DateTime!
@@ -122,6 +125,7 @@ type Assignment {
   course: Course!
   rubric: Rubric!
   submissions: [Submission!]
+  extensions: [AssignmentExtension!]
 }
 
 type Submission {
@@ -150,6 +154,17 @@ enum SubmissionStatus {
   REVIEW_PENDING
   PUBLISHED
   FAILED
+}
+
+type AssignmentExtension {
+  id: ID!
+  extendedDueDate: DateTime!
+  reason: String
+  assignment: Assignment!
+  student: User!
+  grantedBy: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Evaluation {
@@ -271,6 +286,8 @@ type Mutation {
   createAssignment(createAssignmentInput: CreateAssignmentInput!): Assignment!
   updateAssignment(updateAssignmentInput: UpdateAssignmentInput!): Assignment!
   removeAssignment(id: ID!): Assignment!
+  upsertAssignmentExtension(input: UpsertAssignmentExtensionInput!): AssignmentExtension!
+  removeAssignmentExtension(assignmentId: ID!, studentId: ID!): Boolean!
   createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
   publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
@@ -436,6 +453,13 @@ input UpdateAssignmentInput {
 
   """ID of the assignment to update"""
   id: ID!
+}
+
+input UpsertAssignmentExtensionInput {
+  assignmentId: ID!
+  studentId: ID!
+  extendedDueDate: DateTime!
+  reason: String
 }
 
 input CreateSubmissionInput {

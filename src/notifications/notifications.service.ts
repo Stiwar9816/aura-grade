@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { getEffectiveAssignmentDueDate } from 'src/assignment/assignment-deadline';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { MailService } from 'src/mail/mail.service';
 import { User } from 'src/user/entities/user.entity';
@@ -47,6 +48,8 @@ export type AssignmentReminderPreview = {
 export type AssignmentReminderSendResult = AssignmentReminderPreview & {
   queuedCount: number;
 };
+
+type PendingReminderStudent = { student: User; dueDate: Date };
 
 export type InAppNotificationView = Pick<
   InAppNotificationEntity,
@@ -296,14 +299,15 @@ export class NotificationsService {
     const assignment = await this.findReminderAssignment(teacher, assignmentId, now);
     const pendingStudents = this.getPendingReminderStudents(assignment);
     const eligibleStudents = pendingStudents.filter(
-      (student) => student.reminderNotificationsEnabled !== false
+      ({ student, dueDate }) =>
+        student.reminderNotificationsEnabled !== false && dueDate.getTime() > now.getTime()
     );
     const cooldownUntilDates = await Promise.all(
-      eligibleStudents.map((student) =>
+      eligibleStudents.map(({ student, dueDate }) =>
         this.notificationQueue.getManualAssignmentReminderCooldownUntil(
           assignment.id,
           student.id,
-          assignment.dueDate,
+          dueDate,
           now
         )
       )
@@ -332,14 +336,15 @@ export class NotificationsService {
     const assignment = await this.findReminderAssignment(teacher, assignmentId, now);
     const pendingStudents = this.getPendingReminderStudents(assignment);
     const eligibleStudents = pendingStudents.filter(
-      (student) => student.reminderNotificationsEnabled !== false
+      ({ student, dueDate }) =>
+        student.reminderNotificationsEnabled !== false && dueDate.getTime() > now.getTime()
     );
     const results = await Promise.all(
-      eligibleStudents.map((student) =>
+      eligibleStudents.map(({ student, dueDate }) =>
         this.notificationQueue.enqueueAssignmentReminder(
           assignment.id,
           student.id,
-          assignment.dueDate,
+          dueDate,
           AssignmentReminderKind.MANUAL,
           now
         )
@@ -427,38 +432,47 @@ export class NotificationsService {
   private async findReminderAssignment(
     teacher: User,
     assignmentId: string,
-    now: Date
+    _now: Date
   ): Promise<Assignment> {
     if (teacher.role !== UserRoles.Docente)
       throw new ForbiddenException('Solo un docente puede enviar recordatorios de tareas.');
 
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId, user: { id: teacher.id } },
-      relations: ['user', 'course', 'course.users', 'submissions', 'submissions.student'],
+      relations: [
+        'user',
+        'course',
+        'course.users',
+        'submissions',
+        'submissions.student',
+        'extensions',
+        'extensions.student',
+      ],
     });
     if (!assignment)
       throw new ForbiddenException('La tarea no existe o no pertenece al docente actual.');
     if (!assignment.isActive)
       throw new BadRequestException('No se pueden recordar entregas de una tarea inactiva.');
-    if (assignment.dueDate.getTime() <= now.getTime())
-      throw new BadRequestException('No se pueden recordar entregas de una tarea vencida.');
     return assignment;
   }
 
-  private getPendingReminderStudents(assignment: Assignment): User[] {
+  private getPendingReminderStudents(assignment: Assignment): PendingReminderStudent[] {
     const submittedStudentIds = new Set(
       (assignment.submissions ?? [])
         .map((submission) => submission.student?.id)
         .filter((id): id is string => Boolean(id))
     );
-    const uniqueStudents = new Map<string, User>();
+    const uniqueStudents = new Map<string, PendingReminderStudent>();
     for (const student of assignment.course?.users ?? []) {
       if (
         student.role === UserRoles.Estudiante &&
         student.isActive !== false &&
         !submittedStudentIds.has(student.id)
       )
-        uniqueStudents.set(student.id, student);
+        uniqueStudents.set(student.id, {
+          student,
+          dueDate: getEffectiveAssignmentDueDate(assignment, student.id),
+        });
     }
     return [...uniqueStudents.values()];
   }

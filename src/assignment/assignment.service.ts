@@ -6,9 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 // DTO
-import { CreateAssignmentInput, UpdateAssignmentInput } from './dto';
+import {
+  CreateAssignmentInput,
+  UpdateAssignmentInput,
+  UpsertAssignmentExtensionInput,
+} from './dto';
 // TypeORM
-import { Repository } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 // Entities
 import { Assignment } from './entities/assignment.entity';
@@ -17,6 +21,8 @@ import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
 import { EvaluationStatus } from 'src/enums';
+import { AssignmentExtension } from './entities/assignment-extension.entity';
+import { getEffectiveAssignmentDueDate } from './assignment-deadline';
 
 const ASSIGNMENT_RELATIONS = [
   'rubric',
@@ -29,6 +35,9 @@ const ASSIGNMENT_RELATIONS = [
   'submissions',
   'submissions.student',
   'submissions.evaluation',
+  'extensions',
+  'extensions.student',
+  'extensions.grantedBy',
 ];
 
 @Injectable()
@@ -36,6 +45,8 @@ export class AssignmentService {
   constructor(
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentExtension)
+    private readonly extensionRepository: Repository<AssignmentExtension>,
     @InjectRepository(Course)
     private readonly courseRepository: Repository<Course>,
     @InjectRepository(Rubric)
@@ -75,7 +86,7 @@ export class AssignmentService {
       relations: ASSIGNMENT_RELATIONS,
     });
 
-    return assignments.map((assignment) => this.limitStudentSubmissions(assignment, actor));
+    return assignments.map((assignment) => this.scopeAssignment(assignment, actor));
   }
 
   async findOne(id: string, actor: User): Promise<Assignment> {
@@ -97,12 +108,12 @@ export class AssignmentService {
         Boolean(assignment.course?.users?.some((student) => student.id === actor.id)));
     if (!canAccess) throw new ForbiddenException('No puedes acceder a esta tarea.');
 
-    return this.limitStudentSubmissions(assignment, actor);
+    return this.scopeAssignment(assignment, actor);
   }
 
   async update(id: string, input: UpdateAssignmentInput, teacher: User): Promise<Assignment> {
     this.assertTeacher(teacher);
-    await this.findOne(id, teacher);
+    const currentAssignment = await this.findOne(id, teacher);
 
     const { id: _, rubricId, courseId, ...toUpdate } = input;
     const [course, rubric] = await Promise.all([
@@ -120,7 +131,16 @@ export class AssignmentService {
     if (!assignment)
       throw new NotFoundException(`No se encontró la tarea con identificador ${id}.`);
 
-    return this.assignmentRepository.save(assignment);
+    const savedAssignment = await this.assignmentRepository.save(assignment);
+    if (course && course.id !== currentAssignment.course?.id) {
+      await this.extensionRepository.delete({ assignment: { id } });
+    } else if (input.dueDate) {
+      await this.extensionRepository.delete({
+        assignment: { id },
+        extendedDueDate: LessThanOrEqual(new Date(savedAssignment.dueDate)),
+      });
+    }
+    return this.findOne(id, teacher);
   }
 
   async remove(id: string, teacher: User): Promise<Assignment> {
@@ -135,6 +155,64 @@ export class AssignmentService {
     const assignment = await this.findOne(id, teacher);
     assignment.isActive = false;
     return this.assignmentRepository.save(assignment);
+  }
+
+  async upsertExtension(
+    input: UpsertAssignmentExtensionInput,
+    teacher: User
+  ): Promise<AssignmentExtension> {
+    this.assertTeacher(teacher);
+    const assignment = await this.findOne(input.assignmentId, teacher);
+    if (!assignment.isActive)
+      throw new BadRequestException('No se puede prorrogar una tarea inactiva.');
+    const student = (assignment.course?.users ?? []).find(
+      (candidate) =>
+        candidate.id === input.studentId &&
+        candidate.role === UserRoles.Estudiante &&
+        candidate.isActive !== false
+    );
+    if (!student)
+      throw new BadRequestException('El estudiante no está activo o matriculado en este curso.');
+    if (
+      (assignment.submissions ?? []).some(
+        (submission) => submission.student?.id === input.studentId
+      )
+    )
+      throw new BadRequestException(
+        'No se puede prorrogar una tarea que el estudiante ya entregó.'
+      );
+
+    const extendedDueDate = new Date(input.extendedDueDate);
+    if (
+      Number.isNaN(extendedDueDate.getTime()) ||
+      extendedDueDate.getTime() <= new Date(assignment.dueDate).getTime()
+    )
+      throw new BadRequestException(
+        'La prórroga debe ser posterior a la fecha límite general de la tarea.'
+      );
+    if (extendedDueDate.getTime() <= Date.now())
+      throw new BadRequestException('La nueva fecha límite debe estar en el futuro.');
+
+    const existing = await this.extensionRepository.findOne({
+      where: { assignment: { id: assignment.id }, student: { id: student.id } },
+    });
+    const extension = existing ?? this.extensionRepository.create();
+    extension.assignment = assignment;
+    extension.student = student;
+    extension.grantedBy = teacher;
+    extension.extendedDueDate = extendedDueDate;
+    extension.reason = input.reason?.trim() || undefined;
+    return this.extensionRepository.save(extension);
+  }
+
+  async removeExtension(assignmentId: string, studentId: string, teacher: User): Promise<boolean> {
+    this.assertTeacher(teacher);
+    await this.findOne(assignmentId, teacher);
+    const result = await this.extensionRepository.delete({
+      assignment: { id: assignmentId },
+      student: { id: studentId },
+    });
+    return (result.affected ?? 0) > 0;
   }
 
   private async findOwnedCourse(id: string, teacher: User): Promise<Course> {
@@ -157,10 +235,17 @@ export class AssignmentService {
     return rubric;
   }
 
-  private limitStudentSubmissions(assignment: Assignment, actor: User): Assignment {
-    if (actor.role !== UserRoles.Estudiante) return assignment;
+  private scopeAssignment(assignment: Assignment, actor: User): Assignment {
+    if (actor.role !== UserRoles.Estudiante)
+      return { ...assignment, effectiveDueDate: new Date(assignment.dueDate) };
+
+    const ownExtensions = (assignment.extensions ?? []).filter(
+      (extension) => extension.student?.id === actor.id
+    );
     return {
       ...assignment,
+      effectiveDueDate: getEffectiveAssignmentDueDate(assignment, actor.id),
+      extensions: ownExtensions,
       course: assignment.course
         ? {
             ...assignment.course,
