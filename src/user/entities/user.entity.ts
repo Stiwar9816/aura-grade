@@ -163,6 +163,9 @@ export class User {
   @Column({ name: 'grade_notifications_enabled', type: 'boolean', default: true })
   gradeNotificationsEnabled?: boolean;
 
+  @Column({ name: 'reminder_notifications_enabled', type: 'boolean', default: true })
+  reminderNotificationsEnabled?: boolean;
+
   // Relations - Many-to-Many with Course
   @ManyToMany(
     () => require('../../course/entities/course.entity').Course,

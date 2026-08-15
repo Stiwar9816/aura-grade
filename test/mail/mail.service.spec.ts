@@ -160,6 +160,58 @@ describe('MailService', () => {
         })
       );
     });
+
+    it('sends a plain-text assignment reminder with a direct upload link', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+      const assignment = {
+        id: 'assignment-id',
+        title: 'Ensayo final',
+        dueDate: new Date('2026-08-17T15:00:00.000Z'),
+      } as Assignment;
+
+      await service.sendAssignmentReminderNotification(
+        mockUser,
+        assignment,
+        'assignment-reminder-email'
+      );
+
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockUser.email,
+          subject: 'Recordatorio de entrega: Ensayo final',
+          text: expect.stringContaining('/upload?assignment=assignment-id'),
+        }),
+        { idempotencyKey: 'assignment-reminder-email' }
+      );
+    });
+
+    it('uses the optional Resend template when it is configured', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+      envs.resend_assignment_reminder_template_id = 'assignment-reminder-test';
+      const assignment = {
+        id: 'assignment-id',
+        title: 'Ensayo final',
+        dueDate: new Date('2026-08-17T15:00:00.000Z'),
+      } as Assignment;
+
+      try {
+        await service.sendAssignmentReminderNotification(mockUser, assignment);
+
+        expect(mockResend.emails.send).toHaveBeenCalledWith(
+          expect.objectContaining({
+            template: expect.objectContaining({
+              id: 'assignment-reminder-test',
+              variables: expect.objectContaining({
+                assignment_title: 'Ensayo final',
+                url_assignment: expect.stringContaining('/upload?assignment=assignment-id'),
+              }),
+            }),
+          })
+        );
+      } finally {
+        envs.resend_assignment_reminder_template_id = undefined;
+      }
+    });
   });
 
   describe('sendUpdatePassword', () => {

@@ -125,6 +125,8 @@ RESEND_UPDATE_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
 RESEND_RESET_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
 RESEND_NEW_SUBMISSION_TEMPLATE_ID=tmpl_xxxxxxxxx
 RESEND_GRADE_PUBLISHED_TEMPLATE_ID=tmpl_xxxxxxxxx
+# Opcional; sin esta variable el recordatorio usa texto plano
+RESEND_ASSIGNMENT_REMINDER_TEMPLATE_ID=tmpl_xxxxxxxxx
 
 # Web Push
 VAPID_SUBJECT=mailto:admin@tu-dominio.com
@@ -205,6 +207,23 @@ y backoff exponencial. Cada entrega queda registrada por evento y canal en
 deshabilitados. Los trabajos completados se conservan siete días y los fallidos
 treinta días. `/api/metrics` expone contadores de trabajos encolados, duplicados,
 reintentos, agotados y resultados por canal.
+
+El centro interno persiste una sola entrada por usuario y evento en
+`in_app_notifications`. `GET /api/notifications` devuelve el historial paginado
+y el contador de no leídas; `PATCH /api/notifications/:id/read` y
+`PATCH /api/notifications/read-all` actualizan únicamente registros del usuario
+autenticado. Las preferencias de entregas y calificaciones también controlan
+la creación de estas entradas.
+
+Los recordatorios de tareas ejecutan un escaneo durable cada 30 minutos. Para
+cada tarea activa que venza dentro de 48 o 24 horas se encola, como máximo, un
+aviso por estudiante matriculado que todavía no haya entregado. Antes de enviar
+se vuelven a comprobar la fecha límite, el estado de la tarea, la matrícula, la
+ausencia de entrega y la preferencia `remindersEnabled`. El docente propietario
+también puede consultar destinatarios con
+`GET /api/notifications/assignments/:assignmentId/reminder-preview` y encolar un
+recordatorio manual con `POST /api/notifications/assignments/:assignmentId/reminders`;
+el envío manual aplica un enfriamiento real de seis horas por estudiante y tarea.
 
 ### 3. Iniciar Servicios (Docker)
 

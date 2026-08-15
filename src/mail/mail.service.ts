@@ -98,6 +98,51 @@ export class MailService {
     });
   }
 
+  async sendAssignmentReminderNotification(
+    student: User,
+    assignment: Assignment,
+    idempotencyKey?: string
+  ) {
+    const dueDate = new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'America/Bogota',
+    }).format(assignment.dueDate);
+    const assignmentUrl = `${envs.frontend_url.replace(/\/+$/, '')}/upload?assignment=${assignment.id}`;
+    if (envs.resend_assignment_reminder_template_id) {
+      await this.sendEmail({
+        to: student.email,
+        subject: `Recordatorio de entrega: ${assignment.title}`,
+        templateId: envs.resend_assignment_reminder_template_id,
+        idempotencyKey,
+        variables: {
+          student_name: `${student.name} ${student.last_name}`,
+          assignment_title: assignment.title,
+          due_date: dueDate,
+          url_assignment: assignmentUrl,
+        },
+      });
+      return;
+    }
+
+    const payload = {
+      from: envs.mail_from,
+      to: student.email,
+      subject: `Recordatorio de entrega: ${assignment.title}`,
+      text: [
+        `Hola ${student.name} ${student.last_name},`,
+        '',
+        `La tarea "${assignment.title}" vence ${dueDate} y aún no registras una entrega.`,
+        `Puedes entregarla en ${assignmentUrl}`,
+      ].join('\n'),
+    };
+    const { error } = idempotencyKey
+      ? await this.resend.emails.send(payload, { idempotencyKey })
+      : await this.resend.emails.send(payload);
+    if (error)
+      throw new InternalServerErrorException(`No se pudo enviar el correo: ${error.message}`);
+  }
+
   private async sendEmail({
     to,
     subject,

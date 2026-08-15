@@ -2,24 +2,29 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job } from 'bullmq';
-import { Repository } from 'typeorm';
+import { And, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { UserRoles } from 'src/auth/enums';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { AuthMetricsService } from 'src/observability';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { NotificationDeliveryEntity } from './entities/notification-delivery.entity';
 import {
   NOTIFICATIONS_QUEUE,
+  AssignmentReminderKind,
   NotificationChannel,
   NotificationDeliveryStatus,
   NotificationJobData,
   NotificationJobType,
 } from './notification-queue.constants';
+import { NotificationQueueService } from './notification-queue.service';
 import { NotificationsService } from './notifications.service';
 
 type ChannelResult = Record<NotificationChannel, NotificationDeliveryStatus>;
 type NotificationJobResult = {
-  status: 'DELIVERED' | 'SOURCE_NOT_FOUND';
+  status: 'DELIVERED' | 'SOURCE_NOT_FOUND' | 'RECIPIENT_INELIGIBLE' | 'SCANNED';
   channels?: ChannelResult;
+  queuedCount?: number;
 };
 
 @Processor(NOTIFICATIONS_QUEUE, { concurrency: 4 })
@@ -31,9 +36,12 @@ export class NotificationProcessor extends WorkerHost {
     private readonly submissionRepository: Repository<Submission>,
     @InjectRepository(Evaluation)
     private readonly evaluationRepository: Repository<Evaluation>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(NotificationDeliveryEntity)
     private readonly deliveryRepository: Repository<NotificationDeliveryEntity>,
     private readonly notificationsService: NotificationsService,
+    private readonly notificationQueue: NotificationQueueService,
     private readonly metrics: AuthMetricsService
   ) {
     super();
@@ -45,9 +53,16 @@ export class NotificationProcessor extends WorkerHost {
     this.assertValidJob(job.data);
     this.logger.log(`Procesando la notificación durable ${job.data.eventKey}.`);
 
-    return job.data.type === NotificationJobType.NEW_SUBMISSION
-      ? this.processNewSubmission(job.data)
-      : this.processPublishedGrade(job.data);
+    switch (job.data.type) {
+      case NotificationJobType.NEW_SUBMISSION:
+        return this.processNewSubmission(job.data);
+      case NotificationJobType.GRADE_PUBLISHED:
+        return this.processPublishedGrade(job.data);
+      case NotificationJobType.ASSIGNMENT_REMINDER:
+        return this.processAssignmentReminder(job.data);
+      case NotificationJobType.DEADLINE_REMINDER_SCAN:
+        return this.processDeadlineReminderScan();
+    }
   }
 
   private async processNewSubmission(data: NotificationJobData): Promise<NotificationJobResult> {
@@ -60,6 +75,13 @@ export class NotificationProcessor extends WorkerHost {
       this.logger.warn(`No existe la entrega de la notificación ${data.eventKey}.`);
       return { status: 'SOURCE_NOT_FOUND' };
     }
+
+    await this.notificationsService.createNewSubmissionInApp(
+      submission.assignment.user,
+      submission.student,
+      submission.assignment,
+      submission.id
+    );
 
     const channels = await this.processChannels(data, {
       email: () =>
@@ -91,6 +113,12 @@ export class NotificationProcessor extends WorkerHost {
       return { status: 'SOURCE_NOT_FOUND' };
     }
 
+    await this.notificationsService.createPublishedGradeInApp(
+      evaluation.submission.student,
+      evaluation.submission.assignment,
+      evaluation
+    );
+
     const channels = await this.processChannels(data, {
       email: () =>
         this.notificationsService.sendPublishedGradeEmail(
@@ -105,6 +133,108 @@ export class NotificationProcessor extends WorkerHost {
           evaluation.submission.assignment,
           evaluation
         ),
+    });
+    return { status: 'DELIVERED', channels };
+  }
+
+  private async processDeadlineReminderScan(now = new Date()): Promise<NotificationJobResult> {
+    const assignments = await this.assignmentRepository.find({
+      where: {
+        isActive: true,
+        dueDate: And(MoreThan(now), LessThanOrEqual(new Date(now.getTime() + 48 * 60 * 60 * 1000))),
+      },
+      relations: ['course', 'course.users', 'submissions', 'submissions.student'],
+    });
+    let queuedCount = 0;
+
+    for (const assignment of assignments) {
+      const dueDate = new Date(assignment.dueDate);
+      const remainingMs = dueDate.getTime() - now.getTime();
+      const reminderKind =
+        remainingMs <= 24 * 60 * 60 * 1000
+          ? AssignmentReminderKind.AUTO_24H
+          : AssignmentReminderKind.AUTO_48H;
+      const submittedStudentIds = new Set(
+        (assignment.submissions ?? [])
+          .map((submission) => submission.student?.id)
+          .filter((id): id is string => Boolean(id))
+      );
+      const students = new Map(
+        (assignment.course?.users ?? [])
+          .filter(
+            (student) =>
+              student.role === UserRoles.Estudiante &&
+              student.isActive !== false &&
+              student.reminderNotificationsEnabled !== false &&
+              !submittedStudentIds.has(student.id)
+          )
+          .map((student) => [student.id, student])
+      );
+
+      const results = await Promise.all(
+        [...students.values()].map((student) =>
+          this.notificationQueue.enqueueAssignmentReminder(
+            assignment.id,
+            student.id,
+            dueDate,
+            reminderKind,
+            now
+          )
+        )
+      );
+      queuedCount += results.filter((result) => result.queued).length;
+    }
+
+    this.metrics.increment('assignment_reminder_scan_total');
+    return { status: 'SCANNED', queuedCount };
+  }
+
+  private async processAssignmentReminder(
+    data: NotificationJobData
+  ): Promise<NotificationJobResult> {
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: data.aggregateId },
+      relations: ['course', 'course.users', 'submissions', 'submissions.student'],
+    });
+    if (!assignment) {
+      this.metrics.increment('notification_source_missing_total');
+      return { status: 'SOURCE_NOT_FOUND' };
+    }
+
+    const student = (assignment.course?.users ?? []).find(
+      (candidate) => candidate.id === data.recipientId
+    );
+    const hasSubmitted = (assignment.submissions ?? []).some(
+      (submission) => submission.student?.id === data.recipientId
+    );
+    const currentDueDate = new Date(assignment.dueDate);
+    const isEligible =
+      assignment.isActive &&
+      currentDueDate.getTime() > Date.now() &&
+      currentDueDate.getTime() === data.dueDateEpoch &&
+      student?.role === UserRoles.Estudiante &&
+      student.isActive !== false &&
+      student.reminderNotificationsEnabled !== false &&
+      !hasSubmitted;
+    if (!student || !isEligible) {
+      this.metrics.increment('assignment_reminder_ineligible_total');
+      return { status: 'RECIPIENT_INELIGIBLE' };
+    }
+
+    await this.notificationsService.createAssignmentReminderInApp(
+      student,
+      assignment,
+      data.eventKey
+    );
+    const channels = await this.processChannels(data, {
+      email: () =>
+        this.notificationsService.sendAssignmentReminderEmail(
+          student,
+          assignment,
+          `${data.eventKey}-email`
+        ),
+      push: () =>
+        this.notificationsService.sendAssignmentReminderPush(student, assignment, data.eventKey),
     });
     return { status: 'DELIVERED', channels };
   }
@@ -188,5 +318,10 @@ export class NotificationProcessor extends WorkerHost {
       !Object.values(NotificationJobType).includes(data.type)
     )
       throw new Error('El trabajo de notificación no contiene datos válidos.');
+    if (
+      data.type === NotificationJobType.ASSIGNMENT_REMINDER &&
+      (!data.recipientId || !data.reminderKind || !data.dueDateEpoch)
+    )
+      throw new Error('El recordatorio de tarea no contiene destinatario o fecha límite.');
   }
 }

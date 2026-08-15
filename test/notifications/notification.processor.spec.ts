@@ -1,5 +1,6 @@
 import { NotificationDeliveryEntity } from 'src/notifications/entities/notification-delivery.entity';
 import {
+  AssignmentReminderKind,
   NotificationChannel,
   NotificationDeliveryStatus,
   NotificationJobType,
@@ -24,24 +25,33 @@ describe('NotificationProcessor', () => {
   } as any;
   const submissionRepository = { findOne: jest.fn() };
   const evaluationRepository = { findOne: jest.fn() };
+  const assignmentRepository = { find: jest.fn(), findOne: jest.fn() };
   const deliveryRepository = {
     findOne: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
   };
   const notificationsService = {
+    createNewSubmissionInApp: jest.fn(),
+    createPublishedGradeInApp: jest.fn(),
     sendNewSubmissionEmail: jest.fn(),
     sendNewSubmissionPush: jest.fn(),
     sendPublishedGradeEmail: jest.fn(),
     sendPublishedGradePush: jest.fn(),
+    createAssignmentReminderInApp: jest.fn(),
+    sendAssignmentReminderEmail: jest.fn(),
+    sendAssignmentReminderPush: jest.fn(),
   };
+  const notificationQueue = { enqueueAssignmentReminder: jest.fn() };
   const metrics = { increment: jest.fn() };
   const deliveries: NotificationDeliveryEntity[] = [];
   const processor = new NotificationProcessor(
     submissionRepository as any,
     evaluationRepository as any,
+    assignmentRepository as any,
     deliveryRepository as any,
     notificationsService as any,
+    notificationQueue as any,
     metrics as any
   );
 
@@ -59,10 +69,19 @@ describe('NotificationProcessor', () => {
     deliveries.length = 0;
     submissionRepository.findOne.mockResolvedValue(submission);
     evaluationRepository.findOne.mockResolvedValue(evaluation);
+    notificationsService.createNewSubmissionInApp.mockResolvedValue(true);
+    notificationsService.createPublishedGradeInApp.mockResolvedValue(true);
     notificationsService.sendNewSubmissionEmail.mockResolvedValue(true);
     notificationsService.sendNewSubmissionPush.mockResolvedValue(true);
     notificationsService.sendPublishedGradeEmail.mockResolvedValue(true);
     notificationsService.sendPublishedGradePush.mockResolvedValue(true);
+    notificationsService.createAssignmentReminderInApp.mockResolvedValue(true);
+    notificationsService.sendAssignmentReminderEmail.mockResolvedValue(true);
+    notificationsService.sendAssignmentReminderPush.mockResolvedValue(true);
+    notificationQueue.enqueueAssignmentReminder.mockResolvedValue({
+      eventKey: 'reminder-key',
+      queued: true,
+    });
     deliveryRepository.findOne.mockImplementation(({ where }) =>
       Promise.resolve(
         deliveries.find(
@@ -101,6 +120,12 @@ describe('NotificationProcessor', () => {
       submission.student,
       submission.assignment,
       'new-submission-submission-id-email'
+    );
+    expect(notificationsService.createNewSubmissionInApp).toHaveBeenCalledWith(
+      submission.assignment.user,
+      submission.student,
+      submission.assignment,
+      submission.id
     );
     expect(deliveries).toEqual(
       expect.arrayContaining([
@@ -160,6 +185,84 @@ describe('NotificationProcessor', () => {
       processor.process(makeJob(NotificationJobType.NEW_SUBMISSION, submission.id) as any)
     ).resolves.toEqual({ status: 'SOURCE_NOT_FOUND' });
     expect(notificationsService.sendNewSubmissionEmail).not.toHaveBeenCalled();
+    expect(notificationsService.createNewSubmissionInApp).not.toHaveBeenCalled();
     expect(metrics.increment).toHaveBeenCalledWith('notification_source_missing_total');
+  });
+
+  it('scans upcoming assignments and queues only students without a submission', async () => {
+    const now = Date.now();
+    assignmentRepository.find.mockResolvedValue([
+      {
+        id: 'assignment-id',
+        isActive: true,
+        dueDate: new Date(now + 23 * 60 * 60 * 1000),
+        course: {
+          users: [
+            { id: 'pending-id', role: 'Estudiante', isActive: true },
+            { id: 'submitted-id', role: 'Estudiante', isActive: true },
+          ],
+        },
+        submissions: [{ student: { id: 'submitted-id' } }],
+      },
+    ]);
+
+    const result = await processor.process({
+      data: {
+        type: NotificationJobType.DEADLINE_REMINDER_SCAN,
+        aggregateId: 'scheduled-scan',
+        eventKey: 'assignment-deadline-reminder-scan',
+      },
+    } as any);
+
+    expect(result).toEqual({ status: 'SCANNED', queuedCount: 1 });
+    expect(notificationQueue.enqueueAssignmentReminder).toHaveBeenCalledWith(
+      'assignment-id',
+      'pending-id',
+      expect.any(Date),
+      AssignmentReminderKind.AUTO_24H,
+      expect.any(Date)
+    );
+  });
+
+  it('rechecks enrollment and submissions before delivering an assignment reminder', async () => {
+    const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const student = {
+      id: 'student-id',
+      role: 'Estudiante',
+      isActive: true,
+      reminderNotificationsEnabled: true,
+    };
+    const reminderAssignment = {
+      id: 'assignment-id',
+      title: 'Ensayo',
+      isActive: true,
+      dueDate,
+      course: { users: [student] },
+      submissions: [],
+    };
+    assignmentRepository.findOne.mockResolvedValue(reminderAssignment);
+    const data = {
+      type: NotificationJobType.ASSIGNMENT_REMINDER,
+      aggregateId: 'assignment-id',
+      recipientId: student.id,
+      reminderKind: AssignmentReminderKind.AUTO_24H,
+      dueDateEpoch: dueDate.getTime(),
+      eventKey: 'assignment-reminder-key',
+    };
+
+    await expect(processor.process({ data } as any)).resolves.toEqual(
+      expect.objectContaining({ status: 'DELIVERED' })
+    );
+    expect(notificationsService.createAssignmentReminderInApp).toHaveBeenCalledWith(
+      student,
+      reminderAssignment,
+      data.eventKey
+    );
+
+    reminderAssignment.submissions = [{ student: { id: student.id } }] as any;
+    await expect(processor.process({ data } as any)).resolves.toEqual({
+      status: 'RECIPIENT_INELIGIBLE',
+    });
+    expect(notificationsService.sendAssignmentReminderEmail).toHaveBeenCalledTimes(1);
   });
 });

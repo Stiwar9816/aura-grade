@@ -7,8 +7,10 @@ import * as webPush from 'web-push';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { User } from 'src/user/entities/user.entity';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
 // Gateways
 import { NotificationDeliveryEntity } from './entities/notification-delivery.entity';
+import { InAppNotificationEntity } from './entities/in-app-notification.entity';
 import { PushSubscriptionEntity } from './entities/push-subscription.entity';
 import { NOTIFICATIONS_QUEUE } from './notification-queue.constants';
 import { NotificationProcessor } from './notification.processor';
@@ -38,6 +40,8 @@ class NodeWebPushClient {
       Evaluation,
       PushSubscriptionEntity,
       NotificationDeliveryEntity,
+      InAppNotificationEntity,
+      Assignment,
     ]),
     BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
     BullBoardModule.forFeature({ name: NOTIFICATIONS_QUEUE, adapter: BullMQAdapter }),

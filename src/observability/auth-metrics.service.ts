@@ -25,7 +25,9 @@ type CounterName =
   | 'notification_retry_total'
   | 'notification_exhausted_total'
   | 'notification_job_completed_total'
-  | 'notification_source_missing_total';
+  | 'notification_source_missing_total'
+  | 'assignment_reminder_scan_total'
+  | 'assignment_reminder_ineligible_total';
 
 const COUNTERS: CounterName[] = [
   'auth_login_success_total',
@@ -53,6 +55,8 @@ const COUNTERS: CounterName[] = [
   'notification_exhausted_total',
   'notification_job_completed_total',
   'notification_source_missing_total',
+  'assignment_reminder_scan_total',
+  'assignment_reminder_ineligible_total',
 ];
 
 const VALIDATION_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
