@@ -140,6 +140,15 @@ type Submission {
 
   """Current status of the submission"""
   status: SubmissionStatus!
+
+  """Total number of automatic grading attempts"""
+  gradingAttemptCount: Int
+
+  """Safe description of the last definitive grading failure"""
+  gradingFailureReason: String
+
+  """Date of the most recent automatic grading attempt"""
+  gradingLastAttemptAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
   student: User!
@@ -289,6 +298,7 @@ type Mutation {
   upsertAssignmentExtension(input: UpsertAssignmentExtensionInput!): AssignmentExtension!
   removeAssignmentExtension(assignmentId: ID!, studentId: ID!): Boolean!
   createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
+  retrySubmissionGrading(id: ID!): Submission!
   publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
   updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!

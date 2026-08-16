@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 // TypeORM
 import {
   Entity,
@@ -66,6 +66,42 @@ export class Submission {
   })
   @Field(() => SubmissionStatus, { description: 'Current status of the submission' })
   status: SubmissionStatus;
+
+  @ApiProperty({
+    example: 3,
+    description: 'Total number of automatic grading attempts',
+    default: 0,
+  })
+  @Column({ name: 'grading_attempt_count', type: 'integer', default: 0 })
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Total number of automatic grading attempts',
+  })
+  gradingAttemptCount?: number;
+
+  @ApiProperty({
+    example: 'El servicio de IA no pudo completar la evaluación.',
+    description: 'Safe description of the last definitive grading failure',
+    nullable: true,
+  })
+  @Column({ name: 'grading_failure_reason', type: 'text', nullable: true })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Safe description of the last definitive grading failure',
+  })
+  gradingFailureReason?: string | null;
+
+  @ApiProperty({
+    example: '2026-08-15T14:30:00.000Z',
+    description: 'Date of the most recent automatic grading attempt',
+    nullable: true,
+  })
+  @Column({ name: 'grading_last_attempt_at', type: 'timestamp with time zone', nullable: true })
+  @Field(() => Date, {
+    nullable: true,
+    description: 'Date of the most recent automatic grading attempt',
+  })
+  gradingLastAttemptAt?: Date;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   @Field(() => Date)

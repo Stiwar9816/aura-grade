@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 // TypeORM
@@ -169,18 +171,76 @@ export class SubmissionService {
     return this.hideStudentDraft(submission, actor);
   }
 
+  async retryGrading(id: string, teacher: User): Promise<Submission> {
+    this.assertTeacher(teacher);
+    const submission = await this.submissionRepository.findOne({
+      where: { id },
+      relations: ['student', 'assignment', 'assignment.user', 'evaluation'],
+    });
+    if (!submission)
+      throw new NotFoundException(`No se encontró la entrega con identificador ${id}.`);
+    if (submission.assignment?.user?.id !== teacher.id)
+      throw new ForbiddenException('No puedes reintentar una entrega de otro docente.');
+    if (submission.evaluation)
+      throw new BadRequestException('La entrega ya tiene una evaluación y no necesita reintento.');
+    if (submission.status !== SubmissionStatus.FAILED)
+      throw new BadRequestException('Solo se pueden reintentar entregas con estado fallido.');
+    if (!submission.fileUrl)
+      throw new BadRequestException('La entrega no tiene un archivo disponible para reprocesar.');
+
+    const claimed = await this.submissionRepository.update(
+      { id, status: SubmissionStatus.FAILED },
+      { status: SubmissionStatus.PENDING }
+    );
+    if ((claimed.affected ?? 0) !== 1)
+      throw new ConflictException('La entrega ya fue tomada para reprocesamiento.');
+
+    try {
+      await this.gradingQueue.add(
+        'grade-submission',
+        { id: submission.id, url: submission.fileUrl },
+        {
+          jobId: `${submission.id}-retry-${randomUUID()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 86400, count: 1000 },
+          removeOnFail: { age: 604800, count: 5000 },
+        }
+      );
+    } catch (error) {
+      await this.submissionRepository.update(
+        { id, status: SubmissionStatus.PENDING },
+        { status: SubmissionStatus.FAILED }
+      );
+      throw error;
+    }
+
+    submission.status = SubmissionStatus.PENDING;
+    return submission;
+  }
+
   private assertStudent(actor: User): void {
     if (actor.role !== UserRoles.Estudiante)
       throw new ForbiddenException('Solo un estudiante puede crear entregas.');
   }
 
+  private assertTeacher(actor: User): void {
+    if (actor.role !== UserRoles.Docente)
+      throw new ForbiddenException('Solo un docente puede reintentar una evaluación fallida.');
+  }
+
   private hideStudentDraft(submission: Submission, actor: User): Submission {
-    if (
-      actor.role !== UserRoles.Estudiante ||
-      submission.evaluation?.status === EvaluationStatus.PUBLISHED
-    )
-      return submission;
-    return { ...submission, evaluation: undefined };
+    if (actor.role !== UserRoles.Estudiante) return submission;
+    return {
+      ...submission,
+      gradingAttemptCount: undefined,
+      gradingFailureReason: undefined,
+      gradingLastAttemptAt: undefined,
+      evaluation:
+        submission.evaluation?.status === EvaluationStatus.PUBLISHED
+          ? submission.evaluation
+          : undefined,
+    };
   }
 
   private async readAndValidateDocx(file: FileUpload): Promise<Buffer> {

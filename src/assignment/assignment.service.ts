@@ -256,6 +256,9 @@ export class AssignmentService {
         .filter((submission) => submission.student?.id === actor.id)
         .map((submission) => ({
           ...submission,
+          gradingAttemptCount: undefined,
+          gradingFailureReason: undefined,
+          gradingLastAttemptAt: undefined,
           evaluation:
             submission.evaluation?.status === EvaluationStatus.PUBLISHED
               ? submission.evaluation

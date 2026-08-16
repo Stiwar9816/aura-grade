@@ -4,6 +4,7 @@ import { SubmissionStatus } from 'src/enums';
 describe('SubmissionProcessor', () => {
   const submissionRepository = {
     findOne: jest.fn(),
+    increment: jest.fn(),
     update: jest.fn(),
   };
   const extractorService = { extractTextFromUrl: jest.fn() };
@@ -47,6 +48,8 @@ describe('SubmissionProcessor', () => {
       id: 'evaluation-id',
       totalScore: 8,
     });
+    submissionRepository.increment.mockResolvedValue(undefined);
+    submissionRepository.update.mockResolvedValue({ affected: 1 });
   });
 
   it('skips extraction and AI when a draft already exists', async () => {
@@ -63,6 +66,7 @@ describe('SubmissionProcessor', () => {
       status: 'DRAFT_ALREADY_EXISTS',
     });
     expect(job.updateProgress).toHaveBeenCalledWith(100);
+    expect(submissionRepository.increment).not.toHaveBeenCalled();
     expect(extractorService.extractTextFromUrl).not.toHaveBeenCalled();
     expect(aiService.evaluateSubmission).not.toHaveBeenCalled();
   });
@@ -70,9 +74,18 @@ describe('SubmissionProcessor', () => {
   it('notifies the actual submission owner when grading finishes', async () => {
     const result = await processor.process(job as never);
 
+    expect(submissionRepository.increment).toHaveBeenCalledWith(
+      { id: 'submission-id' },
+      'gradingAttemptCount',
+      1
+    );
+    expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
+      status: SubmissionStatus.IN_PROGRESS,
+      gradingFailureReason: null,
+      gradingLastAttemptAt: expect.any(Date),
+    });
     expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
       extractedText: 'Contenido de la entrega',
-      status: SubmissionStatus.IN_PROGRESS,
     });
     expect(evaluationService.createDraft).toHaveBeenCalledWith(
       expect.objectContaining({ submissionId: 'submission-id', totalScore: 8 })
@@ -91,6 +104,12 @@ describe('SubmissionProcessor', () => {
 
     expect(submissionRepository.update).not.toHaveBeenCalledWith('submission-id', {
       status: SubmissionStatus.FAILED,
+    });
+    expect(submissionRepository.increment).toHaveBeenCalledTimes(1);
+    expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
+      status: SubmissionStatus.IN_PROGRESS,
+      gradingFailureReason: null,
+      gradingLastAttemptAt: expect.any(Date),
     });
   });
 });

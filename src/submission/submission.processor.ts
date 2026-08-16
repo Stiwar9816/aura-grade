@@ -71,13 +71,19 @@ export class SubmissionProcessor extends WorkerHost {
         };
       }
 
+      await this.submissionRepository.increment({ id }, 'gradingAttemptCount', 1);
+      await this.submissionRepository.update(id, {
+        status: SubmissionStatus.IN_PROGRESS,
+        gradingFailureReason: null,
+        gradingLastAttemptAt: new Date(),
+      });
+
       await job.updateProgress(10);
       const text = await this.extractorService.extractTextFromUrl(url);
       await job.updateProgress(30);
 
       await this.submissionRepository.update(id, {
         extractedText: text,
-        status: SubmissionStatus.IN_PROGRESS,
       });
 
       await job.updateProgress(40);

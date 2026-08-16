@@ -10,6 +10,7 @@ describe('SubmissionService', () => {
     save: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    update: jest.fn(),
     remove: jest.fn(),
   };
   const assignmentRepository = { findOne: jest.fn() };
@@ -91,6 +92,7 @@ describe('SubmissionService', () => {
     submissionRepository.remove.mockResolvedValue(undefined);
     gradingQueue.add.mockResolvedValue(undefined);
     notificationQueue.enqueueNewSubmission.mockResolvedValue('new-submission-submission-id');
+    submissionRepository.update.mockResolvedValue({ affected: 1 });
   });
 
   it('creates a submission with the authenticated student identity', async () => {
@@ -293,11 +295,95 @@ describe('SubmissionService', () => {
       id: 'submission-id',
       student,
       assignment: { user: teacher },
+      gradingAttemptCount: 3,
+      gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
+      gradingLastAttemptAt: new Date('2026-08-15T14:30:00.000Z'),
       evaluation: { id: 'evaluation-id', status: EvaluationStatus.DRAFT, totalScore: 8 },
     });
 
     const result = await service.findOne('submission-id', student);
 
     expect(result.evaluation).toBeUndefined();
+    expect(result.gradingAttemptCount).toBeUndefined();
+    expect(result.gradingFailureReason).toBeUndefined();
+    expect(result.gradingLastAttemptAt).toBeUndefined();
+  });
+
+  it('atomically queues a retry for a failed submission owned by the teacher', async () => {
+    const failedSubmission = {
+      id: 'submission-id',
+      fileUrl: 'https://example.com/entrega.docx',
+      status: SubmissionStatus.FAILED,
+      student,
+      assignment: { user: teacher },
+    };
+    submissionRepository.findOne.mockResolvedValue(failedSubmission);
+
+    await expect(service.retryGrading(failedSubmission.id, teacher)).resolves.toEqual(
+      expect.objectContaining({ status: SubmissionStatus.PENDING })
+    );
+    expect(submissionRepository.update).toHaveBeenCalledWith(
+      { id: failedSubmission.id, status: SubmissionStatus.FAILED },
+      { status: SubmissionStatus.PENDING }
+    );
+    expect(gradingQueue.add).toHaveBeenCalledWith(
+      'grade-submission',
+      { id: failedSubmission.id, url: failedSubmission.fileUrl },
+      expect.objectContaining({
+        jobId: expect.stringMatching(/^submission-id-retry-/),
+        attempts: 3,
+      })
+    );
+  });
+
+  it('rejects retrying another teacher submission', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      fileUrl: 'https://example.com/entrega.docx',
+      status: SubmissionStatus.FAILED,
+      assignment: { user: { id: 'other-teacher-id' } },
+    });
+
+    await expect(service.retryGrading('submission-id', teacher)).rejects.toThrow('otro docente');
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('prevents a student from retrying grading', async () => {
+    await expect(service.retryGrading('submission-id', student)).rejects.toThrow(
+      'Solo un docente puede reintentar'
+    );
+    expect(submissionRepository.findOne).not.toHaveBeenCalled();
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('prevents duplicate retries with an atomic status claim', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      fileUrl: 'https://example.com/entrega.docx',
+      status: SubmissionStatus.FAILED,
+      assignment: { user: teacher },
+    });
+    submissionRepository.update.mockResolvedValueOnce({ affected: 0 });
+
+    await expect(service.retryGrading('submission-id', teacher)).rejects.toThrow('ya fue tomada');
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('restores the failed status when retry queueing is unavailable', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      fileUrl: 'https://example.com/entrega.docx',
+      status: SubmissionStatus.FAILED,
+      assignment: { user: teacher },
+    });
+    gradingQueue.add.mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await expect(service.retryGrading('submission-id', teacher)).rejects.toThrow(
+      'Redis unavailable'
+    );
+    expect(submissionRepository.update).toHaveBeenLastCalledWith(
+      { id: 'submission-id', status: SubmissionStatus.PENDING },
+      { status: SubmissionStatus.FAILED }
+    );
   });
 });

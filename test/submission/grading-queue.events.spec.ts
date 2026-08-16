@@ -33,6 +33,7 @@ describe('GradingQueueEvents', () => {
 
     expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
       status: SubmissionStatus.FAILED,
+      gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
     });
     expect(notificationsGateway.notifyStudent).toHaveBeenCalledWith('student-id', {
       submissionId: 'submission-id',
@@ -52,5 +53,28 @@ describe('GradingQueueEvents', () => {
 
     expect(submissionRepository.update).not.toHaveBeenCalled();
     expect(notificationsGateway.notifyStudent).not.toHaveBeenCalled();
+  });
+
+  it('stores a safe category instead of the raw provider failure', async () => {
+    gradingQueue.getJob.mockResolvedValue({
+      data: { id: 'submission-id' },
+      attemptsMade: 3,
+      opts: { attempts: 3 },
+    });
+
+    await events.onFailed({
+      jobId: 'job-id',
+      failedReason: '401 Unauthorized: invalid API_KEY secret-value',
+    });
+
+    expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
+      status: SubmissionStatus.FAILED,
+      gradingFailureReason:
+        'El servicio de IA no está disponible por un problema de configuración.',
+    });
+    expect(submissionRepository.update).not.toHaveBeenCalledWith(
+      'submission-id',
+      expect.objectContaining({ gradingFailureReason: expect.stringContaining('secret-value') })
+    );
   });
 });

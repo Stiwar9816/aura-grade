@@ -57,7 +57,10 @@ export class GradingQueueEvents extends QueueEventsHost {
       });
 
       if (submission) {
-        await this.submissionRepository.update(id, { status: SubmissionStatus.FAILED });
+        await this.submissionRepository.update(id, {
+          status: SubmissionStatus.FAILED,
+          gradingFailureReason: this.getSafeFailureReason(failedReason),
+        });
         this.notificationsGateway.notifyStudent(submission.student.id, {
           submissionId: id,
           status: SubmissionStatus.FAILED,
@@ -78,5 +81,20 @@ export class GradingQueueEvents extends QueueEventsHost {
     if (progress <= 75) return 'Analizando contenido con IA...';
     if (progress <= 95) return 'Generando calificación final...';
     return '¡Evaluación completada!';
+  }
+
+  private getSafeFailureReason(failedReason: string): string {
+    const reason = failedReason.toLowerCase();
+    if (/429|quota|rate.?limit|too many requests/.test(reason))
+      return 'El servicio de IA alcanzó temporalmente su límite de solicitudes.';
+    if (/401|403|api.?key|auth|credential|unauthorized|forbidden/.test(reason))
+      return 'El servicio de IA no está disponible por un problema de configuración.';
+    if (/extract|document|docx|download|file|archivo|url/.test(reason))
+      return 'No se pudo leer o extraer el contenido del archivo.';
+    if (/json|schema|format|parse|response/.test(reason))
+      return 'La respuesta de la IA no tuvo el formato esperado.';
+    if (/ai|gemini|model|provider|generation/.test(reason))
+      return 'El servicio de IA no pudo completar la evaluación.';
+    return 'El procesamiento automático no pudo completar la evaluación.';
   }
 }

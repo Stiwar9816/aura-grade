@@ -51,4 +51,14 @@ export class SubmissionResolver {
   ): Promise<Submission> {
     return this.submissionService.findOne(id, user);
   }
+
+  @Mutation(() => Submission, { name: 'retrySubmissionGrading' })
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
+  retrySubmissionGrading(
+    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ): Promise<Submission> {
+    return this.submissionService.retryGrading(id, user);
+  }
 }

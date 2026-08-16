@@ -111,6 +111,9 @@ describe('AssignmentService', () => {
           {
             id: 'submission-id',
             student,
+            gradingAttemptCount: 3,
+            gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
+            gradingLastAttemptAt: new Date('2026-08-15T14:30:00.000Z'),
             evaluation: { id: 'evaluation-id', status: 'DRAFT', totalScore: 5 },
           },
         ],
@@ -120,6 +123,9 @@ describe('AssignmentService', () => {
     const [assignment] = await service.findAll(student);
 
     expect(assignment.submissions?.[0].evaluation).toBeUndefined();
+    expect(assignment.submissions?.[0].gradingAttemptCount).toBeUndefined();
+    expect(assignment.submissions?.[0].gradingFailureReason).toBeUndefined();
+    expect(assignment.submissions?.[0].gradingLastAttemptAt).toBeUndefined();
   });
 
   it('creates the assignment under the authenticated teacher identity', async () => {
