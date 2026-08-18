@@ -6,6 +6,7 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationResourceType } from 'src/notifications/entities/in-app-notification.entity';
 import { User } from 'src/user/entities/user.entity';
 import { AssignmentReminderKind } from 'src/notifications/notification-queue.constants';
+import { Submission } from 'src/submission/entities/submission.entity';
 
 describe('NotificationsService', () => {
   const repository = { update: jest.fn() };
@@ -61,6 +62,12 @@ describe('NotificationsService', () => {
     totalScore: 4.5,
     submission: { id: 'submission-id' },
   } as Evaluation;
+  const failedSubmission = {
+    id: 'submission-id',
+    status: 'FAILED',
+    gradingAttemptCount: 3,
+    gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
+  } as Submission;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -188,6 +195,32 @@ describe('NotificationsService', () => {
       false
     );
     expect(inAppRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('creates a safe direct internal alert for a definitive grading failure', async () => {
+    const teacher = { ...user, id: 'teacher-id', role: UserRoles.Docente } as User;
+    const student = { ...user, id: 'student-id', name: 'Ana', last_name: 'Pérez' } as User;
+
+    await expect(
+      service.createGradingFailedInApp(
+        teacher,
+        student,
+        assignment,
+        failedSubmission,
+        'grading-failed-grading-job-id'
+      )
+    ).resolves.toBe(true);
+
+    expect(inAppRepository.create).toHaveBeenCalledWith({
+      recipientId: teacher.id,
+      eventKey: 'grading-failed-grading-job-id',
+      type: 'GRADING_FAILED',
+      title: 'Calificación automática fallida',
+      body: 'No se pudo calificar “Ensayo final” de Ana Pérez. El servicio de IA no pudo completar la evaluación. Intentos registrados: 3.',
+      url: '/teacher/assignments/assignment-id?submission=submission-id',
+      resourceType: NotificationResourceType.SUBMISSION,
+      resourceId: 'submission-id',
+    });
   });
 
   it('does not email new submissions when that event is disabled', async () => {

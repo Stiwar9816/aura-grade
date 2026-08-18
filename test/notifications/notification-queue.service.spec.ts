@@ -45,6 +45,22 @@ describe('NotificationQueueService', () => {
     expect(metrics.increment).toHaveBeenCalledWith('notification_duplicate_total');
   });
 
+  it('deduplicates a grading-failure alert per grading cycle', async () => {
+    await expect(service.enqueueGradingFailed('submission-id', 'grading-job-id')).resolves.toBe(
+      'grading-failed-grading-job-id'
+    );
+
+    expect(queue.add).toHaveBeenCalledWith(
+      NotificationJobType.GRADING_FAILED,
+      {
+        type: NotificationJobType.GRADING_FAILED,
+        aggregateId: 'submission-id',
+        eventKey: 'grading-failed-grading-job-id',
+      },
+      expect.objectContaining({ jobId: 'grading-failed-grading-job-id', attempts: 5 })
+    );
+  });
+
   it('records queue infrastructure failures and propagates them', async () => {
     queue.add.mockRejectedValue(new Error('Redis unavailable'));
 

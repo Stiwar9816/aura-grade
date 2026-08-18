@@ -8,10 +8,14 @@ import {
 } from 'src/notifications/notification-queue.constants';
 import { NotificationProcessor } from 'src/notifications/notification.processor';
 import { UserRoles } from 'src/auth/enums';
+import { SubmissionStatus } from 'src/enums';
 
 describe('NotificationProcessor', () => {
   const submission = {
     id: 'submission-id',
+    status: SubmissionStatus.FAILED,
+    gradingAttemptCount: 3,
+    gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
     student: { id: 'student-id', name: 'Ana', last_name: 'Pérez' },
     assignment: {
       id: 'assignment-id',
@@ -35,6 +39,7 @@ describe('NotificationProcessor', () => {
   const notificationsService = {
     createNewSubmissionInApp: jest.fn(),
     createPublishedGradeInApp: jest.fn(),
+    createGradingFailedInApp: jest.fn(),
     sendNewSubmissionEmail: jest.fn(),
     sendNewSubmissionPush: jest.fn(),
     sendPublishedGradeEmail: jest.fn(),
@@ -72,6 +77,7 @@ describe('NotificationProcessor', () => {
     evaluationRepository.findOne.mockResolvedValue(evaluation);
     notificationsService.createNewSubmissionInApp.mockResolvedValue(true);
     notificationsService.createPublishedGradeInApp.mockResolvedValue(true);
+    notificationsService.createGradingFailedInApp.mockResolvedValue(true);
     notificationsService.sendNewSubmissionEmail.mockResolvedValue(true);
     notificationsService.sendNewSubmissionPush.mockResolvedValue(true);
     notificationsService.sendPublishedGradeEmail.mockResolvedValue(true);
@@ -177,6 +183,44 @@ describe('NotificationProcessor', () => {
 
     expect(result.channels).toEqual({ EMAIL: 'SKIPPED', PUSH: 'SKIPPED' });
     expect(metrics.increment).toHaveBeenCalledWith('notification_channel_skipped_total');
+  });
+
+  it('creates only an internal notification for a definitive grading failure', async () => {
+    const data = {
+      type: NotificationJobType.GRADING_FAILED,
+      aggregateId: submission.id,
+      eventKey: 'grading-failed-grading-job-id',
+    };
+
+    await expect(processor.process({ data } as any)).resolves.toEqual({ status: 'DELIVERED' });
+
+    expect(notificationsService.createGradingFailedInApp).toHaveBeenCalledWith(
+      submission.assignment.user,
+      submission.student,
+      submission.assignment,
+      submission,
+      data.eventKey
+    );
+    expect(deliveries).toHaveLength(0);
+    expect(notificationsService.sendNewSubmissionEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendNewSubmissionPush).not.toHaveBeenCalled();
+  });
+
+  it('skips a stale grading-failure alert after the submission is retried', async () => {
+    submissionRepository.findOne.mockResolvedValueOnce({
+      ...submission,
+      status: SubmissionStatus.PENDING,
+    });
+    const data = {
+      type: NotificationJobType.GRADING_FAILED,
+      aggregateId: submission.id,
+      eventKey: 'grading-failed-stale-job-id',
+    };
+
+    await expect(processor.process({ data } as any)).resolves.toEqual({
+      status: 'RECIPIENT_INELIGIBLE',
+    });
+    expect(notificationsService.createGradingFailedInApp).not.toHaveBeenCalled();
   });
 
   it('completes without sending when the source entity no longer exists', async () => {

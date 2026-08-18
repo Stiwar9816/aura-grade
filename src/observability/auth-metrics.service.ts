@@ -26,6 +26,7 @@ type CounterName =
   | 'notification_exhausted_total'
   | 'notification_job_completed_total'
   | 'notification_source_missing_total'
+  | 'grading_failed_notification_ineligible_total'
   | 'assignment_reminder_scan_total'
   | 'assignment_reminder_ineligible_total';
 
@@ -55,6 +56,7 @@ const COUNTERS: CounterName[] = [
   'notification_exhausted_total',
   'notification_job_completed_total',
   'notification_source_missing_total',
+  'grading_failed_notification_ineligible_total',
   'assignment_reminder_scan_total',
   'assignment_reminder_ineligible_total',
 ];

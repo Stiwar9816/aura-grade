@@ -3,6 +3,7 @@ export const NOTIFICATIONS_QUEUE = 'notifications';
 export enum NotificationJobType {
   NEW_SUBMISSION = 'NEW_SUBMISSION',
   GRADE_PUBLISHED = 'GRADE_PUBLISHED',
+  GRADING_FAILED = 'GRADING_FAILED',
   ASSIGNMENT_REMINDER = 'ASSIGNMENT_REMINDER',
   DEADLINE_REMINDER_SCAN = 'DEADLINE_REMINDER_SCAN',
 }
@@ -39,6 +40,9 @@ export const notificationEventKey = (type: NotificationJobType, aggregateId: str
   type === NotificationJobType.NEW_SUBMISSION
     ? `new-submission-${aggregateId}`
     : `grade-published-${aggregateId}`;
+
+export const gradingFailedEventKey = (gradingJobId: string): string =>
+  `grading-failed-${gradingJobId}`;
 
 export const assignmentReminderEventKey = (
   assignmentId: string,

@@ -12,6 +12,7 @@ import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { MailService } from 'src/mail/mail.service';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
+import { Submission } from 'src/submission/entities/submission.entity';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { SavePushSubscriptionDto } from './dto/push-subscription.dto';
 import { ListNotificationsDto } from './dto/list-notifications.dto';
@@ -165,6 +166,33 @@ export class NotificationsService {
       url: `/evaluation?submission=${evaluation.submission.id}`,
       resourceType: NotificationResourceType.EVALUATION,
       resourceId: evaluation.id,
+    });
+  }
+
+  async createGradingFailedInApp(
+    teacher: User,
+    student: User,
+    assignment: Assignment,
+    submission: Submission,
+    eventKey: string
+  ): Promise<boolean> {
+    const studentName = `${student.name} ${student.last_name}`.trim();
+    const attemptLabel = submission.gradingAttemptCount
+      ? ` Intentos registrados: ${submission.gradingAttemptCount}.`
+      : '';
+    const reason =
+      submission.gradingFailureReason ||
+      'El procesamiento automático no pudo completar la evaluación.';
+
+    return this.createInAppNotification({
+      recipientId: teacher.id,
+      eventKey,
+      type: NotificationJobType.GRADING_FAILED,
+      title: 'Calificación automática fallida',
+      body: `No se pudo calificar “${assignment.title}” de ${studentName}. ${reason}${attemptLabel}`,
+      url: `/teacher/assignments/${assignment.id}?submission=${submission.id}`,
+      resourceType: NotificationResourceType.SUBMISSION,
+      resourceId: submission.id,
     });
   }
 

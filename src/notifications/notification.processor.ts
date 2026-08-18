@@ -9,6 +9,7 @@ import { UserRoles } from 'src/auth/enums';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { AuthMetricsService } from 'src/observability';
 import { Submission } from 'src/submission/entities/submission.entity';
+import { SubmissionStatus } from 'src/enums';
 import { NotificationDeliveryEntity } from './entities/notification-delivery.entity';
 import {
   NOTIFICATIONS_QUEUE,
@@ -59,6 +60,8 @@ export class NotificationProcessor extends WorkerHost {
         return this.processNewSubmission(job.data);
       case NotificationJobType.GRADE_PUBLISHED:
         return this.processPublishedGrade(job.data);
+      case NotificationJobType.GRADING_FAILED:
+        return this.processGradingFailed(job.data);
       case NotificationJobType.ASSIGNMENT_REMINDER:
         return this.processAssignmentReminder(job.data);
       case NotificationJobType.DEADLINE_REMINDER_SCAN:
@@ -136,6 +139,32 @@ export class NotificationProcessor extends WorkerHost {
         ),
     });
     return { status: 'DELIVERED', channels };
+  }
+
+  private async processGradingFailed(data: NotificationJobData): Promise<NotificationJobResult> {
+    const submission = await this.submissionRepository.findOne({
+      where: { id: data.aggregateId },
+      relations: ['student', 'assignment', 'assignment.user'],
+    });
+    if (!submission) {
+      this.metrics.increment('notification_source_missing_total');
+      this.logger.warn(`No existe la entrega fallida de la notificación ${data.eventKey}.`);
+      return { status: 'SOURCE_NOT_FOUND' };
+    }
+
+    if (submission.status !== SubmissionStatus.FAILED || !submission.assignment.user) {
+      this.metrics.increment('grading_failed_notification_ineligible_total');
+      return { status: 'RECIPIENT_INELIGIBLE' };
+    }
+
+    await this.notificationsService.createGradingFailedInApp(
+      submission.assignment.user,
+      submission.student,
+      submission.assignment,
+      submission,
+      data.eventKey
+    );
+    return { status: 'DELIVERED' };
   }
 
   private async processDeadlineReminderScan(now = new Date()): Promise<NotificationJobResult> {

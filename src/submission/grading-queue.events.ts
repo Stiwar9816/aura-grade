@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { Submission } from './entities/submission.entity';
 import { SubmissionStatus } from 'src/enums';
 
@@ -15,7 +16,8 @@ export class GradingQueueEvents extends QueueEventsHost {
     @InjectRepository(Submission)
     private readonly submissionRepository: Repository<Submission>,
     private readonly notificationsGateway: NotificationsGateway,
-    @InjectQueue('grading') private readonly gradingQueue: Queue
+    @InjectQueue('grading') private readonly gradingQueue: Queue,
+    private readonly notificationQueue: NotificationQueueService
   ) {
     super();
   }
@@ -57,15 +59,25 @@ export class GradingQueueEvents extends QueueEventsHost {
       });
 
       if (submission) {
+        const safeFailureReason = this.getSafeFailureReason(failedReason);
         await this.submissionRepository.update(id, {
           status: SubmissionStatus.FAILED,
-          gradingFailureReason: this.getSafeFailureReason(failedReason),
+          gradingFailureReason: safeFailureReason,
         });
         this.notificationsGateway.notifyStudent(submission.student.id, {
           submissionId: id,
           status: SubmissionStatus.FAILED,
           message: 'La evaluación falló tras varios intentos.',
         });
+        try {
+          await this.notificationQueue.enqueueGradingFailed(id, jobId);
+        } catch (error) {
+          this.logger.error(
+            `No se pudo encolar la alerta interna del fallo ${jobId}: ${
+              error instanceof Error ? error.message : String(error)
+            }.`
+          );
+        }
       }
     }
   }

@@ -8,6 +8,7 @@ import {
   NotificationJobData,
   NotificationJobType,
   assignmentReminderEventKey,
+  gradingFailedEventKey,
   notificationEventKey,
 } from './notification-queue.constants';
 
@@ -44,6 +45,14 @@ export class NotificationQueueService implements OnModuleInit {
 
   enqueuePublishedGrade(evaluationId: string): Promise<string> {
     return this.enqueue(NotificationJobType.GRADE_PUBLISHED, evaluationId);
+  }
+
+  enqueueGradingFailed(submissionId: string, gradingJobId: string): Promise<string> {
+    return this.enqueue(
+      NotificationJobType.GRADING_FAILED,
+      submissionId,
+      gradingFailedEventKey(gradingJobId)
+    );
   }
 
   async registerDeadlineReminderScheduler(): Promise<void> {
@@ -164,8 +173,11 @@ export class NotificationQueueService implements OnModuleInit {
     return cooldownUntil > now.getTime() ? new Date(cooldownUntil) : undefined;
   }
 
-  private async enqueue(type: NotificationJobType, aggregateId: string): Promise<string> {
-    const eventKey = notificationEventKey(type, aggregateId);
+  private async enqueue(
+    type: NotificationJobType,
+    aggregateId: string,
+    eventKey = notificationEventKey(type, aggregateId)
+  ): Promise<string> {
     try {
       const existing = await this.queue.getJob(eventKey);
       if (existing) {
