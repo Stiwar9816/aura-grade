@@ -1,7 +1,8 @@
 import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { UserRoles } from 'src/auth/enums';
-import { EvaluationStatus, SubmissionStatus } from 'src/enums';
+import { EvaluationOrigin, EvaluationStatus, SubmissionStatus } from 'src/enums';
 import type { User } from 'src/user/entities/user.entity';
+import { Submission } from 'src/submission/entities/submission.entity';
 
 describe('EvaluationService', () => {
   const evaluationRepository = {
@@ -12,15 +13,25 @@ describe('EvaluationService', () => {
   };
   const submissionRepository = {
     findOneBy: jest.fn(),
+    findOne: jest.fn(),
     update: jest.fn(),
   };
+  const manager = {
+    getRepository: jest.fn((entity) =>
+      entity === Submission ? submissionRepository : evaluationRepository
+    ),
+  };
+  const dataSource = { transaction: jest.fn((callback) => callback(manager)) };
   const notificationsGateway = { notifyStudent: jest.fn() };
   const notificationQueue = { enqueuePublishedGrade: jest.fn() };
+  const gradingQueue = { getJobs: jest.fn() };
   const service = new EvaluationService(
     evaluationRepository as never,
     submissionRepository as never,
+    dataSource as never,
     notificationsGateway as never,
-    notificationQueue as never
+    notificationQueue as never,
+    gradingQueue as never
   );
 
   const teacher = {
@@ -47,6 +58,7 @@ describe('EvaluationService', () => {
     generalFeedback: 'Buen trabajo',
     detailedFeedback: {},
     status: EvaluationStatus.DRAFT,
+    origin: EvaluationOrigin.AI,
     submission: {
       id: 'submission-id',
       student,
@@ -57,10 +69,15 @@ describe('EvaluationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     notificationQueue.enqueuePublishedGrade.mockResolvedValue('grade-published-evaluation-id');
+    gradingQueue.getJobs.mockResolvedValue([]);
+    manager.getRepository.mockImplementation((entity) =>
+      entity === Submission ? submissionRepository : evaluationRepository
+    );
+    dataSource.transaction.mockImplementation((callback) => callback(manager));
   });
 
   it('creates an internal draft and marks the submission for teacher review', async () => {
-    submissionRepository.findOneBy.mockResolvedValue({ id: 'submission-id' });
+    submissionRepository.findOne.mockResolvedValue({ id: 'submission-id' });
     evaluationRepository.findOne.mockResolvedValue(null);
     evaluationRepository.create.mockImplementation((value) => value);
     evaluationRepository.save.mockImplementation((value) => ({ ...value, id: 'evaluation-id' }));
@@ -76,6 +93,7 @@ describe('EvaluationService', () => {
       expect.objectContaining({
         submission: { id: 'submission-id' },
         status: EvaluationStatus.DRAFT,
+        origin: EvaluationOrigin.AI,
       })
     );
     expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
@@ -85,7 +103,7 @@ describe('EvaluationService', () => {
   });
 
   it('reuses the existing draft when the grading job is retried', async () => {
-    submissionRepository.findOneBy.mockResolvedValue({ id: 'submission-id' });
+    submissionRepository.findOne.mockResolvedValue({ id: 'submission-id' });
     evaluationRepository.findOne.mockResolvedValue(draftEvaluation);
 
     const result = await service.createDraft({
@@ -96,6 +114,109 @@ describe('EvaluationService', () => {
     });
 
     expect(result).toBe(draftEvaluation);
+    expect(evaluationRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('creates a manual draft only for the owner of a failed submission', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      status: SubmissionStatus.FAILED,
+      assignment,
+    });
+    evaluationRepository.findOne.mockResolvedValue(null);
+    evaluationRepository.create.mockImplementation((value) => value);
+    evaluationRepository.save.mockImplementation((value) => ({ ...value, id: 'manual-id' }));
+    const remove = jest.fn().mockResolvedValue(undefined);
+    gradingQueue.getJobs.mockResolvedValue([
+      { data: { id: 'submission-id' }, remove },
+      { data: { id: 'other-submission' }, remove: jest.fn() },
+    ]);
+
+    const result = await service.createManualDraft(
+      {
+        submissionId: 'submission-id',
+        totalScore: 4,
+        generalFeedback: 'Revisión manual completa',
+        detailedFeedback: [{ criteriaId: 'criterion-id', score: 4 }],
+      },
+      teacher
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({ id: 'manual-id', origin: EvaluationOrigin.MANUAL })
+    );
+    expect(evaluationRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: EvaluationOrigin.MANUAL,
+        status: EvaluationStatus.DRAFT,
+        submission: { id: 'submission-id' },
+      })
+    );
+    expect(submissionRepository.update).toHaveBeenCalledWith('submission-id', {
+      status: SubmissionStatus.REVIEW_PENDING,
+    });
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects manual grading when the submission belongs to another teacher', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      status: SubmissionStatus.FAILED,
+      assignment: { ...assignment, user: { id: 'other-teacher-id' } },
+    });
+
+    await expect(
+      service.createManualDraft(
+        {
+          submissionId: 'submission-id',
+          totalScore: 4,
+          generalFeedback: 'Revisión manual',
+        },
+        teacher
+      )
+    ).rejects.toThrow('otro docente');
+    expect(evaluationRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects manual grading while an AI retry owns the submission', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      status: SubmissionStatus.PENDING,
+      assignment,
+    });
+    evaluationRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.createManualDraft(
+        {
+          submissionId: 'submission-id',
+          totalScore: 4,
+          generalFeedback: 'Revisión manual',
+        },
+        teacher
+      )
+    ).rejects.toThrow('entrega fallida');
+  });
+
+  it('reuses an existing manual draft idempotently', async () => {
+    const manualDraft = { ...draftEvaluation, origin: EvaluationOrigin.MANUAL };
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'submission-id',
+      status: SubmissionStatus.REVIEW_PENDING,
+      assignment,
+    });
+    evaluationRepository.findOne.mockResolvedValue(manualDraft);
+
+    await expect(
+      service.createManualDraft(
+        {
+          submissionId: 'submission-id',
+          totalScore: 4,
+          generalFeedback: 'Revisión manual',
+        },
+        teacher
+      )
+    ).resolves.toBe(manualDraft);
     expect(evaluationRepository.save).not.toHaveBeenCalled();
   });
 

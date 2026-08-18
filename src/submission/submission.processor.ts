@@ -15,7 +15,7 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 // Entities
 import { Submission } from './entities/submission.entity';
 // Enums
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationOrigin, SubmissionStatus } from 'src/enums';
 // Helpers
 import { AiSanitizer } from 'src/common/helpers/ai-sanitizer.helper';
 
@@ -88,6 +88,19 @@ export class SubmissionProcessor extends WorkerHost {
 
       await job.updateProgress(40);
 
+      const currentSubmission = await this.submissionRepository.findOne({
+        where: { id },
+        relations: ['evaluation'],
+      });
+      if (currentSubmission?.evaluation) {
+        await job.updateProgress(100);
+        return {
+          evaluationId: currentSubmission.evaluation.id,
+          score: currentSubmission.evaluation.totalScore,
+          status: 'DRAFT_ALREADY_EXISTS',
+        };
+      }
+
       this.logger.log(`Solicitando a la IA la calificación de la entrega ${id}.`);
       const cleanText = AiSanitizer.clean(text);
 
@@ -106,6 +119,15 @@ export class SubmissionProcessor extends WorkerHost {
         aiModelUsed: this.config.get('AI_PROVIDER'),
       });
       await job.updateProgress(90);
+
+      if (evaluation.origin === EvaluationOrigin.MANUAL) {
+        await job.updateProgress(100);
+        return {
+          evaluationId: evaluation.id,
+          score: evaluation.totalScore,
+          status: 'DRAFT_ALREADY_EXISTS',
+        };
+      }
 
       await job.updateProgress(100);
       this.logger.log(

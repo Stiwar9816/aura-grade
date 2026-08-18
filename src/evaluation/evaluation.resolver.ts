@@ -8,7 +8,7 @@ import { EvaluationService } from './evaluation.service';
 import { Evaluation } from './entities/evaluation.entity';
 import { User } from 'src/user/entities/user.entity';
 // DTOs
-import { UpdateEvaluationInput } from './dto';
+import { CreateManualEvaluationInput, UpdateEvaluationInput } from './dto';
 // Guards
 import { JwtAuthGuard } from 'src/auth/guards';
 // Decorators
@@ -55,5 +55,14 @@ export class EvaluationResolver {
     @CurrentUser([UserRoles.Docente]) user: User
   ): Promise<Evaluation> {
     return this.evaluationService.publish(id, updateEvaluationInput, user);
+  }
+
+  @Mutation(() => Evaluation, { name: 'createManualEvaluationDraft' })
+  @UseGuards(JwtAuthGuard)
+  createManualEvaluationDraft(
+    @Args('input') input: CreateManualEvaluationInput,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ): Promise<Evaluation> {
+    return this.evaluationService.createManualDraft(input, user);
   }
 }

@@ -1,20 +1,23 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 // DTOs
-import { CreateEvaluationInput, UpdateEvaluationInput } from './dto';
+import { CreateEvaluationInput, CreateManualEvaluationInput, UpdateEvaluationInput } from './dto';
 // TypeORM
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 // Entities
 import { Evaluation } from './entities/evaluation.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 // Enums
-import { EvaluationStatus, SubmissionStatus } from 'src/enums';
+import { EvaluationOrigin, EvaluationStatus, SubmissionStatus } from 'src/enums';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
@@ -43,35 +46,75 @@ export class EvaluationService {
     private readonly evaluationRepository: Repository<Evaluation>,
     @InjectRepository(Submission)
     private readonly submissionRepository: Repository<Submission>,
+    private readonly dataSource: DataSource,
     private readonly notificationsGateway: NotificationsGateway,
-    private readonly notificationQueue: NotificationQueueService
+    private readonly notificationQueue: NotificationQueueService,
+    @InjectQueue('grading') private readonly gradingQueue: Queue
   ) {}
 
   async createDraft(createEvaluationInput: CreateEvaluationInput): Promise<Evaluation> {
-    const { submissionId, ...evaluationData } = createEvaluationInput;
+    return this.dataSource.transaction((manager) =>
+      this.createDraftInTransaction(manager, createEvaluationInput, EvaluationOrigin.AI)
+    );
+  }
 
-    const submission = await this.submissionRepository.findOneBy({ id: submissionId });
-    if (!submission) throw new NotFoundException(`No se encontró la entrega ${submissionId}.`);
+  async createManualDraft(input: CreateManualEvaluationInput, teacher: User): Promise<Evaluation> {
+    if (teacher.role !== UserRoles.Docente)
+      throw new ForbiddenException('Solo un docente puede crear una calificación manual.');
 
-    const existingEvaluation = await this.evaluationRepository.findOne({
-      where: { submission: { id: submissionId } },
-      relations: this.evaluationRelations,
+    const evaluation = await this.dataSource.transaction(async (manager) => {
+      const submissionRepository = manager.getRepository(Submission);
+      const evaluationRepository = manager.getRepository(Evaluation);
+      await this.lockSubmission(submissionRepository, input.submissionId);
+      const submission = await submissionRepository.findOne({
+        where: { id: input.submissionId },
+        relations: ['assignment', 'assignment.user', 'assignment.rubric'],
+      });
+      if (!submission)
+        throw new NotFoundException(`No se encontró la entrega ${input.submissionId}.`);
+      if (submission.assignment?.user?.id !== teacher.id)
+        throw new ForbiddenException(
+          'No puedes calificar manualmente una entrega de otro docente.'
+        );
+
+      const existingEvaluation = await evaluationRepository.findOne({
+        where: { submission: { id: input.submissionId } },
+        relations: this.evaluationRelations,
+      });
+      if (existingEvaluation) {
+        if (
+          existingEvaluation.origin === EvaluationOrigin.MANUAL &&
+          existingEvaluation.status === EvaluationStatus.DRAFT
+        )
+          return existingEvaluation;
+        throw new ConflictException('La entrega ya tiene una evaluación creada.');
+      }
+      if (submission.status !== SubmissionStatus.FAILED)
+        throw new BadRequestException(
+          'Solo se puede iniciar una calificación manual para una entrega fallida.'
+        );
+
+      this.validateScore(input.totalScore, submission.assignment.rubric?.maxTotalScore);
+      const feedback = input.generalFeedback.trim();
+      if (!feedback) throw new BadRequestException('La retroalimentación manual es obligatoria.');
+
+      const manualEvaluation = evaluationRepository.create({
+        totalScore: input.totalScore,
+        generalFeedback: feedback,
+        detailedFeedback: input.detailedFeedback ?? [],
+        origin: EvaluationOrigin.MANUAL,
+        status: EvaluationStatus.DRAFT,
+        submission: { id: input.submissionId } as Submission,
+      });
+      const saved = await evaluationRepository.save(manualEvaluation);
+      await submissionRepository.update(input.submissionId, {
+        status: SubmissionStatus.REVIEW_PENDING,
+      });
+      return saved;
     });
-    if (existingEvaluation) return existingEvaluation;
 
-    const evaluation = this.evaluationRepository.create({
-      ...evaluationData,
-      submission: { id: submissionId } as any,
-      status: EvaluationStatus.DRAFT,
-    });
-
-    const savedEvaluation = await this.evaluationRepository.save(evaluation);
-
-    await this.submissionRepository.update(submissionId, {
-      status: SubmissionStatus.REVIEW_PENDING,
-    });
-
-    return savedEvaluation;
+    await this.cancelPendingGradingJobs(input.submissionId);
+    return evaluation;
   }
 
   async publish(
@@ -194,5 +237,82 @@ export class EvaluationService {
       throw new ForbiddenException(
         'Solo el docente propietario de la tarea puede publicar esta evaluación.'
       );
+  }
+
+  private async createDraftInTransaction(
+    manager: EntityManager,
+    input: CreateEvaluationInput,
+    origin: EvaluationOrigin
+  ): Promise<Evaluation> {
+    const submissionRepository = manager.getRepository(Submission);
+    const evaluationRepository = manager.getRepository(Evaluation);
+    await this.lockSubmission(submissionRepository, input.submissionId);
+    const submission = await submissionRepository.findOne({
+      where: { id: input.submissionId },
+    });
+    if (!submission)
+      throw new NotFoundException(`No se encontró la entrega ${input.submissionId}.`);
+
+    const existingEvaluation = await evaluationRepository.findOne({
+      where: { submission: { id: input.submissionId } },
+      relations: this.evaluationRelations,
+    });
+    if (existingEvaluation) return existingEvaluation;
+
+    const { submissionId, ...evaluationData } = input;
+    const evaluation = evaluationRepository.create({
+      ...evaluationData,
+      origin,
+      submission: { id: submissionId } as Submission,
+      status: EvaluationStatus.DRAFT,
+    });
+    const savedEvaluation = await evaluationRepository.save(evaluation);
+    await submissionRepository.update(submissionId, {
+      status: SubmissionStatus.REVIEW_PENDING,
+    });
+    return savedEvaluation;
+  }
+
+  private async lockSubmission(
+    repository: Repository<Submission>,
+    submissionId: string
+  ): Promise<void> {
+    const submission = await repository.findOne({
+      where: { id: submissionId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!submission) throw new NotFoundException(`No se encontró la entrega ${submissionId}.`);
+  }
+
+  private validateScore(score: number, rawMaxScore: number | undefined): void {
+    const maxScore = Number(rawMaxScore);
+    if (!Number.isFinite(score) || score < 0 || !Number.isFinite(maxScore) || score > maxScore)
+      throw new BadRequestException(`La calificación debe estar entre 0 y ${maxScore}.`);
+  }
+
+  private async cancelPendingGradingJobs(submissionId: string): Promise<void> {
+    try {
+      const jobs = await this.gradingQueue.getJobs([
+        'waiting',
+        'delayed',
+        'prioritized',
+        'paused',
+        'failed',
+      ]);
+      const removals = await Promise.allSettled(
+        jobs.filter((job) => job.data?.id === submissionId).map((job) => job.remove())
+      );
+      const failedRemovals = removals.filter((result) => result.status === 'rejected').length;
+      if (failedRemovals > 0)
+        this.logger.warn(
+          `No se pudieron retirar ${failedRemovals} trabajos de calificación para ${submissionId}.`
+        );
+    } catch (error) {
+      this.logger.error(
+        `No se pudieron consultar los trabajos de calificación para ${submissionId}: ${
+          error instanceof Error ? error.message : String(error)
+        }.`
+      );
+    }
   }
 }

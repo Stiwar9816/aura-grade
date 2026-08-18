@@ -182,6 +182,7 @@ type Evaluation {
   generalFeedback: String!
   detailedFeedback: JSON!
   aiModelUsed: String
+  origin: EvaluationOrigin!
   status: EvaluationStatus!
   createdAt: DateTime!
   submission: Submission!
@@ -192,6 +193,12 @@ type Evaluation {
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
 scalar JSON
+
+"""Origin of an evaluation draft"""
+enum EvaluationOrigin {
+  AI
+  MANUAL
+}
 
 """Publicaton status of an evaluation"""
 enum EvaluationStatus {
@@ -300,6 +307,7 @@ type Mutation {
   createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
   retrySubmissionGrading(id: ID!): Submission!
   publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
+  createManualEvaluationDraft(input: CreateManualEvaluationInput!): Evaluation!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
   updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!
   removeCriterion(id: String!): Criterion!
@@ -491,6 +499,20 @@ input UpdateEvaluationInput {
   generalFeedback: String
 
   """Retroalimentación detallada"""
+  detailedFeedback: JSON
+}
+
+input CreateManualEvaluationInput {
+  """Submission ID"""
+  submissionId: ID!
+
+  """Initial manual score"""
+  totalScore: Float!
+
+  """Initial manual feedback"""
+  generalFeedback: String!
+
+  """Optional criterion feedback"""
   detailedFeedback: JSON
 }
 

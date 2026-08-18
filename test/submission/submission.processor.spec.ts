@@ -1,5 +1,5 @@
 import { SubmissionProcessor } from 'src/submission/submission.processor';
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationOrigin, SubmissionStatus } from 'src/enums';
 
 describe('SubmissionProcessor', () => {
   const submissionRepository = {
@@ -47,6 +47,7 @@ describe('SubmissionProcessor', () => {
     evaluationService.createDraft.mockResolvedValue({
       id: 'evaluation-id',
       totalScore: 8,
+      origin: EvaluationOrigin.AI,
     });
     submissionRepository.increment.mockResolvedValue(undefined);
     submissionRepository.update.mockResolvedValue({ affected: 1 });
@@ -111,5 +112,35 @@ describe('SubmissionProcessor', () => {
       gradingFailureReason: null,
       gradingLastAttemptAt: expect.any(Date),
     });
+  });
+
+  it('stops before invoking AI when a manual draft appears during extraction', async () => {
+    submissionRepository.findOne.mockResolvedValueOnce(submission).mockResolvedValueOnce({
+      ...submission,
+      evaluation: { id: 'manual-id', totalScore: 4, origin: EvaluationOrigin.MANUAL },
+    });
+
+    await expect(processor.process(job as never)).resolves.toEqual({
+      evaluationId: 'manual-id',
+      score: 4,
+      status: 'DRAFT_ALREADY_EXISTS',
+    });
+    expect(aiService.evaluateSubmission).not.toHaveBeenCalled();
+    expect(notificationsGateway.notifyStudent).not.toHaveBeenCalled();
+  });
+
+  it('does not announce an AI draft when manual grading wins the creation race', async () => {
+    evaluationService.createDraft.mockResolvedValue({
+      id: 'manual-id',
+      totalScore: 4,
+      origin: EvaluationOrigin.MANUAL,
+    });
+
+    await expect(processor.process(job as never)).resolves.toEqual({
+      evaluationId: 'manual-id',
+      score: 4,
+      status: 'DRAFT_ALREADY_EXISTS',
+    });
+    expect(notificationsGateway.notifyStudent).not.toHaveBeenCalled();
   });
 });

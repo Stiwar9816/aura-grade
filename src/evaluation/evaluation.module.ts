@@ -5,11 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Evaluation } from './entities/evaluation.entity';
 import { SubmissionModule } from 'src/submission/submission.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   providers: [EvaluationResolver, EvaluationService],
   imports: [
     TypeOrmModule.forFeature([Evaluation]),
+    BullModule.registerQueue({ name: 'grading' }),
     NotificationsModule,
     forwardRef(() => SubmissionModule),
   ],

@@ -16,7 +16,7 @@ import { GraphQLJSON } from 'graphql-type-json';
 import type { Submission } from 'src/submission/entities/submission.entity';
 import type { ReEvaluationRequest } from 'src/reevaluation/entities/reevaluation-request.entity';
 // Enums
-import { EvaluationStatus } from 'src/enums';
+import { EvaluationOrigin, EvaluationStatus } from 'src/enums';
 
 @Entity({ name: 'evaluations' })
 @ObjectType()
@@ -66,6 +66,19 @@ export class Evaluation {
   @Column({ type: 'text', nullable: true })
   @Field(() => String, { nullable: true })
   aiModelUsed?: string;
+
+  @ApiProperty({
+    example: EvaluationOrigin.AI,
+    description: 'Origin of the evaluation draft',
+    enum: EvaluationOrigin,
+  })
+  @Column({
+    type: 'enum',
+    enum: EvaluationOrigin,
+    default: EvaluationOrigin.AI,
+  })
+  @Field(() => EvaluationOrigin)
+  origin: EvaluationOrigin;
 
   @ApiProperty({
     example: 'DRAFT',
