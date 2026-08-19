@@ -7,7 +7,7 @@ describe('LoginUserDto', () => {
   beforeEach(() => {
     loginUserDto = new LoginUserDto();
     loginUserDto.email = 'john.doe@example.com';
-    loginUserDto.password = 'Password123';
+    loginUserDto.password = 'legacy-password';
   });
 
   it('should pass validation with valid data', async () => {
@@ -47,36 +47,22 @@ describe('LoginUserDto', () => {
   });
 
   describe('password validation', () => {
-    it('should fail if password is too short', async () => {
+    it('should accept a short legacy password at login', async () => {
       loginUserDto.password = 'Abc1';
       const errors = await validate(loginUserDto);
-      expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.property === 'password')).toBe(true);
+      expect(errors.length).toBe(0);
     });
 
     it('should fail if password is too long', async () => {
-      loginUserDto.password = 'A'.repeat(31) + 'bc123';
+      loginUserDto.password = 'A'.repeat(129);
       const errors = await validate(loginUserDto);
       expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('should fail if password has no uppercase letter', async () => {
+    it('should not impose composition rules during login', async () => {
       loginUserDto.password = 'password123';
       const errors = await validate(loginUserDto);
-      expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.property === 'password')).toBe(true);
-    });
-
-    it('should fail if password has no lowercase letter', async () => {
-      loginUserDto.password = 'PASSWORD123';
-      const errors = await validate(loginUserDto);
-      expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it('should fail if password has no number or special character', async () => {
-      loginUserDto.password = 'PasswordOnly';
-      const errors = await validate(loginUserDto);
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.length).toBe(0);
     });
 
     it('should fail if password is empty', async () => {
@@ -86,7 +72,7 @@ describe('LoginUserDto', () => {
     });
 
     it('should pass with valid password formats', async () => {
-      const validPasswords = ['Password123', 'MyP@ssw0rd', 'Secure123!', 'Test@123'];
+      const validPasswords = ['legacy', 'frase con espacios', 'Password123!'];
 
       for (const password of validPasswords) {
         loginUserDto.password = password;

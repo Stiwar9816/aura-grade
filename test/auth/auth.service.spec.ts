@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   BadRequestException,
   ForbiddenException,
@@ -16,6 +15,8 @@ import { CreateUserDto, LoginUserDto } from 'src/auth/dto';
 import { DocumentType, UserRoles } from 'src/auth/enums';
 import { SessionService } from 'src/auth/session';
 import { AuthAttemptService } from 'src/auth/security';
+import { PasswordService } from 'src/auth/security';
+import { TwoFactorService } from 'src/auth/two-factor';
 import { AuthMetricsService } from 'src/observability';
 import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
 
@@ -29,9 +30,6 @@ describe('AuthService', () => {
     updatedAt: new Date(),
   };
   let service: AuthService;
-  let authRepository: Repository<User>;
-  let mailService: MailService;
-  let jwtService: JwtService;
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -59,6 +57,7 @@ describe('AuthService', () => {
     findOne: jest.fn(),
     findOneBy: jest.fn(),
     increment: jest.fn(),
+    update: jest.fn(),
   };
 
   const mockMailService = {
@@ -78,6 +77,16 @@ describe('AuthService', () => {
   const mockAuthAttempts = {
     registerFailure: jest.fn(),
     clear: jest.fn(),
+  };
+  const mockPasswordService = {
+    hash: jest.fn(),
+    verify: jest.fn(),
+    needsRehash: jest.fn(),
+  };
+  const mockTwoFactorService = {
+    requiresTwoFactor: jest.fn(),
+    createChallenge: jest.fn(),
+    verifyChallenge: jest.fn(),
   };
   const mockMetrics = {
     increment: jest.fn(),
@@ -128,16 +137,25 @@ describe('AuthService', () => {
           provide: InstitutionService,
           useValue: mockInstitutionService,
         },
+        {
+          provide: PasswordService,
+          useValue: mockPasswordService,
+        },
+        {
+          provide: TwoFactorService,
+          useValue: mockTwoFactorService,
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    authRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    mailService = module.get<MailService>(MailService);
-    jwtService = module.get<JwtService>(JwtService);
 
     jest.clearAllMocks();
     mockInstitutionService.findActiveById.mockResolvedValue(mockInstitution);
+    mockPasswordService.hash.mockResolvedValue('scrypt-hash');
+    mockPasswordService.verify.mockResolvedValue(true);
+    mockPasswordService.needsRehash.mockReturnValue(false);
+    mockTwoFactorService.requiresTwoFactor.mockReturnValue(false);
   });
 
   it('should be defined', () => {
@@ -172,7 +190,7 @@ describe('AuthService', () => {
       };
 
       const hashedPassword = 'hashedPassword123';
-      jest.spyOn(bcrypt, 'hashSync').mockReturnValue(hashedPassword as never);
+      mockPasswordService.hash.mockResolvedValue(hashedPassword);
 
       const createdUser = { ...mockUser, password: hashedPassword };
       mockAuthRepository.create.mockReturnValue(createdUser);
@@ -309,7 +327,6 @@ describe('AuthService', () => {
 
       const userWithPassword = { ...mockUser, password: bcrypt.hashSync('Password123', 12) };
       mockAuthRepository.findOne.mockResolvedValue(userWithPassword);
-      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
       mockSessionService.create.mockResolvedValue({
         sessionToken: 'opaque-token',
         expiresAt: '2026-07-26T00:00:00.000Z',
@@ -334,12 +351,15 @@ describe('AuthService', () => {
           isActive: true,
           authVersion: true,
           isPlatformAdmin: true,
+          twoFactorSecretEncrypted: true,
+          twoFactorEnabledAt: true,
+          twoFactorLastCounter: true,
         },
         relations: ['courses', 'assignments', 'institution'],
       });
-      expect(result).toHaveProperty('token');
-      expect(result.token).toBe(result.sessionToken);
-      expect(result.user.password).toBeUndefined();
+      expect(result).not.toHaveProperty('token');
+      expect(result).toHaveProperty('sessionToken', 'opaque-token');
+      expect('user' in result && result.user.password).toBeUndefined();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -373,7 +393,7 @@ describe('AuthService', () => {
 
       const userWithPassword = { ...mockUser, password: bcrypt.hashSync('Password123', 12) };
       mockAuthRepository.findOne.mockResolvedValue(userWithPassword);
-      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(false as never);
+      mockPasswordService.verify.mockResolvedValue(false);
 
       await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
@@ -390,7 +410,6 @@ describe('AuthService', () => {
         password: bcrypt.hashSync('Password123', 12),
       };
       mockAuthRepository.findOne.mockResolvedValue(inactiveUser);
-      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
 
       await expect(service.login(loginUserDto)).rejects.toThrow(UnauthorizedException);
     });
@@ -402,7 +421,6 @@ describe('AuthService', () => {
         password: bcrypt.hashSync('Password123', 12),
       };
       mockAuthRepository.findOne.mockResolvedValue(pendingUser);
-      jest.spyOn(bcrypt, 'compareSync').mockReturnValue(true as never);
 
       await expect(
         service.login({
@@ -411,6 +429,78 @@ describe('AuthService', () => {
         })
       ).rejects.toThrow(ForbiddenException);
       expect(mockSessionService.create).not.toHaveBeenCalled();
+    });
+
+    it('requires TOTP for an administrator and does not create a session after password only', async () => {
+      const administrator = {
+        ...mockUser,
+        role: UserRoles.Administrador,
+        password: 'legacy-hash',
+      };
+      const challenge = {
+        challengeToken: 'opaque-challenge',
+        expiresAt: '2026-08-18T20:00:00.000Z',
+        requiresTwoFactor: true as const,
+        requiresTwoFactorSetup: false,
+      };
+      mockAuthRepository.findOne.mockResolvedValue(administrator);
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+      mockTwoFactorService.createChallenge.mockResolvedValue(challenge);
+
+      const result = await service.login({
+        email: administrator.email,
+        password: 'Password123',
+        rememberMe: true,
+      });
+
+      expect(result).toEqual(challenge);
+      expect(mockTwoFactorService.createChallenge).toHaveBeenCalledWith(administrator, true);
+      expect(mockSessionService.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyOtp', () => {
+    it('creates the opaque session only after the second factor succeeds', async () => {
+      const administrator = { ...mockUser, role: UserRoles.Administrador };
+      mockTwoFactorService.verifyChallenge.mockResolvedValue({
+        rememberMe: true,
+        user: administrator,
+      });
+      mockSessionService.create.mockResolvedValue({
+        sessionToken: 'opaque-token',
+        expiresAt: '2026-08-19T00:00:00.000Z',
+      });
+
+      const result = await service.verifyOtp({
+        challengeToken: 'challenge-token-with-at-least-32-characters',
+        otp: '123456',
+      });
+
+      expect(mockSessionService.create).toHaveBeenCalledWith(administrator, true, 'mfa');
+      expect(result).toEqual(
+        expect.objectContaining({ sessionToken: 'opaque-token', rememberMe: true })
+      );
+      expect(result).not.toHaveProperty('token');
+    });
+  });
+
+  describe('logoutAllForUser', () => {
+    it('prevents an institutional administrator from revoking another institution', async () => {
+      const administrator = {
+        ...mockUser,
+        id: '54fd7dcb-cac6-4f7d-a279-c7792a16e3fd',
+        role: UserRoles.Administrador,
+      } as User;
+      mockAuthRepository.findOneBy.mockResolvedValue({
+        ...mockUser,
+        institutionId: '2d65e30f-eb21-427a-a98c-cc0e169ee8f7',
+      });
+
+      await expect(service.logoutAllForUser(mockUser.id, administrator)).rejects.toThrow(
+        ForbiddenException
+      );
+      expect(mockAuthRepository.increment).not.toHaveBeenCalled();
+      expect(mockSessionService.revokeAll).not.toHaveBeenCalled();
     });
   });
 

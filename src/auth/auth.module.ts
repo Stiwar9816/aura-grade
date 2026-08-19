@@ -19,11 +19,21 @@ import { MailModule } from 'src/mail/mail.module';
 import { SessionService } from './session';
 import { AuthAttemptService } from './security';
 import { InstitutionModule } from 'src/institution';
+import { PasswordService } from './security';
+import { TwoFactorService } from './two-factor';
 
 @Global()
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, SessionService, AuthAttemptService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    SessionService,
+    AuthAttemptService,
+    PasswordService,
+    TwoFactorService,
+  ],
   exports: [
     TypeOrmModule,
     JwtStrategy,
@@ -33,6 +43,8 @@ import { InstitutionModule } from 'src/institution';
     AuthService,
     SessionService,
     AuthAttemptService,
+    PasswordService,
+    TwoFactorService,
   ],
   imports: [
     ConfigModule,

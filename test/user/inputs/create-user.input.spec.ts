@@ -14,7 +14,7 @@ describe('CreateUserInput', () => {
     createUserInput.document_num = 123456789;
     createUserInput.phone = 3001234567;
     createUserInput.email = 'john.doe@example.com';
-    createUserInput.password = 'Password123';
+    createUserInput.password = 'una frase larga y privada';
     createUserInput.role = UserRoles.Estudiante;
   });
 
@@ -143,32 +143,30 @@ describe('CreateUserInput', () => {
     });
 
     it('should fail if password is too long', async () => {
-      createUserInput.password = 'A'.repeat(31) + 'bc123';
+      createUserInput.password = 'A'.repeat(129);
       const errors = await validate(createUserInput);
       expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('should fail if password has no uppercase letter', async () => {
-      createUserInput.password = 'password123';
+    it('should reject a common password', async () => {
+      createUserInput.password = 'password123456!';
       const errors = await validate(createUserInput);
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.property === 'password')).toBe(true);
     });
 
-    it('should fail if password has no lowercase letter', async () => {
-      createUserInput.password = 'PASSWORD123';
+    it('should allow a long lowercase passphrase', async () => {
+      createUserInput.password = 'esta es una frase privada';
       const errors = await validate(createUserInput);
-      expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it('should fail if password has no number or special character', async () => {
-      createUserInput.password = 'PasswordOnly';
-      const errors = await validate(createUserInput);
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.length).toBe(0);
     });
 
     it('should pass with valid password formats', async () => {
-      const validPasswords = ['Password123', 'MyP@ssw0rd', 'Secure123!', 'Test@123'];
+      const validPasswords = [
+        'correct horse battery staple',
+        'una frase única con espacios',
+        '🔐 contraseña extensa y privada',
+      ];
 
       for (const password of validPasswords) {
         createUserInput.password = password;

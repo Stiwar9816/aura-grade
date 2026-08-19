@@ -7,6 +7,9 @@ type CounterName =
   | 'auth_session_invalid_total'
   | 'auth_session_revoked_total'
   | 'auth_redis_error_total'
+  | 'auth_otp_challenge_total'
+  | 'auth_otp_success_total'
+  | 'auth_otp_failure_total'
   | 'audit_enqueued_total'
   | 'audit_persisted_total'
   | 'audit_duplicate_total'
@@ -37,6 +40,9 @@ const COUNTERS: CounterName[] = [
   'auth_session_invalid_total',
   'auth_session_revoked_total',
   'auth_redis_error_total',
+  'auth_otp_challenge_total',
+  'auth_otp_success_total',
+  'auth_otp_failure_total',
   'audit_enqueued_total',
   'audit_persisted_total',
   'audit_duplicate_total',

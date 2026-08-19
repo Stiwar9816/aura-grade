@@ -127,13 +127,13 @@ describe('UpdateUserInput', () => {
     });
 
     it('should fail if password is too long', async () => {
-      updateUserInput.password = 'A'.repeat(31) + 'bc123';
+      updateUserInput.password = 'A'.repeat(129);
       const errors = await validate(updateUserInput);
       expect(errors.length).toBeGreaterThan(0);
     });
 
     it('should pass with valid password', async () => {
-      updateUserInput.password = 'NewPassword123';
+      updateUserInput.password = 'Nueva frase segura y unica 2026';
       const errors = await validate(updateUserInput);
       expect(errors.length).toBe(0);
     });

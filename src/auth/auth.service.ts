@@ -14,10 +14,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 // Entities
 import { User } from '../user/entities/user.entity';
-// Bcrypt
-import * as bcrypt from 'bcryptjs';
 // DTO
-import { CreateUserDto, LoginUserDto } from './dto';
+import { CreateUserDto, LoginUserDto, VerifyOtpDto } from './dto';
 import { UserRoles } from './enums';
 // Interfaces
 import { JwtPayload } from './interface/jwt-payload.interface';
@@ -26,9 +24,10 @@ import { MailService } from 'src/mail/mail.service';
 import { SessionService } from './session';
 import { Logger } from '@nestjs/common';
 import { AuthMetricsService } from '../observability';
-import { AuthAttemptService } from './security';
+import { AuthAttemptService, PasswordService } from './security';
 import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
 import { randomPassword } from './common';
+import { TwoFactorService } from './two-factor';
 
 @Injectable()
 export class AuthService {
@@ -44,7 +43,9 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly authAttempts: AuthAttemptService,
     private readonly metrics: AuthMetricsService,
-    private readonly institutionService: InstitutionService
+    private readonly institutionService: InstitutionService,
+    private readonly passwordService: PasswordService,
+    private readonly twoFactorService: TwoFactorService
   ) {}
 
   getToken(payload: JwtPayload) {
@@ -66,7 +67,7 @@ export class AuthService {
       institutionId: institution.id,
       institution,
       approvalStatus: InstitutionApprovalStatus.PENDING,
-      password: bcrypt.hashSync(password, 12),
+      password: await this.passwordService.hash(password),
     });
 
     // Convertir IDs (string[]) → [{ id }, { id }, ...]
@@ -107,11 +108,14 @@ export class AuthService {
         isActive: true,
         authVersion: true,
         isPlatformAdmin: true,
+        twoFactorSecretEncrypted: true,
+        twoFactorEnabledAt: true,
+        twoFactorLastCounter: true,
       },
       relations: ['courses', 'assignments', 'institution'],
     });
 
-    const passwordMatches = bcrypt.compareSync(
+    const passwordMatches = await this.passwordService.verify(
       password,
       user?.password ?? AuthService.DUMMY_PASSWORD_HASH
     );
@@ -135,24 +139,47 @@ export class AuthService {
           : 'Tu cuenta está pendiente de aprobación institucional.'
       );
     }
-    delete user.password;
-
     await this.authAttempts.clear(clientIdentity);
+    if (this.passwordService.needsRehash(user.password)) {
+      await this.authRepository.update(user.id, {
+        password: await this.passwordService.hash(password),
+      });
+      this.logger.log(`El hash de contraseña del usuario ${user.id} fue actualizado a scrypt.`);
+    }
+
+    if (this.twoFactorService.requiresTwoFactor(user)) {
+      const challenge = await this.twoFactorService.createChallenge(user, rememberMe);
+      this.metrics.increment('auth_otp_challenge_total');
+      this.logger.log(`Segundo factor requerido para el usuario administrativo ${user.id}.`);
+      return challenge;
+    }
+
+    this.sanitizeUser(user);
     const session = await this.sessionService.create(user, rememberMe);
     this.metrics.increment('auth_login_success_total');
     this.logger.log(`Autenticación exitosa para el usuario ${user.id}.`);
-    return this.authResponse(user, session);
+    return { ...this.authResponse(user, session), rememberMe };
   }
 
-  async forgotPassword(email: string): Promise<User> {
+  async verifyOtp({ challengeToken, otp }: VerifyOtpDto) {
+    const { rememberMe, user } = await this.twoFactorService.verifyChallenge(challengeToken, otp);
+    const session = await this.sessionService.create(user, rememberMe, 'mfa');
+    this.metrics.increment('auth_login_success_total');
+    this.logger.log(`Segundo factor validado y sesión creada para el usuario ${user.id}.`);
+    return { ...this.authResponse(user, session), rememberMe };
+  }
+
+  async forgotPassword(email: string): Promise<User | undefined> {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await this.authRepository.findOne({ where: { email: normalizedEmail } });
-    if (!user)
-      throw new NotFoundException(`No se encontró un usuario con el correo ${normalizedEmail}.`);
+    if (!user) {
+      await this.passwordService.verify(randomPassword(), AuthService.DUMMY_PASSWORD_HASH);
+      return undefined;
+    }
 
     const newPassword = randomPassword();
     await this.mailService.sendResetPassword(user, newPassword);
-    user.password = bcrypt.hashSync(newPassword, 10);
+    user.password = await this.passwordService.hash(newPassword);
     user.authVersion = (user.authVersion ?? 1) + 1;
     const savedUser = await this.authRepository.save(user);
     this.logger.log(
@@ -174,7 +201,7 @@ export class AuthService {
     )
       throw new UnauthorizedException('El usuario está inactivo. Comunícate con un administrador.');
 
-    delete user.password;
+    this.sanitizeUser(user);
     return user;
   }
 
@@ -190,7 +217,7 @@ export class AuthService {
       !currentUser.institution?.isActive
     )
       throw new UnauthorizedException('Sesión inválida o expirada.');
-    delete currentUser.password;
+    this.sanitizeUser(currentUser);
     return { user: currentUser };
   }
 
@@ -203,9 +230,28 @@ export class AuthService {
     return this.logoutAllForUser(user.id);
   }
 
-  async logoutAllForUser(userId: string): Promise<{ success: true; revokedSessions: number }> {
+  async logoutAllForUser(
+    userId: string,
+    actor?: User
+  ): Promise<{ success: true; revokedSessions: number }> {
     const target = await this.authRepository.findOneBy({ id: userId });
     if (!target) throw new NotFoundException('Usuario no encontrado.');
+    if (
+      actor &&
+      actor.id !== target.id &&
+      !actor.isPlatformAdmin &&
+      actor.institutionId !== target.institutionId
+    )
+      throw new ForbiddenException('No puedes revocar sesiones de otra institución.');
+    if (
+      actor &&
+      actor.id !== target.id &&
+      !actor.isPlatformAdmin &&
+      target.role === UserRoles.Administrador
+    )
+      throw new ForbiddenException(
+        'Solo un administrador de plataforma puede revocar otro administrador.'
+      );
     await this.authRepository.increment({ id: userId }, 'authVersion', 1);
     const revokedSessions = await this.sessionService.revokeAll(userId);
     this.logger.log(`Se revocaron todas las sesiones del usuario ${userId}.`);
@@ -216,9 +262,14 @@ export class AuthService {
     return {
       user,
       sessionToken: session.sessionToken,
-      token: session.sessionToken,
       expiresAt: session.expiresAt,
     };
+  }
+
+  private sanitizeUser(user: User): void {
+    delete user.password;
+    delete user.twoFactorSecretEncrypted;
+    delete user.twoFactorLastCounter;
   }
 
   private handleDBException(error: any): never {

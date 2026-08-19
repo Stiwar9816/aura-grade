@@ -1,4 +1,5 @@
 export interface StoredSession {
+  authenticationLevel: 'mfa' | 'password';
   userId: string;
   createdAt: number;
   lastActivityAt: number;

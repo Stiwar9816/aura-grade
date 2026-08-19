@@ -10,14 +10,11 @@ import {
   IsPositive,
   IsString,
   IsUUID,
-  Matches,
-  MaxLength,
-  MinLength,
 } from 'class-validator';
 import { DocumentType } from '../enums/user-document-type.enum';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRoles } from '../enums';
-import { Course } from 'src/course/entities/course.entity';
+import { IsStrongPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../security';
 
 @InputType({
   description: 'Inputs user register',
@@ -88,18 +85,13 @@ export class CreateUserDto {
   @ApiProperty({
     description: 'Contraseña del usuario',
     nullable: false,
-    minLength: 6,
-    maxLength: 30,
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
   })
   @IsString()
-  @MinLength(6)
-  @MaxLength(30)
-  @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'La contraseña debe incluir mayúsculas, minúsculas y números.',
-  })
+  @IsStrongPassword()
   @Field(() => String, {
-    description:
-      'Contraseña de usuario: mínimo 6 caracteres e incluye mayúsculas, minúsculas y un número',
+    description: `Contraseña o frase única de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
   })
   password: string;
 

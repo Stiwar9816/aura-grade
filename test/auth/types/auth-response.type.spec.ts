@@ -35,7 +35,7 @@ describe('AuthResponde Type', () => {
     };
 
     authResponse = new AuthResponde();
-    authResponse.token = 'mock-jwt-token-123';
+    authResponse.sessionToken = 'opaque-session-token-123';
     authResponse.user = mockUser;
   });
 
@@ -44,9 +44,9 @@ describe('AuthResponde Type', () => {
   });
 
   describe('Properties', () => {
-    it('should have token property', () => {
-      expect(authResponse.token).toBeDefined();
-      expect(typeof authResponse.token).toBe('string');
+    it('should have sessionToken property', () => {
+      expect(authResponse.sessionToken).toBeDefined();
+      expect(typeof authResponse.sessionToken).toBe('string');
     });
 
     it('should have user property', () => {
@@ -54,9 +54,9 @@ describe('AuthResponde Type', () => {
       expect(authResponse.user).toBeInstanceOf(Object);
     });
 
-    it('should contain valid JWT token', () => {
-      expect(authResponse.token).toBe('mock-jwt-token-123');
-      expect(authResponse.token.length).toBeGreaterThan(0);
+    it('should contain an opaque session token', () => {
+      expect(authResponse.sessionToken).toBe('opaque-session-token-123');
+      expect(authResponse.sessionToken.length).toBeGreaterThan(0);
     });
 
     it('should contain user object with all properties', () => {
@@ -70,28 +70,28 @@ describe('AuthResponde Type', () => {
 
   describe('Response Structure', () => {
     it('should match expected auth response structure', () => {
-      expect(authResponse).toHaveProperty('token');
+      expect(authResponse).toHaveProperty('sessionToken');
       expect(authResponse).toHaveProperty('user');
     });
 
     it('should be usable for login response', () => {
       const loginResponse = {
-        token: 'login-token',
+        sessionToken: 'login-session-token',
         user: mockUser,
       };
 
-      expect(loginResponse).toHaveProperty('token');
+      expect(loginResponse).toHaveProperty('sessionToken');
       expect(loginResponse).toHaveProperty('user');
       expect(loginResponse.user).toBe(mockUser);
     });
 
     it('should be usable for signup response', () => {
       const signupResponse = {
-        token: 'signup-token',
+        sessionToken: 'signup-session-token',
         user: mockUser,
       };
 
-      expect(signupResponse).toHaveProperty('token');
+      expect(signupResponse).toHaveProperty('sessionToken');
       expect(signupResponse).toHaveProperty('user');
       expect(signupResponse.user).toBe(mockUser);
     });

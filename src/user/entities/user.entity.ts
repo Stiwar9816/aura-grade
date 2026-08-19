@@ -151,6 +151,17 @@ export class User {
   @Field(() => Boolean)
   isPlatformAdmin: boolean;
 
+  @Column({ name: 'two_factor_secret_encrypted', type: 'text', nullable: true, select: false })
+  @HideField()
+  twoFactorSecretEncrypted?: string | null;
+
+  @Column({ name: 'two_factor_enabled_at', type: 'timestamp with time zone', nullable: true })
+  twoFactorEnabledAt?: Date | null;
+
+  @Column({ name: 'two_factor_last_counter', type: 'bigint', nullable: true, select: false })
+  @HideField()
+  twoFactorLastCounter?: string | null;
+
   @Column({ name: 'email_notifications_enabled', type: 'boolean', default: true })
   emailNotificationsEnabled?: boolean;
 

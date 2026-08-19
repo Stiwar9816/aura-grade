@@ -18,7 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 // Services
 import { AuthService } from './auth.service';
 // Dto
-import { CreateUserDto, ForgotPasswordDto, LoginUserDto, AuthResponse } from './dto';
+import { CreateUserDto, ForgotPasswordDto, LoginUserDto, AuthResponse, VerifyOtpDto } from './dto';
 // Entities
 import { User } from 'src/user/entities/user.entity';
 // Swagger
@@ -34,6 +34,7 @@ import {
 import { JwtAuthGuard } from './guards';
 import { CurrentUser } from './decorators';
 import { UserRoles } from './enums';
+import { trustedClientIp } from 'src/common/security';
 
 interface AuthenticatedRequest extends Request {
   user: User;
@@ -69,8 +70,16 @@ export class AuthController {
   @ApiInternalServerErrorResponse({ description: 'Error interno del servidor.' })
   // End - Doc API
   login(@Body() loginUserDto: LoginUserDto, @Req() request: Request) {
-    const identity = `${request.ip}:${loginUserDto.email.toLowerCase().trim()}`;
+    const identity = `${trustedClientIp(request)}:${loginUserDto.email.toLowerCase().trim()}`;
     return this.authService.login(loginUserDto, identity);
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 5, ttl: 5 * 60 * 1000 } })
+  @ApiOkResponse({ description: 'Segundo factor validado.', type: AuthResponse })
+  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto);
   }
 
   @Post('forgot-password')
@@ -113,8 +122,8 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   revokeUserSessions(
     @Param('userId', ParseUUIDPipe) userId: string,
-    @CurrentUser([UserRoles.Administrador]) _administrator: User
+    @CurrentUser([UserRoles.Administrador]) administrator: User
   ) {
-    return this.authService.logoutAllForUser(userId);
+    return this.authService.logoutAllForUser(userId, administrator);
   }
 }

@@ -8,11 +8,11 @@ import { JwtAuthGuard } from 'src/auth/guards';
 describe('AuthController', () => {
   const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
   let controller: AuthController;
-  let authService: AuthService;
 
   const mockAuthService = {
     register: jest.fn(),
     login: jest.fn(),
+    verifyOtp: jest.fn(),
     forgotPassword: jest.fn(),
   };
 
@@ -53,7 +53,6 @@ describe('AuthController', () => {
       .compile();
 
     controller = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
 
     jest.clearAllMocks();
   });
@@ -154,6 +153,19 @@ describe('AuthController', () => {
       expect(result).toEqual({
         message: 'Revisa tu correo para continuar con el restablecimiento de contraseña.',
       });
+    });
+  });
+
+  describe('verifyOtp', () => {
+    it('delegates the opaque challenge and one-time code', async () => {
+      const input = {
+        challengeToken: 'challenge-token-with-at-least-32-characters',
+        otp: '123456',
+      };
+      mockAuthService.verifyOtp.mockResolvedValue(mockLoginResponse);
+
+      await expect(controller.verifyOtp(input)).resolves.toEqual(mockLoginResponse);
+      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(input);
     });
   });
 });

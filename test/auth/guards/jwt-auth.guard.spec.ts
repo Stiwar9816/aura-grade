@@ -1,6 +1,8 @@
-import { ExecutionContext } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { UserRoles } from 'src/auth/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
@@ -59,5 +61,32 @@ describe('JwtAuthGuard', () => {
 
       expect(result.headers.authorization).toBe('Bearer test-token-123');
     });
+  });
+
+  it('never accepts a legacy JWT for an administrator', async () => {
+    const request = { headers: { authorization: 'Bearer header.payload.signature' } };
+    const context = {
+      getType: jest.fn().mockReturnValue('http'),
+      switchToHttp: jest.fn().mockReturnValue({ getRequest: () => request }),
+    } as any;
+    const jwtService = { verifyAsync: jest.fn().mockResolvedValue({ id: 'admin-id' }) };
+    const repository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'admin-id',
+        isActive: true,
+        isPlatformAdmin: false,
+        role: UserRoles.Administrador,
+        approvalStatus: InstitutionApprovalStatus.APPROVED,
+        institution: { isActive: true },
+      }),
+    };
+    guard = new JwtAuthGuard(
+      {} as any,
+      jwtService as any,
+      { get: jest.fn().mockReturnValue(true) } as any,
+      repository as any
+    );
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

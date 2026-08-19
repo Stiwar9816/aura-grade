@@ -203,12 +203,12 @@ describe('UserResolver', () => {
   describe('resetPassword', () => {
     it('should reset password for a user', async () => {
       const email = 'john.doe@example.com';
-      mockUserService.resetPassword.mockResolvedValue(mockUser);
+      mockUserService.resetPassword.mockResolvedValue(true);
 
       const result = await resolver.resetPassword(email);
 
       expect(mockUserService.resetPassword).toHaveBeenCalledWith(email);
-      expect(result).toEqual(mockUser);
+      expect(result).toBe(true);
     });
   });
 
@@ -217,7 +217,7 @@ describe('UserResolver', () => {
       const newPassword = 'NewPassword123';
       mockUserService.resetPasswordAuth.mockResolvedValue(mockUser);
 
-      const result = await resolver.resetPasswordAuth(newPassword, mockUser);
+      const result = await resolver.resetPasswordAuth({ newPassword }, mockUser);
 
       expect(mockUserService.resetPasswordAuth).toHaveBeenCalledWith(newPassword, mockUser);
       expect(result).toEqual(mockUser);

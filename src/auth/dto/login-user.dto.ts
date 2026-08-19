@@ -1,13 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsBoolean,
-  IsEmail,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class LoginUserDto {
   @ApiProperty({
@@ -22,15 +14,12 @@ export class LoginUserDto {
   @ApiProperty({
     description: 'Contraseña del usuario',
     nullable: false,
-    minLength: 6,
-    maxLength: 30,
+    minLength: 1,
+    maxLength: 128,
   })
   @IsString()
-  @MinLength(6)
-  @MaxLength(30)
-  @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'La contraseña debe incluir mayúsculas, minúsculas y números.',
-  })
+  @MinLength(1)
+  @MaxLength(128)
   password: string;
 
   @ApiProperty({

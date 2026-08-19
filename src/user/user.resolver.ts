@@ -20,6 +20,7 @@ import { UserService } from './user.service';
 // Dto
 import {
   AssignCoursesInput,
+  ChangePasswordInput,
   ReviewInstitutionUserInput,
   UpdateOwnProfileInput,
   UpdateUserInput,
@@ -138,13 +139,13 @@ export class UserResolver {
     return this.userService.block(id, administrator);
   }
 
-  @Mutation(() => User, {
+  @Mutation(() => Boolean, {
     name: 'resetPassword',
     description: 'Reset password user',
   })
   @UseGuards(NoAuthAuthGuard)
   @Throttle({ short: { limit: 3, ttl: 15 * 60 * 1000 } })
-  resetPassword(@Args('resetPassword', { type: () => String }) email: string): Promise<User> {
+  resetPassword(@Args('resetPassword', { type: () => String }) email: string): Promise<boolean> {
     return this.userService.resetPassword(email);
   }
 
@@ -154,10 +155,10 @@ export class UserResolver {
   })
   @UseGuards(JwtAuthGuard)
   resetPasswordAuth(
-    @Args('newPassword', { type: () => String }) password: string,
+    @Args('input') { newPassword }: ChangePasswordInput,
     @CurrentUser() user: User
   ): Promise<User> {
-    return this.userService.resetPasswordAuth(password, user);
+    return this.userService.resetPasswordAuth(newPassword, user);
   }
 
   @Mutation(() => User, {

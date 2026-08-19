@@ -10,6 +10,7 @@ import { User } from '../../user/entities/user.entity';
 import { JwtPayload } from '../interface/jwt-payload.interface';
 import { SessionService } from '../session';
 import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
+import { UserRoles } from '../enums';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -28,7 +29,7 @@ export class JwtAuthGuard implements CanActivate {
     if (this.looksLikeJwt(token)) {
       const acceptLegacyJwt = this.configService.get<boolean | string>(
         'AUTH_ACCEPT_LEGACY_JWT',
-        true
+        false
       );
       if (acceptLegacyJwt === false || acceptLegacyJwt === 'false')
         throw new UnauthorizedException('Sesión inválida o expirada.');
@@ -77,6 +78,8 @@ export class JwtAuthGuard implements CanActivate {
     if (
       !user ||
       !user.isActive ||
+      user.role === UserRoles.Administrador ||
+      user.isPlatformAdmin ||
       user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
       !user.institution?.isActive
     )

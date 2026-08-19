@@ -286,10 +286,10 @@ type Mutation {
   blockUser(id: String!): User!
 
   """Reset password user"""
-  resetPassword(resetPassword: String!): User!
+  resetPassword(resetPassword: String!): Boolean!
 
   """Reset password user authenticed"""
-  resetPasswordAuth(newPassword: String!): User!
+  resetPasswordAuth(input: ChangePasswordInput!): User!
 
   """Assign multiple courses to a user"""
   assignCoursesToUser(assignCoursesInput: AssignCoursesInput!): User!
@@ -339,9 +339,7 @@ input UpdateUserInput {
   """User Email"""
   email: String
 
-  """
-  Contraseña de usuario: mínimo 6 caracteres e incluye mayúsculas, minúsculas y un número
-  """
+  """Contraseña o frase única de 15 a 128 caracteres"""
   password: String
 
   """User roles wich can Administrator, User by default takes the user role"""
@@ -374,6 +372,11 @@ input UpdateOwnProfileInput {
 
   """User Email"""
   email: String
+}
+
+input ChangePasswordInput {
+  """Nueva contraseña o frase única de 15 a 128 caracteres"""
+  newPassword: String!
 }
 
 input AssignCoursesInput {

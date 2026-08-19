@@ -1,17 +1,8 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsEnum,
-  IsNotEmpty,
-  IsNumber,
-  IsPositive,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsNumber, IsPositive, IsString } from 'class-validator';
 import { DocumentType, UserRoles } from 'src/auth/enums';
+import { IsStrongPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from 'src/auth/security';
 
 @InputType()
 export class CreateUserInput {
@@ -80,18 +71,13 @@ export class CreateUserInput {
   @ApiProperty({
     description: 'Contraseña del usuario',
     nullable: false,
-    minLength: 6,
-    maxLength: 30,
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
   })
   @IsString()
-  @MinLength(6)
-  @MaxLength(30)
-  @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'La contraseña debe incluir mayúsculas, minúsculas y números.',
-  })
+  @IsStrongPassword()
   @Field(() => String, {
-    description:
-      'Contraseña de usuario: mínimo 6 caracteres e incluye mayúsculas, minúsculas y un número',
+    description: `Contraseña o frase única de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
   })
   password: string;
 

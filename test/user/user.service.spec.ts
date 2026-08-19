@@ -11,12 +11,12 @@ import { User } from 'src/user/entities/user.entity';
 import { Course } from 'src/course/entities/course.entity';
 import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
-import { JwtService } from '@nestjs/jwt';
 import { CreateUserInput } from 'src/user/dto/inputs/create-user.input';
 import { UpdateUserInput } from 'src/user/dto/inputs/update-user.input';
 import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { UserRoles } from 'src/auth/enums';
 import { InstitutionApprovalStatus } from 'src/institution';
+import { PasswordService } from 'src/auth/security';
 
 describe('UserService', () => {
   const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
@@ -75,8 +75,8 @@ describe('UserService', () => {
     forgotPassword: jest.fn(),
   };
 
-  const mockJwtService = {
-    verify: jest.fn(),
+  const mockPasswordService = {
+    hash: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -100,8 +100,8 @@ describe('UserService', () => {
           useValue: mockAuthService,
         },
         {
-          provide: JwtService,
-          useValue: mockJwtService,
+          provide: PasswordService,
+          useValue: mockPasswordService,
         },
       ],
     }).compile();
@@ -109,6 +109,7 @@ describe('UserService', () => {
     service = module.get<UserService>(UserService);
     // Clear all mocks before each test
     jest.clearAllMocks();
+    mockPasswordService.hash.mockResolvedValue('scrypt-hash');
   });
 
   it('should be defined', () => {
@@ -615,7 +616,7 @@ describe('UserService', () => {
       const result = await service.resetPassword(mockUser.email);
 
       expect(mockAuthService.forgotPassword).toHaveBeenCalledWith(mockUser.email);
-      expect(result).toEqual(mockUser);
+      expect(result).toBe(true);
     });
 
     it('should propagate recovery failures', async () => {

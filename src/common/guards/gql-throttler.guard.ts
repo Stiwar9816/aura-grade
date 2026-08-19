@@ -2,6 +2,7 @@ import { ExecutionContext, Injectable } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { createHash } from 'crypto';
+import { trustedClientIp } from '../security';
 
 @Injectable()
 export class GqlThrottlerGuard extends ThrottlerGuard {
@@ -9,10 +10,16 @@ export class GqlThrottlerGuard extends ThrottlerGuard {
     req: Record<string, any>,
     context?: ExecutionContext
   ): Promise<string> {
-    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const ip = trustedClientIp(req);
     const email =
       typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : undefined;
     if (context?.getHandler().name === 'login' && email) return `${ip}:${email}`;
+    if (context?.getHandler().name === 'forgotPassword' && email) return `${ip}:${email}`;
+    const challengeToken = req.body?.challengeToken;
+    if (context?.getHandler().name === 'verifyOtp' && typeof challengeToken === 'string') {
+      const challengeHash = createHash('sha256').update(challengeToken).digest('hex');
+      return `${ip}:${challengeHash}`;
+    }
     const recoveryEmail = req.body?.variables?.resetPassword;
     if (context?.getHandler().name === 'resetPassword' && typeof recoveryEmail === 'string')
       return `${ip}:${recoveryEmail.toLowerCase().trim()}`;

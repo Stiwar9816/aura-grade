@@ -8,14 +8,14 @@ import { User } from 'src/user/entities/user.entity';
         Scheme of how to expect the response from the Auth module of users of [ Signin & Signup ] 
         mutations and [ revalidateToken ] queries 
         { 
-            token, 
+            sessionToken,
             User[] 
         }
     `,
 })
 export class AuthResponde {
   @Field(() => String)
-  token: string;
+  sessionToken: string;
 
   @Field(() => User)
   user: User;

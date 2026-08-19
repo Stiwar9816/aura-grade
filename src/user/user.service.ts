@@ -9,12 +9,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 // TypeORM
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-// Bcrypt
-import * as bcrypt from 'bcryptjs';
 // Dto
 import {
   AssignCoursesInput,
@@ -31,6 +28,7 @@ import { MailService } from 'src/mail/mail.service';
 import { AuthService } from 'src/auth/auth.service';
 import { InstitutionApprovalStatus } from 'src/institution';
 import { UserRoles } from 'src/auth/enums';
+import { PasswordService } from 'src/auth/security';
 
 @Injectable()
 export class UserService {
@@ -42,14 +40,14 @@ export class UserService {
     private readonly mailService: MailService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
-    private readonly jwtService: JwtService,
+    private readonly passwordService: PasswordService,
     @InjectRepository(Course)
     private readonly courseRepository: Repository<Course>
   ) {}
   async create(createUserInput: CreateUserInput): Promise<User> {
     const user = this.userRepository.create(createUserInput);
     // Encrypt password
-    user.password = bcrypt.hashSync(user.password, 10);
+    user.password = await this.passwordService.hash(user.password);
     try {
       return await this.userRepository.save(user);
     } catch (error) {
@@ -207,7 +205,7 @@ export class UserService {
     if (mustInvalidateSessions) user.authVersion = (currentUser.authVersion ?? 1) + 1;
     if (password) {
       // Encrypt password
-      user.password = bcrypt.hashSync(password, 10);
+      user.password = await this.passwordService.hash(password);
       await this.mailService.sendUpdatePassword(user, password);
     }
 
@@ -245,14 +243,15 @@ export class UserService {
     return savedUser;
   }
 
-  async resetPassword(email: string): Promise<User> {
-    return this.authService.forgotPassword(email);
+  async resetPassword(email: string): Promise<boolean> {
+    await this.authService.forgotPassword(email);
+    return true;
   }
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
     const userFound = await this.findOneById(user.id);
     await this.mailService.sendUpdatePassword(userFound, password);
-    userFound.password = bcrypt.hashSync(password, 10);
+    userFound.password = await this.passwordService.hash(password);
     userFound.authVersion = (userFound.authVersion ?? 1) + 1;
     const savedUser = await this.userRepository.save(userFound);
     this.logger.log(`El cambio de contraseña invalidó las sesiones del usuario ${savedUser.id}.`);

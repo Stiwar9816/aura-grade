@@ -1,4 +1,4 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { SessionService } from 'src/auth/session';
@@ -105,6 +105,37 @@ describe('SessionService', () => {
       where: { id: user.id },
       relations: ['institution'],
     });
+  });
+
+  it('refuses to create an administrator session without MFA assurance', async () => {
+    const administrator = { ...user, role: UserRoles.Administrador } as User;
+
+    await expect(service.create(administrator)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(client.eval).not.toHaveBeenCalled();
+  });
+
+  it('creates and validates an administrator session after MFA', async () => {
+    const administrator = { ...user, role: UserRoles.Administrador } as User;
+    repository.findOne.mockResolvedValue(administrator);
+
+    const created = await service.create(administrator, false, 'mfa');
+
+    await expect(service.validate(created.sessionToken)).resolves.toEqual(
+      expect.objectContaining({ user: expect.objectContaining({ id: administrator.id }) })
+    );
+  });
+
+  it('invalidates an old administrator session without MFA assurance', async () => {
+    const administrator = { ...user, role: UserRoles.Administrador } as User;
+    repository.findOne.mockResolvedValue(administrator);
+    const created = await service.create(administrator, false, 'mfa');
+    const hash = createHash('sha256').update(created.sessionToken).digest('hex');
+    const stored = JSON.parse(values.get(`session:${hash}`) as string) as Record<string, unknown>;
+    delete stored.authenticationLevel;
+    values.set(`session:${hash}`, JSON.stringify(stored));
+
+    await expect(service.validate(created.sessionToken)).resolves.toBeNull();
+    expect(values.has(`session:${hash}`)).toBe(false);
   });
 
   it('invalidates a session when authVersion changes', async () => {

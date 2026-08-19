@@ -14,7 +14,7 @@ describe('CreateUserDto', () => {
     createUserDto.document_num = 123456789;
     createUserDto.phone = 3001234567;
     createUserDto.email = 'john.doe@example.com';
-    createUserDto.password = 'Password123';
+    createUserDto.password = 'una frase larga y privada';
     createUserDto.role = UserRoles.Estudiante;
     createUserDto.institutionId = institutionId;
   });
@@ -144,32 +144,30 @@ describe('CreateUserDto', () => {
     });
 
     it('should fail if password is too long', async () => {
-      createUserDto.password = 'A'.repeat(31) + 'bc123';
+      createUserDto.password = 'A'.repeat(129);
       const errors = await validate(createUserDto);
       expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('should fail if password has no uppercase letter', async () => {
-      createUserDto.password = 'password123';
+    it('should reject a common password', async () => {
+      createUserDto.password = 'password123456!';
       const errors = await validate(createUserDto);
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.property === 'password')).toBe(true);
     });
 
-    it('should fail if password has no lowercase letter', async () => {
-      createUserDto.password = 'PASSWORD123';
+    it('should allow a long lowercase passphrase', async () => {
+      createUserDto.password = 'esta es una frase privada';
       const errors = await validate(createUserDto);
-      expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it('should fail if password has no number or special character', async () => {
-      createUserDto.password = 'PasswordOnly';
-      const errors = await validate(createUserDto);
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.length).toBe(0);
     });
 
     it('should pass with valid password formats', async () => {
-      const validPasswords = ['Password123', 'MyP@ssw0rd', 'Secure123!', 'Test@123'];
+      const validPasswords = [
+        'correct horse battery staple',
+        'una frase única con espacios',
+        '🔐 contraseña extensa y privada',
+      ];
 
       for (const password of validPasswords) {
         createUserDto.password = password;

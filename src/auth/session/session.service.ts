@@ -1,4 +1,9 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -70,12 +75,22 @@ export class SessionService {
     this.maxSessionsPerUser = this.number('SESSION_MAX_PER_USER', 5);
   }
 
-  async create(user: User, rememberMe = false): Promise<CreatedSession> {
+  async create(
+    user: User,
+    rememberMe = false,
+    authenticationLevel: 'mfa' | 'password' = 'password'
+  ): Promise<CreatedSession> {
+    if (
+      (user.role === UserRoles.Administrador || user.isPlatformAdmin) &&
+      authenticationLevel !== 'mfa'
+    )
+      throw new ForbiddenException('La sesión administrativa requiere segundo factor.');
     const sessionToken = randomBytes(32).toString('base64url');
     const hash = this.hash(sessionToken);
     const now = Date.now();
     const policy = this.policy(user.role, rememberMe);
     const session: StoredSession = {
+      authenticationLevel,
       userId: user.id,
       createdAt: now,
       lastActivityAt: now,
@@ -153,6 +168,8 @@ export class SessionService {
       user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
       !user.institution?.isActive ||
       user.authVersion !== session.authVersion ||
+      ((user.role === UserRoles.Administrador || user.isPlatformAdmin) &&
+        session.authenticationLevel !== 'mfa') ||
       now >= session.absoluteExpiresAt
     ) {
       await this.revokeByHash(hash, session.userId);
