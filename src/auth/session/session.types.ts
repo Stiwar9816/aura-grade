@@ -12,6 +12,8 @@ export interface StoredSession {
   userId: string;
   createdAt: number;
   lastActivityAt: number;
+  mfaExpiresAt: number;
+  mfaVerifiedAt: number;
   absoluteExpiresAt: number;
   rememberMe: boolean;
   authVersion: number;
@@ -31,6 +33,7 @@ export interface ActiveSession {
   id: string;
   ipAddress?: string;
   lastActivityAt: string;
+  mfaExpiresAt: string;
   name: string;
   operatingSystem: string;
   rememberMe: boolean;

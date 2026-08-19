@@ -90,6 +90,13 @@ describe('TwoFactorService', () => {
     expect(evalArguments.keys[0]).not.toContain(challenge.challengeToken);
   });
 
+  it.each([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante])(
+    'requires OTP for the %s role',
+    (role) => {
+      expect(service.requiresTwoFactor({ ...user, role })).toBe(true);
+    }
+  );
+
   it('accepts a current TOTP once and persists encrypted enrollment state', async () => {
     const now = 1_787_123_450_000;
     jest.spyOn(Date, 'now').mockReturnValue(now);

@@ -156,14 +156,10 @@ Pruebas E2E:
 - Sesión vencida durante navegación.
 - Dos pestañas convergen al mismo estado tras logout.
 
-### F8. Despliegue gradual y retiro de compatibilidad
+### F8. Compatibilidad heredada retirada
 
-1. Desplegar backend con sesiones opacas y `AUTH_ACCEPT_LEGACY_JWT=true`.
-2. Desplegar el BFF y observar métricas de login, sesiones inválidas, Redis y latencia.
-3. Confirmar que el navegador ya no envía JWT ni conserva tokens.
-4. Cambiar `AUTH_ACCEPT_LEGACY_JWT=false`.
-5. Observar un ciclo completo del TTL legado.
-6. Eliminar el alias `token` del backend y cualquier código de compatibilidad del frontend.
+Los JWT heredados ya no se aceptan porque no pueden acreditar la verificación OTP temporal.
+El navegador utiliza exclusivamente la cookie `HttpOnly` respaldada por una sesión opaca en Redis.
 
 ## Criterios de aceptación conjunta
 

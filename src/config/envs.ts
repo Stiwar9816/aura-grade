@@ -71,7 +71,6 @@ const envsSchema = joi
       otherwise: joi.optional(),
     }),
     TRUST_PROXY_HOPS: joi.number().integer().min(0).default(0),
-    AUTH_ACCEPT_LEGACY_JWT: joi.boolean().default(false),
     AUTH_2FA_ENCRYPTION_KEY: joi.string().empty('').min(32).when('STATE', {
       is: 'prod',
       then: joi.required(),
@@ -79,6 +78,12 @@ const envsSchema = joi
     }),
     AUTH_2FA_CHALLENGE_TTL_SECONDS: joi.number().integer().min(60).max(900).default(300),
     AUTH_2FA_MAX_ATTEMPTS: joi.number().integer().min(3).max(10).default(5),
+    AUTH_2FA_SESSION_TTL_SECONDS: joi
+      .number()
+      .integer()
+      .min(300)
+      .max(7 * 24 * 60 * 60)
+      .default(12 * 60 * 60),
     SESSION_IDLE_SECONDS: joi.number().integer().positive().optional(),
     SESSION_ABSOLUTE_SECONDS: joi.number().integer().positive().optional(),
     SESSION_REMEMBER_IDLE_SECONDS: joi.number().integer().positive().optional(),
@@ -132,10 +137,10 @@ export const envs = {
   bff_shared_secret: envVars.BFF_SHARED_SECRET,
   metrics_token: envVars.METRICS_TOKEN,
   trust_proxy_hops: envVars.TRUST_PROXY_HOPS,
-  auth_accept_legacy_jwt: envVars.AUTH_ACCEPT_LEGACY_JWT,
   auth_2fa_encryption_key: envVars.AUTH_2FA_ENCRYPTION_KEY,
   auth_2fa_challenge_ttl_seconds: envVars.AUTH_2FA_CHALLENGE_TTL_SECONDS,
   auth_2fa_max_attempts: envVars.AUTH_2FA_MAX_ATTEMPTS,
+  auth_2fa_session_ttl_seconds: envVars.AUTH_2FA_SESSION_TTL_SECONDS,
   session_idle_seconds: envVars.SESSION_IDLE_SECONDS,
   session_absolute_seconds: envVars.SESSION_ABSOLUTE_SECONDS,
   session_remember_idle_seconds: envVars.SESSION_REMEMBER_IDLE_SECONDS,

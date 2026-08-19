@@ -322,7 +322,7 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('should login user and return user with token', async () => {
+    it('starts an OTP challenge after a valid password', async () => {
       const loginUserDto: LoginUserDto = {
         email: 'john.doe@example.com',
         password: 'Password123',
@@ -330,10 +330,15 @@ describe('AuthService', () => {
 
       const userWithPassword = { ...mockUser, password: bcrypt.hashSync('Password123', 12) };
       mockAuthRepository.findOne.mockResolvedValue(userWithPassword);
-      mockSessionService.create.mockResolvedValue({
-        sessionToken: 'opaque-token',
-        expiresAt: '2026-07-26T00:00:00.000Z',
-      });
+      const challenge = {
+        challengeToken: 'opaque-challenge',
+        expiresAt: '2026-08-18T20:00:00.000Z',
+        requiresTwoFactor: true as const,
+        requiresTwoFactorSetup: true,
+        otpAuthUri: 'otpauth://totp/AuraGrade:test',
+        setupKey: 'ABCDEFGHIJKLMNOP234567ABCDEFGHIJKLMNOP',
+      };
+      mockTwoFactorService.createChallenge.mockResolvedValue(challenge);
 
       const result = await service.login(loginUserDto);
 
@@ -360,9 +365,9 @@ describe('AuthService', () => {
         },
         relations: ['courses', 'assignments', 'institution'],
       });
-      expect(result).not.toHaveProperty('token');
-      expect(result).toHaveProperty('sessionToken', 'opaque-token');
-      expect('user' in result && result.user.password).toBeUndefined();
+      expect(result).toEqual(challenge);
+      expect(mockTwoFactorService.createChallenge).toHaveBeenCalledWith(userWithPassword, false);
+      expect(mockSessionService.create).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -434,57 +439,62 @@ describe('AuthService', () => {
       expect(mockSessionService.create).not.toHaveBeenCalled();
     });
 
-    it('requires TOTP for an administrator and does not create a session after password only', async () => {
-      const administrator = {
-        ...mockUser,
-        role: UserRoles.Administrador,
-        password: 'legacy-hash',
-      };
-      const challenge = {
-        challengeToken: 'opaque-challenge',
-        expiresAt: '2026-08-18T20:00:00.000Z',
-        requiresTwoFactor: true as const,
-        requiresTwoFactorSetup: false,
-      };
-      mockAuthRepository.findOne.mockResolvedValue(administrator);
-      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
-      mockTwoFactorService.createChallenge.mockResolvedValue(challenge);
+    it.each([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante])(
+      'requires TOTP for the %s role and does not create a session after password only',
+      async (role) => {
+        const account = {
+          ...mockUser,
+          role,
+          password: 'legacy-hash',
+        };
+        const challenge = {
+          challengeToken: 'opaque-challenge',
+          expiresAt: '2026-08-18T20:00:00.000Z',
+          requiresTwoFactor: true as const,
+          requiresTwoFactorSetup: false,
+        };
+        mockAuthRepository.findOne.mockResolvedValue(account);
+        mockTwoFactorService.createChallenge.mockResolvedValue(challenge);
 
-      const result = await service.login({
-        email: administrator.email,
-        password: 'Password123',
-        rememberMe: true,
-      });
+        const result = await service.login({
+          email: account.email,
+          password: 'Password123',
+          rememberMe: true,
+        });
 
-      expect(result).toEqual(challenge);
-      expect(mockTwoFactorService.createChallenge).toHaveBeenCalledWith(administrator, true);
-      expect(mockSessionService.create).not.toHaveBeenCalled();
-    });
+        expect(result).toEqual(challenge);
+        expect(mockTwoFactorService.createChallenge).toHaveBeenCalledWith(account, true);
+        expect(mockSessionService.create).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('verifyOtp', () => {
-    it('creates the opaque session only after the second factor succeeds', async () => {
-      const administrator = { ...mockUser, role: UserRoles.Administrador };
-      mockTwoFactorService.verifyChallenge.mockResolvedValue({
-        rememberMe: true,
-        user: administrator,
-      });
-      mockSessionService.create.mockResolvedValue({
-        sessionToken: 'opaque-token',
-        expiresAt: '2026-08-19T00:00:00.000Z',
-      });
+    it.each([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante])(
+      'creates the opaque session for %s only after the second factor succeeds',
+      async (role) => {
+        const account = { ...mockUser, role };
+        mockTwoFactorService.verifyChallenge.mockResolvedValue({
+          rememberMe: true,
+          user: account,
+        });
+        mockSessionService.create.mockResolvedValue({
+          sessionToken: 'opaque-token',
+          expiresAt: '2026-08-19T00:00:00.000Z',
+        });
 
-      const result = await service.verifyOtp({
-        challengeToken: 'challenge-token-with-at-least-32-characters',
-        otp: '123456',
-      });
+        const result = await service.verifyOtp({
+          challengeToken: 'challenge-token-with-at-least-32-characters',
+          otp: '123456',
+        });
 
-      expect(mockSessionService.create).toHaveBeenCalledWith(administrator, true, 'mfa', undefined);
-      expect(result).toEqual(
-        expect.objectContaining({ sessionToken: 'opaque-token', rememberMe: true })
-      );
-      expect(result).not.toHaveProperty('token');
-    });
+        expect(mockSessionService.create).toHaveBeenCalledWith(account, true, 'mfa', undefined);
+        expect(result).toEqual(
+          expect.objectContaining({ sessionToken: 'opaque-token', rememberMe: true })
+        );
+        expect(result).not.toHaveProperty('token');
+      }
+    );
   });
 
   describe('active sessions', () => {

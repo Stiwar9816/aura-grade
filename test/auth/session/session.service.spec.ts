@@ -83,6 +83,7 @@ describe('SessionService', () => {
     values.clear();
     indexes.clear();
     jest.clearAllMocks();
+    config.get.mockImplementation((_key: string) => undefined);
     repository.findOne.mockResolvedValue({ ...user });
     service = new SessionService(
       redis as any,
@@ -93,7 +94,7 @@ describe('SessionService', () => {
   });
 
   it('stores only the hash and validates an opaque session', async () => {
-    const created = await service.create(user);
+    const created = await service.create(user, false, 'mfa');
     const hash = createHash('sha256').update(created.sessionToken).digest('hex');
 
     expect(created.sessionToken).toHaveLength(43);
@@ -108,10 +109,8 @@ describe('SessionService', () => {
     });
   });
 
-  it('refuses to create an administrator session without MFA assurance', async () => {
-    const administrator = { ...user, role: UserRoles.Administrador } as User;
-
-    await expect(service.create(administrator)).rejects.toBeInstanceOf(ForbiddenException);
+  it('refuses to create a session without MFA assurance for every role', async () => {
+    await expect(service.create(user)).rejects.toBeInstanceOf(ForbiddenException);
     expect(client.eval).not.toHaveBeenCalled();
   });
 
@@ -126,13 +125,11 @@ describe('SessionService', () => {
     );
   });
 
-  it('invalidates an old administrator session without MFA assurance', async () => {
-    const administrator = { ...user, role: UserRoles.Administrador } as User;
-    repository.findOne.mockResolvedValue(administrator);
-    const created = await service.create(administrator, false, 'mfa');
+  it('invalidates an old session without MFA assurance', async () => {
+    const created = await service.create(user, false, 'mfa');
     const hash = createHash('sha256').update(created.sessionToken).digest('hex');
     const stored = JSON.parse(values.get(`session:${hash}`) as string) as Record<string, unknown>;
-    delete stored.authenticationLevel;
+    delete stored.mfaExpiresAt;
     values.set(`session:${hash}`, JSON.stringify(stored));
 
     await expect(service.validate(created.sessionToken)).resolves.toBeNull();
@@ -140,7 +137,7 @@ describe('SessionService', () => {
   });
 
   it('invalidates a session when authVersion changes', async () => {
-    const created = await service.create(user);
+    const created = await service.create(user, false, 'mfa');
     repository.findOne.mockResolvedValue({ ...user, authVersion: 2 });
 
     await expect(service.validate(created.sessionToken)).resolves.toBeNull();
@@ -148,22 +145,22 @@ describe('SessionService', () => {
   });
 
   it('revokes all indexed sessions for a user', async () => {
-    await service.create(user);
-    await service.create(user);
+    await service.create(user, false, 'mfa');
+    await service.create(user, false, 'mfa');
 
     await expect(service.revokeAll(user.id)).resolves.toBe(2);
     expect(indexes.get(`user-sessions:${user.id}`)).toBeUndefined();
   });
 
   it('lists active sessions with device metadata and marks the current session', async () => {
-    const first = await service.create(user, false, 'password', {
+    const first = await service.create(user, false, 'mfa', {
       browser: 'Chrome',
       deviceType: 'desktop',
       ipAddress: '203.0.113.8',
       name: 'Chrome en macOS',
       operatingSystem: 'macOS',
     });
-    await service.create(user, true, 'password', {
+    await service.create(user, true, 'mfa', {
       browser: 'Safari',
       deviceType: 'mobile',
       name: 'Safari en iOS',
@@ -180,6 +177,7 @@ describe('SessionService', () => {
           current: true,
           deviceType: 'desktop',
           ipAddress: '203.0.113.8',
+          mfaExpiresAt: expect.any(String),
           name: 'Chrome en macOS',
         }),
         expect.objectContaining({
@@ -194,7 +192,7 @@ describe('SessionService', () => {
   });
 
   it('revokes only a session owned by the requested user', async () => {
-    const created = await service.create(user);
+    const created = await service.create(user, false, 'mfa');
     const sessionId = createHash('sha256').update(created.sessionToken).digest('hex');
 
     await expect(service.revokeOwned('another-user', sessionId)).rejects.toBeInstanceOf(
@@ -203,6 +201,36 @@ describe('SessionService', () => {
     expect(values.has(`session:${sessionId}`)).toBe(true);
     await expect(service.revokeOwned(user.id, sessionId)).resolves.toBe(true);
     expect(values.has(`session:${sessionId}`)).toBe(false);
+  });
+
+  it('invalidates a session when its temporary OTP assurance expires', async () => {
+    const created = await service.create(user, false, 'mfa');
+    const hash = createHash('sha256').update(created.sessionToken).digest('hex');
+    const stored = JSON.parse(values.get(`session:${hash}`) as string) as Record<string, unknown>;
+    stored.mfaExpiresAt = Date.now() - 1;
+    values.set(`session:${hash}`, JSON.stringify(stored));
+
+    await expect(service.validate(created.sessionToken)).resolves.toBeNull();
+    expect(values.has(`session:${hash}`)).toBe(false);
+  });
+
+  it('limits a remembered session to the configured OTP persistence window', async () => {
+    config.get.mockImplementation((key: string) =>
+      key === 'AUTH_2FA_SESSION_TTL_SECONDS' ? 600 : undefined
+    );
+    service = new SessionService(
+      redis as any,
+      repository as any,
+      config as unknown as ConfigService,
+      metrics as any
+    );
+    const startedAt = Date.now();
+
+    const created = await service.create(user, true, 'mfa');
+    const expiresAt = new Date(created.expiresAt).getTime();
+
+    expect(expiresAt).toBeGreaterThanOrEqual(startedAt + 599_000);
+    expect(expiresAt).toBeLessThanOrEqual(startedAt + 601_000);
   });
 
   it('reports Redis failures as service unavailable', async () => {

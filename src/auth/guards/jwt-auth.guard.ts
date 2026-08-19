@@ -1,42 +1,20 @@
 // NestJS
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 // GraphQL
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { User } from '../../user/entities/user.entity';
-import { JwtPayload } from '../interface/jwt-payload.interface';
 import { SessionService } from '../session';
-import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
-import { UserRoles } from '../enums';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(
-    private readonly sessionService: SessionService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-    @InjectRepository(User) private readonly userRepository: Repository<User>
-  ) {}
+  constructor(private readonly sessionService: SessionService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = this.getRequest(context);
     const token = this.bearerToken(request.headers?.authorization);
     if (!token) throw new UnauthorizedException('Sesión inválida o expirada.');
 
-    if (this.looksLikeJwt(token)) {
-      const acceptLegacyJwt = this.configService.get<boolean | string>(
-        'AUTH_ACCEPT_LEGACY_JWT',
-        false
-      );
-      if (acceptLegacyJwt === false || acceptLegacyJwt === 'false')
-        throw new UnauthorizedException('Sesión inválida o expirada.');
-      request.user = await this.validateLegacyJwt(token);
-      request.sessionToken = undefined;
-      return true;
-    }
+    if (this.looksLikeJwt(token))
+      throw new UnauthorizedException('La sesión debe renovarse con verificación OTP.');
 
     const result = await this.sessionService.validate(token);
     if (!result) throw new UnauthorizedException('Sesión inválida o expirada.');
@@ -61,30 +39,5 @@ export class JwtAuthGuard implements CanActivate {
 
   private looksLikeJwt(token: string): boolean {
     return token.split('.').length === 3;
-  }
-
-  private async validateLegacyJwt(token: string): Promise<User> {
-    let payload: JwtPayload;
-    try {
-      payload = await this.jwtService.verifyAsync<JwtPayload>(token);
-    } catch {
-      throw new UnauthorizedException('Sesión inválida o expirada.');
-    }
-
-    const user = await this.userRepository.findOne({
-      where: { id: payload.id },
-      relations: ['institution'],
-    });
-    if (
-      !user ||
-      !user.isActive ||
-      user.role === UserRoles.Administrador ||
-      user.isPlatformAdmin ||
-      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
-      !user.institution?.isActive
-    )
-      throw new UnauthorizedException('Sesión inválida o expirada.');
-    delete user.password;
-    return user;
   }
 }

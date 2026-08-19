@@ -160,6 +160,7 @@ SESSION_ADMIN_IDLE_SECONDS=900
 SESSION_ADMIN_ABSOLUTE_SECONDS=14400
 SESSION_REFRESH_INTERVAL_SECONDS=60
 SESSION_MAX_PER_USER=5
+AUTH_2FA_SESSION_TTL_SECONDS=43200
 
 # Seguridad (Bull Board Monitoring)
 BASIC_AUTH_PASSWORD=tu-password-seguro
@@ -171,8 +172,7 @@ TRUST_PROXY_HOPS=1
 # Scraping interno de /api/metrics
 METRICS_TOKEN=un-token-aleatorio-de-al-menos-32-caracteres
 
-# Ventana temporal de migración; cambiar a false al retirar JWT
-AUTH_ACCEPT_LEGACY_JWT=true
+# Los JWT heredados no se aceptan: toda sesión debe acreditar OTP en Redis.
 
 # Bootstrap de tenancy (solo mientras se aplica la migración inicial)
 BOOTSTRAP_INSTITUTION_NAME="Universidad Aura"

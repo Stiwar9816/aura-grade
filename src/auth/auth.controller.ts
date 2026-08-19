@@ -73,11 +73,7 @@ export class AuthController {
   // End - Doc API
   login(@Body() loginUserDto: LoginUserDto, @Req() request: Request) {
     const identity = `${trustedClientIp(request)}:${loginUserDto.email.toLowerCase().trim()}`;
-    return this.authService.login(
-      loginUserDto,
-      identity,
-      describeSessionDevice(trustedClientUserAgent(request), trustedClientIp(request))
-    );
+    return this.authService.login(loginUserDto, identity);
   }
 
   @Post('verify-otp')

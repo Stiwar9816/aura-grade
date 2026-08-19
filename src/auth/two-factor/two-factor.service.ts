@@ -98,7 +98,7 @@ export class TwoFactorService {
   }
 
   requiresTwoFactor(user: Pick<User, 'isPlatformAdmin' | 'role'>): boolean {
-    return user.isPlatformAdmin || user.role === UserRoles.Administrador;
+    return user.isPlatformAdmin || Object.values(UserRoles).includes(user.role);
   }
 
   async createChallenge(user: User, rememberMe: boolean): Promise<TwoFactorChallenge> {

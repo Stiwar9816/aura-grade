@@ -88,7 +88,7 @@ export class AuthService {
     };
   }
 
-  async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown', device?: SessionDevice) {
+  async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown') {
     const { password, rememberMe = false } = loginUserDto;
     const email = loginUserDto.email.toLowerCase().trim();
     const user = await this.authRepository.findOne({
@@ -147,18 +147,10 @@ export class AuthService {
       this.logger.log(`El hash de contraseña del usuario ${user.id} fue actualizado a scrypt.`);
     }
 
-    if (this.twoFactorService.requiresTwoFactor(user)) {
-      const challenge = await this.twoFactorService.createChallenge(user, rememberMe);
-      this.metrics.increment('auth_otp_challenge_total');
-      this.logger.log(`Segundo factor requerido para el usuario administrativo ${user.id}.`);
-      return challenge;
-    }
-
-    this.sanitizeUser(user);
-    const session = await this.sessionService.create(user, rememberMe, 'password', device);
-    this.metrics.increment('auth_login_success_total');
-    this.logger.log(`Autenticación exitosa para el usuario ${user.id}.`);
-    return { ...this.authResponse(user, session), rememberMe };
+    const challenge = await this.twoFactorService.createChallenge(user, rememberMe);
+    this.metrics.increment('auth_otp_challenge_total');
+    this.logger.log(`Segundo factor requerido para el usuario ${user.id}.`);
+    return challenge;
   }
 
   async verifyOtp({ challengeToken, otp }: VerifyOtpDto, device?: SessionDevice) {

@@ -129,8 +129,7 @@ describe('AuthController', () => {
 
       expect(mockAuthService.login).toHaveBeenCalledWith(
         loginUserDto,
-        '127.0.0.1:john.doe@example.com',
-        unknownDevice
+        '127.0.0.1:john.doe@example.com'
       );
       expect(result).toEqual(mockLoginResponse);
       expect(result).toHaveProperty('token');

@@ -64,6 +64,7 @@ export class SessionService {
   private readonly logger = new Logger(SessionService.name);
   private readonly refreshIntervalMs: number;
   private readonly maxSessionsPerUser: number;
+  private readonly mfaSessionTtlMs: number;
 
   constructor(
     private readonly redis: RedisService,
@@ -73,6 +74,7 @@ export class SessionService {
   ) {
     this.refreshIntervalMs = this.seconds('SESSION_REFRESH_INTERVAL_SECONDS', 60) * 1000;
     this.maxSessionsPerUser = this.number('SESSION_MAX_PER_USER', 5);
+    this.mfaSessionTtlMs = this.seconds('AUTH_2FA_SESSION_TTL_SECONDS', 12 * 60 * 60) * 1000;
   }
 
   async create(
@@ -81,22 +83,22 @@ export class SessionService {
     authenticationLevel: 'mfa' | 'password' = 'password',
     device?: SessionDevice
   ): Promise<CreatedSession> {
-    if (
-      (user.role === UserRoles.Administrador || user.isPlatformAdmin) &&
-      authenticationLevel !== 'mfa'
-    )
-      throw new ForbiddenException('La sesión administrativa requiere segundo factor.');
+    if (authenticationLevel !== 'mfa')
+      throw new ForbiddenException('La sesión requiere verificación OTP.');
     const sessionToken = randomBytes(32).toString('base64url');
     const hash = this.hash(sessionToken);
     const now = Date.now();
     const policy = this.policy(user.role, rememberMe);
+    const mfaExpiresAt = Math.min(now + this.mfaSessionTtlMs, now + policy.absoluteTtlMs);
     const session: StoredSession = {
       authenticationLevel,
       device,
       userId: user.id,
       createdAt: now,
       lastActivityAt: now,
-      absoluteExpiresAt: now + policy.absoluteTtlMs,
+      mfaExpiresAt,
+      mfaVerifiedAt: now,
+      absoluteExpiresAt: mfaExpiresAt,
       rememberMe,
       authVersion: user.authVersion ?? 1,
     };
@@ -170,8 +172,9 @@ export class SessionService {
       user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
       !user.institution?.isActive ||
       user.authVersion !== session.authVersion ||
-      ((user.role === UserRoles.Administrador || user.isPlatformAdmin) &&
-        session.authenticationLevel !== 'mfa') ||
+      session.authenticationLevel !== 'mfa' ||
+      !Number.isFinite(session.mfaExpiresAt) ||
+      now >= session.mfaExpiresAt ||
       now >= session.absoluteExpiresAt
     ) {
       await this.revokeByHash(hash, session.userId);
@@ -260,6 +263,9 @@ export class SessionService {
             if (
               session.userId !== user.id ||
               session.authVersion !== user.authVersion ||
+              session.authenticationLevel !== 'mfa' ||
+              !Number.isFinite(session.mfaExpiresAt) ||
+              now >= session.mfaExpiresAt ||
               now >= session.absoluteExpiresAt
             )
               return undefined;
@@ -278,6 +284,7 @@ export class SessionService {
               id: hashes[index],
               ipAddress: device.ipAddress,
               lastActivityAt: new Date(session.lastActivityAt).toISOString(),
+              mfaExpiresAt: new Date(session.mfaExpiresAt).toISOString(),
               name: device.name,
               operatingSystem: device.operatingSystem,
               rememberMe: session.rememberMe,
