@@ -7,7 +7,7 @@ export class ChangePasswordInput {
   @IsString()
   @IsStrongPassword()
   @Field(() => String, {
-    description: `Nueva contraseña o frase única de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
+    description: `Nueva contraseña única sin espacios de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
   })
   newPassword: string;
 }

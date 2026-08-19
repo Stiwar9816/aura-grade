@@ -71,7 +71,7 @@ describe('LoginUserDto', () => {
       expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('should pass with valid password formats', async () => {
+    it('should keep accepting existing passwords with spaces during login', async () => {
       const validPasswords = ['legacy', 'frase con espacios', 'Password123!'];
 
       for (const password of validPasswords) {

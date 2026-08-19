@@ -133,9 +133,15 @@ describe('UpdateUserInput', () => {
     });
 
     it('should pass with valid password', async () => {
-      updateUserInput.password = 'Nueva frase segura y unica 2026';
+      updateUserInput.password = 'NuevaClaveSeguraUnica2026';
       const errors = await validate(updateUserInput);
       expect(errors.length).toBe(0);
+    });
+
+    it('should reject a password containing whitespace', async () => {
+      updateUserInput.password = 'Nueva clave segura 2026';
+      const errors = await validate(updateUserInput);
+      expect(errors.some((error) => error.property === 'password')).toBe(true);
     });
 
     it('should pass when password is not provided', async () => {

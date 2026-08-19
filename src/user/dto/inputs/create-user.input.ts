@@ -77,7 +77,7 @@ export class CreateUserInput {
   @IsString()
   @IsStrongPassword()
   @Field(() => String, {
-    description: `Contraseña o frase única de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
+    description: `Contraseña única sin espacios de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres`,
   })
   password: string;
 

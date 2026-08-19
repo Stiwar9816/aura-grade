@@ -339,7 +339,7 @@ input UpdateUserInput {
   """User Email"""
   email: String
 
-  """Contraseña o frase única de 15 a 128 caracteres"""
+  """Contraseña única sin espacios de 15 a 128 caracteres"""
   password: String
 
   """User roles wich can Administrator, User by default takes the user role"""
@@ -375,7 +375,7 @@ input UpdateOwnProfileInput {
 }
 
 input ChangePasswordInput {
-  """Nueva contraseña o frase única de 15 a 128 caracteres"""
+  """Nueva contraseña única sin espacios de 15 a 128 caracteres"""
   newPassword: String!
 }
 

@@ -29,6 +29,8 @@ export const normalizePassword = (password: string): string => password.normaliz
 export const passwordPolicyError = (password: unknown): string | null => {
   if (typeof password !== 'string') return 'La contraseña debe ser un texto.';
   const normalized = normalizePassword(password);
+  if (/\s/u.test(normalized))
+    return 'La contraseña no puede contener espacios ni otros caracteres en blanco.';
   const length = Array.from(normalized).length;
   if (length < PASSWORD_MIN_LENGTH)
     return `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`;

@@ -14,7 +14,7 @@ describe('CreateUserInput', () => {
     createUserInput.document_num = 123456789;
     createUserInput.phone = 3001234567;
     createUserInput.email = 'john.doe@example.com';
-    createUserInput.password = 'una frase larga y privada';
+    createUserInput.password = 'ClaveLargaPrivada2026';
     createUserInput.role = UserRoles.Estudiante;
   });
 
@@ -155,17 +155,29 @@ describe('CreateUserInput', () => {
       expect(errors.some((e) => e.property === 'password')).toBe(true);
     });
 
-    it('should allow a long lowercase passphrase', async () => {
-      createUserInput.password = 'esta es una frase privada';
+    it('should reject spaces and Unicode whitespace', async () => {
+      for (const password of [
+        'clave larga privada 2026',
+        'clave\tlargaPrivada2026',
+        'clave\u00a0largaPrivada2026',
+      ]) {
+        createUserInput.password = password;
+        const errors = await validate(createUserInput);
+        expect(errors.some((error) => error.property === 'password')).toBe(true);
+      }
+    });
+
+    it('should allow a long lowercase password without spaces', async () => {
+      createUserInput.password = 'estodebeserprivado2026';
       const errors = await validate(createUserInput);
       expect(errors.length).toBe(0);
     });
 
     it('should pass with valid password formats', async () => {
       const validPasswords = [
-        'correct horse battery staple',
-        'una frase única con espacios',
-        '🔐 contraseña extensa y privada',
+        'correcthorsebatterystaple',
+        'contraseñaúnica2026',
+        '🔐ContraseñaExtensaPrivada',
       ];
 
       for (const password of validPasswords) {
