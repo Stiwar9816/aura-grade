@@ -14,6 +14,15 @@ describe('AuthController', () => {
     login: jest.fn(),
     verifyOtp: jest.fn(),
     forgotPassword: jest.fn(),
+    listSessions: jest.fn(),
+    revokeSession: jest.fn(),
+  };
+  const unknownDevice = {
+    browser: 'Navegador desconocido',
+    deviceType: 'unknown',
+    ipAddress: '127.0.0.1',
+    name: 'Navegador desconocido en Sistema desconocido',
+    operatingSystem: 'Sistema desconocido',
   };
 
   const mockUserResponse = {
@@ -120,7 +129,8 @@ describe('AuthController', () => {
 
       expect(mockAuthService.login).toHaveBeenCalledWith(
         loginUserDto,
-        '127.0.0.1:john.doe@example.com'
+        '127.0.0.1:john.doe@example.com',
+        unknownDevice
       );
       expect(result).toEqual(mockLoginResponse);
       expect(result).toHaveProperty('token');
@@ -164,8 +174,45 @@ describe('AuthController', () => {
       };
       mockAuthService.verifyOtp.mockResolvedValue(mockLoginResponse);
 
-      await expect(controller.verifyOtp(input)).resolves.toEqual(mockLoginResponse);
-      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(input);
+      await expect(
+        controller.verifyOtp(input, { headers: {}, ip: '127.0.0.1' } as any)
+      ).resolves.toEqual(mockLoginResponse);
+      expect(mockAuthService.verifyOtp).toHaveBeenCalledWith(input, unknownDevice);
+    });
+  });
+
+  describe('sessions', () => {
+    const authenticatedRequest = {
+      headers: {},
+      ip: '127.0.0.1',
+      sessionToken: 'current-opaque-session',
+      user: mockUserResponse,
+    } as any;
+
+    it('lists the current user sessions', async () => {
+      const response = { sessions: [] };
+      mockAuthService.listSessions.mockResolvedValue(response);
+
+      await expect(controller.listSessions(authenticatedRequest)).resolves.toEqual(response);
+      expect(mockAuthService.listSessions).toHaveBeenCalledWith(
+        mockUserResponse,
+        'current-opaque-session'
+      );
+    });
+
+    it('revokes only a session owned by the current user', async () => {
+      const sessionId = 'a'.repeat(64);
+      const response = { currentSession: false, revoked: true, success: true };
+      mockAuthService.revokeSession.mockResolvedValue(response);
+
+      await expect(controller.revokeSession(sessionId, authenticatedRequest)).resolves.toEqual(
+        response
+      );
+      expect(mockAuthService.revokeSession).toHaveBeenCalledWith(
+        mockUserResponse,
+        sessionId,
+        'current-opaque-session'
+      );
     });
   });
 });

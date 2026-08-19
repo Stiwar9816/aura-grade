@@ -12,7 +12,7 @@ import { UserRoles } from '../enums';
 import { User } from '../../user/entities/user.entity';
 import { RedisService } from '../../redis';
 import { AuthMetricsService } from '../../observability';
-import { CreatedSession, StoredSession } from './session.types';
+import { ActiveSession, CreatedSession, SessionDevice, StoredSession } from './session.types';
 import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
 
 interface SessionPolicy {
@@ -78,7 +78,8 @@ export class SessionService {
   async create(
     user: User,
     rememberMe = false,
-    authenticationLevel: 'mfa' | 'password' = 'password'
+    authenticationLevel: 'mfa' | 'password' = 'password',
+    device?: SessionDevice
   ): Promise<CreatedSession> {
     if (
       (user.role === UserRoles.Administrador || user.isPlatformAdmin) &&
@@ -91,6 +92,7 @@ export class SessionService {
     const policy = this.policy(user.role, rememberMe);
     const session: StoredSession = {
       authenticationLevel,
+      device,
       userId: user.id,
       createdAt: now,
       lastActivityAt: now,
@@ -234,6 +236,88 @@ export class SessionService {
       this.logger.error('Redis falló al revocar todas las sesiones.', (error as Error).stack);
       throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
     }
+  }
+
+  async list(
+    user: Pick<User, 'authVersion' | 'id'>,
+    currentSessionToken?: string
+  ): Promise<ActiveSession[]> {
+    try {
+      const hashes = await this.redis.client.zRange(this.userIndexKey(user.id), 0, -1, {
+        REV: true,
+      });
+      const storedSessions = await Promise.all(
+        hashes.map((hash) => this.redis.client.get(this.sessionKey(hash)))
+      );
+      const currentHash = currentSessionToken ? this.hash(currentSessionToken) : undefined;
+      const now = Date.now();
+
+      return storedSessions
+        .map<ActiveSession | undefined>((stored, index) => {
+          if (!stored) return undefined;
+          try {
+            const session = JSON.parse(stored) as StoredSession;
+            if (
+              session.userId !== user.id ||
+              session.authVersion !== user.authVersion ||
+              now >= session.absoluteExpiresAt
+            )
+              return undefined;
+            const device = session.device ?? {
+              browser: 'Navegador desconocido',
+              deviceType: 'unknown' as const,
+              name: 'Dispositivo desconocido',
+              operatingSystem: 'Sistema desconocido',
+            };
+            return {
+              absoluteExpiresAt: new Date(session.absoluteExpiresAt).toISOString(),
+              browser: device.browser,
+              createdAt: new Date(session.createdAt).toISOString(),
+              current: hashes[index] === currentHash,
+              deviceType: device.deviceType,
+              id: hashes[index],
+              ipAddress: device.ipAddress,
+              lastActivityAt: new Date(session.lastActivityAt).toISOString(),
+              name: device.name,
+              operatingSystem: device.operatingSystem,
+              rememberMe: session.rememberMe,
+            };
+          } catch {
+            return undefined;
+          }
+        })
+        .filter((session): session is ActiveSession => Boolean(session))
+        .sort((left, right) => right.lastActivityAt.localeCompare(left.lastActivityAt));
+    } catch (error) {
+      this.metrics.increment('auth_redis_error_total');
+      this.logger.error('Redis falló al listar las sesiones activas.', (error as Error).stack);
+      throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
+    }
+  }
+
+  async revokeOwned(userId: string, sessionId: string): Promise<boolean> {
+    if (!/^[a-f0-9]{64}$/u.test(sessionId)) return false;
+    try {
+      const stored = await this.redis.client.get(this.sessionKey(sessionId));
+      if (!stored) return false;
+      const session = JSON.parse(stored) as StoredSession;
+      if (session.userId !== userId)
+        throw new ForbiddenException('No puedes revocar una sesión de otro usuario.');
+      await this.revokeByHash(sessionId, userId);
+      this.metrics.increment('auth_session_revoked_total');
+      this.logger.log(`Sesión revocada (${sessionId.slice(0, 12)}) para el usuario ${userId}.`);
+      return true;
+    } catch (error) {
+      if (error instanceof ForbiddenException || error instanceof ServiceUnavailableException)
+        throw error;
+      this.metrics.increment('auth_redis_error_total');
+      this.logger.error('Redis falló al revocar la sesión seleccionada.', (error as Error).stack);
+      throw new ServiceUnavailableException('El servicio de sesiones no está disponible.');
+    }
+  }
+
+  isCurrent(sessionToken: string | undefined, sessionId: string): boolean {
+    return Boolean(sessionToken && this.hash(sessionToken) === sessionId);
   }
 
   private async revokeByHash(hash: string, userId: string): Promise<void> {

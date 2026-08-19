@@ -2,6 +2,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Headers,
@@ -34,7 +35,8 @@ import {
 import { JwtAuthGuard } from './guards';
 import { CurrentUser } from './decorators';
 import { UserRoles } from './enums';
-import { trustedClientIp } from 'src/common/security';
+import { trustedClientIp, trustedClientUserAgent } from 'src/common/security';
+import { describeSessionDevice } from './session';
 
 interface AuthenticatedRequest extends Request {
   user: User;
@@ -71,15 +73,22 @@ export class AuthController {
   // End - Doc API
   login(@Body() loginUserDto: LoginUserDto, @Req() request: Request) {
     const identity = `${trustedClientIp(request)}:${loginUserDto.email.toLowerCase().trim()}`;
-    return this.authService.login(loginUserDto, identity);
+    return this.authService.login(
+      loginUserDto,
+      identity,
+      describeSessionDevice(trustedClientUserAgent(request), trustedClientIp(request))
+    );
   }
 
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   @Throttle({ short: { limit: 5, ttl: 5 * 60 * 1000 } })
   @ApiOkResponse({ description: 'Segundo factor validado.', type: AuthResponse })
-  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
-    return this.authService.verifyOtp(verifyOtpDto);
+  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto, @Req() request: Request) {
+    return this.authService.verifyOtp(
+      verifyOtpDto,
+      describeSessionDevice(trustedClientUserAgent(request), trustedClientIp(request))
+    );
   }
 
   @Post('forgot-password')
@@ -114,6 +123,22 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   logoutAll(@Req() request: AuthenticatedRequest) {
     return this.authService.logoutAll(request.user);
+  }
+
+  @Get('sessions')
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ short: { limit: 60, ttl: 60 * 1000 } })
+  @UseGuards(JwtAuthGuard)
+  listSessions(@Req() request: AuthenticatedRequest) {
+    return this.authService.listSessions(request.user, request.sessionToken);
+  }
+
+  @Delete('sessions/:sessionId')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 20, ttl: 60 * 1000 } })
+  @UseGuards(JwtAuthGuard)
+  revokeSession(@Param('sessionId') sessionId: string, @Req() request: AuthenticatedRequest) {
+    return this.authService.revokeSession(request.user, sessionId, request.sessionToken);
   }
 
   @Post('users/:userId/revoke-sessions')

@@ -21,7 +21,7 @@ import { UserRoles } from './enums';
 import { JwtPayload } from './interface/jwt-payload.interface';
 // Services
 import { MailService } from 'src/mail/mail.service';
-import { SessionService } from './session';
+import { SessionDevice, SessionService } from './session';
 import { Logger } from '@nestjs/common';
 import { AuthMetricsService } from '../observability';
 import { AuthAttemptService, PasswordService } from './security';
@@ -88,7 +88,7 @@ export class AuthService {
     };
   }
 
-  async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown') {
+  async login(loginUserDto: LoginUserDto, clientIdentity = 'unknown', device?: SessionDevice) {
     const { password, rememberMe = false } = loginUserDto;
     const email = loginUserDto.email.toLowerCase().trim();
     const user = await this.authRepository.findOne({
@@ -155,15 +155,15 @@ export class AuthService {
     }
 
     this.sanitizeUser(user);
-    const session = await this.sessionService.create(user, rememberMe);
+    const session = await this.sessionService.create(user, rememberMe, 'password', device);
     this.metrics.increment('auth_login_success_total');
     this.logger.log(`Autenticación exitosa para el usuario ${user.id}.`);
     return { ...this.authResponse(user, session), rememberMe };
   }
 
-  async verifyOtp({ challengeToken, otp }: VerifyOtpDto) {
+  async verifyOtp({ challengeToken, otp }: VerifyOtpDto, device?: SessionDevice) {
     const { rememberMe, user } = await this.twoFactorService.verifyChallenge(challengeToken, otp);
-    const session = await this.sessionService.create(user, rememberMe, 'mfa');
+    const session = await this.sessionService.create(user, rememberMe, 'mfa', device);
     this.metrics.increment('auth_login_success_total');
     this.logger.log(`Segundo factor validado y sesión creada para el usuario ${user.id}.`);
     return { ...this.authResponse(user, session), rememberMe };
@@ -228,6 +228,16 @@ export class AuthService {
 
   async logoutAll(user: User): Promise<{ success: true; revokedSessions: number }> {
     return this.logoutAllForUser(user.id);
+  }
+
+  async listSessions(user: User, currentSessionToken?: string) {
+    return { sessions: await this.sessionService.list(user, currentSessionToken) };
+  }
+
+  async revokeSession(user: User, sessionId: string, currentSessionToken?: string) {
+    const currentSession = this.sessionService.isCurrent(currentSessionToken, sessionId);
+    const revoked = await this.sessionService.revokeOwned(user.id, sessionId);
+    return { currentSession, revoked, success: true as const };
   }
 
   async logoutAllForUser(

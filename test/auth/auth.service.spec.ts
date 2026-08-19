@@ -71,8 +71,11 @@ describe('AuthService', () => {
 
   const mockSessionService = {
     create: jest.fn(),
+    isCurrent: jest.fn(),
+    list: jest.fn(),
     revoke: jest.fn(),
     revokeAll: jest.fn(),
+    revokeOwned: jest.fn(),
   };
   const mockAuthAttempts = {
     registerFailure: jest.fn(),
@@ -476,11 +479,35 @@ describe('AuthService', () => {
         otp: '123456',
       });
 
-      expect(mockSessionService.create).toHaveBeenCalledWith(administrator, true, 'mfa');
+      expect(mockSessionService.create).toHaveBeenCalledWith(administrator, true, 'mfa', undefined);
       expect(result).toEqual(
         expect.objectContaining({ sessionToken: 'opaque-token', rememberMe: true })
       );
       expect(result).not.toHaveProperty('token');
+    });
+  });
+
+  describe('active sessions', () => {
+    it('lists sessions and marks the current opaque token through SessionService', async () => {
+      const sessions = [{ id: 'a'.repeat(64), current: true }];
+      mockSessionService.list.mockResolvedValue(sessions);
+
+      await expect(service.listSessions(mockUser, 'opaque-session')).resolves.toEqual({ sessions });
+      expect(mockSessionService.list).toHaveBeenCalledWith(mockUser, 'opaque-session');
+    });
+
+    it('revokes an owned session and reports whether it is the current one', async () => {
+      const sessionId = 'a'.repeat(64);
+      mockSessionService.isCurrent.mockReturnValue(true);
+      mockSessionService.revokeOwned.mockResolvedValue(true);
+
+      await expect(service.revokeSession(mockUser, sessionId, 'opaque-session')).resolves.toEqual({
+        currentSession: true,
+        revoked: true,
+        success: true,
+      });
+      expect(mockSessionService.isCurrent).toHaveBeenCalledWith('opaque-session', sessionId);
+      expect(mockSessionService.revokeOwned).toHaveBeenCalledWith(mockUser.id, sessionId);
     });
   });
 

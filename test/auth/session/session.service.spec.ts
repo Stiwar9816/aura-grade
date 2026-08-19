@@ -16,6 +16,7 @@ describe('SessionService', () => {
       return 'OK';
     }),
     del: jest.fn(async (key: string) => (values.delete(key) ? 1 : 0)),
+    zRange: jest.fn(async (key: string) => [...(indexes.get(key) ?? [])].reverse()),
     eval: jest.fn(async (_script: string, options: { keys: string[]; arguments: string[] }) => {
       if (options.arguments.length === 8) {
         const [sessionKey, indexKey] = options.keys;
@@ -152,6 +153,56 @@ describe('SessionService', () => {
 
     await expect(service.revokeAll(user.id)).resolves.toBe(2);
     expect(indexes.get(`user-sessions:${user.id}`)).toBeUndefined();
+  });
+
+  it('lists active sessions with device metadata and marks the current session', async () => {
+    const first = await service.create(user, false, 'password', {
+      browser: 'Chrome',
+      deviceType: 'desktop',
+      ipAddress: '203.0.113.8',
+      name: 'Chrome en macOS',
+      operatingSystem: 'macOS',
+    });
+    await service.create(user, true, 'password', {
+      browser: 'Safari',
+      deviceType: 'mobile',
+      name: 'Safari en iOS',
+      operatingSystem: 'iOS',
+    });
+
+    const sessions = await service.list(user, first.sessionToken);
+
+    expect(sessions).toHaveLength(2);
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          browser: 'Chrome',
+          current: true,
+          deviceType: 'desktop',
+          ipAddress: '203.0.113.8',
+          name: 'Chrome en macOS',
+        }),
+        expect.objectContaining({
+          browser: 'Safari',
+          current: false,
+          deviceType: 'mobile',
+          name: 'Safari en iOS',
+        }),
+      ])
+    );
+    expect(JSON.stringify(sessions)).not.toContain(first.sessionToken);
+  });
+
+  it('revokes only a session owned by the requested user', async () => {
+    const created = await service.create(user);
+    const sessionId = createHash('sha256').update(created.sessionToken).digest('hex');
+
+    await expect(service.revokeOwned('another-user', sessionId)).rejects.toBeInstanceOf(
+      ForbiddenException
+    );
+    expect(values.has(`session:${sessionId}`)).toBe(true);
+    await expect(service.revokeOwned(user.id, sessionId)).resolves.toBe(true);
+    expect(values.has(`session:${sessionId}`)).toBe(false);
   });
 
   it('reports Redis failures as service unavailable', async () => {
