@@ -1,6 +1,6 @@
 # Base stage
-FROM node:22-alpine AS base
-ARG PNPM_VERSION=11.20.0
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
+ARG PNPM_VERSION=11.23.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && \
@@ -49,9 +49,9 @@ RUN addgroup --system --gid 1001 nodejs && \
   /usr/local/bin/pnpm \
   /usr/local/bin/pnpx
 
-COPY --from=builder /app/dist ./dist
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY package.json ./
+COPY --chown=nestjs:nodejs --from=builder /app/dist ./dist
+COPY --chown=nestjs:nodejs --from=prod-deps /app/node_modules ./node_modules
+COPY --chown=nestjs:nodejs package.json ./
 
 USER nestjs
 EXPOSE 3000

@@ -30,6 +30,13 @@ services:
     image: aura_grade:latest
     container_name: aura_grade_prod
     restart: always
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       db:
         condition: service_healthy

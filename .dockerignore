@@ -2,5 +2,10 @@ dist/
 node_modules/
 postgres/
 docker-scout-*.sarif.json
+.env
+.env.*
+!.env.template
+*.key
+*.pem
 
 .git/
