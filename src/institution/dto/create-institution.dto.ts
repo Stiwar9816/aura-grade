@@ -14,11 +14,11 @@ export class CreateInstitutionDto {
   @MaxLength(200)
   legalName?: string;
 
-  @ApiPropertyOptional({ example: '900123456-7' })
-  @IsOptional()
+  @ApiProperty({ example: '900123456-7' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(40)
-  taxId?: string;
+  taxId: string;
 
   @ApiPropertyOptional({ example: 'contacto@aura.edu.co' })
   @IsOptional()

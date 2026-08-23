@@ -1,6 +1,38 @@
 import { CriterionService } from 'src/criterion/criterion.service';
 import { UserRoles } from 'src/auth/enums';
 import type { User } from 'src/user/entities/user.entity';
+import { RubricPerformanceLevel, RubricStatus } from 'src/rubric/enums';
+
+const levels = [
+  {
+    label: RubricPerformanceLevel.EXCELENTE,
+    minScore: 4.5,
+    maxScore: 5,
+    description: 'Excelente',
+    score: 5,
+  },
+  {
+    label: RubricPerformanceLevel.BUENO,
+    minScore: 4,
+    maxScore: 4.49,
+    description: 'Bueno',
+    score: 4.49,
+  },
+  {
+    label: RubricPerformanceLevel.ACEPTABLE,
+    minScore: 3,
+    maxScore: 3.99,
+    description: 'Aceptable',
+    score: 3.99,
+  },
+  {
+    label: RubricPerformanceLevel.INSUFICIENTE,
+    minScore: 0,
+    maxScore: 2.99,
+    description: 'Insuficiente',
+    score: 2.99,
+  },
+];
 
 describe('CriterionService', () => {
   const criterionRepository = {
@@ -58,7 +90,7 @@ describe('CriterionService', () => {
   });
 
   it('creates a criterion only in a rubric owned by the authenticated teacher', async () => {
-    const rubric = { id: 'rubric-id', user: teacher };
+    const rubric = { id: 'rubric-id', user: teacher, status: RubricStatus.DRAFT };
     rubricRepository.findOne.mockResolvedValue(rubric);
     criterionRepository.create.mockImplementation((value) => value);
     criterionRepository.save.mockImplementation((value) => value);
@@ -66,8 +98,9 @@ describe('CriterionService', () => {
     await service.create(
       {
         title: 'Claridad',
-        maxPoints: 10,
-        levels: [{ description: 'Excelente', score: 10 }],
+        maxPoints: 5,
+        weight: 100,
+        levels,
         rubric: 'rubric-id',
       },
       teacher
@@ -88,8 +121,9 @@ describe('CriterionService', () => {
       service.create(
         {
           title: 'Claridad',
-          maxPoints: 10,
-          levels: [{ description: 'Excelente', score: 10 }],
+          maxPoints: 5,
+          weight: 100,
+          levels,
           rubric: 'other-rubric-id',
         },
         teacher
@@ -122,8 +156,9 @@ describe('CriterionService', () => {
       service.create(
         {
           title: 'Claridad',
-          maxPoints: 10,
-          levels: [{ description: 'Excelente', score: 10 }],
+          maxPoints: 5,
+          weight: 100,
+          levels,
           rubric: 'rubric-id',
         },
         administrator

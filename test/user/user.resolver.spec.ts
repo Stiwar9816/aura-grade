@@ -7,6 +7,7 @@ import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { UserRoles } from 'src/auth/enums';
 import { JwtAuthGuard } from 'src/auth/guards';
 import { InstitutionApprovalStatus } from 'src/institution';
+import { UserImportService } from 'src/user/import/user-import.service';
 
 describe('UserResolver', () => {
   const institutionId = 'f1d24f6e-b766-4e3f-a1c9-4d4c0a58ad31';
@@ -53,6 +54,10 @@ describe('UserResolver', () => {
     reviewInstitutionUser: jest.fn(),
     assignCourses: jest.fn(),
   };
+  const mockUserImportService = {
+    import: jest.fn(),
+    importPlatformAdministrators: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -61,6 +66,10 @@ describe('UserResolver', () => {
         {
           provide: UserService,
           useValue: mockUserService,
+        },
+        {
+          provide: UserImportService,
+          useValue: mockUserImportService,
         },
       ],
     })

@@ -101,6 +101,25 @@ describe('MailService', () => {
   });
 
   describe('notification emails', () => {
+    it('sends a one-time password setup link for an imported user', async () => {
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
+
+      await service.sendUserInvitation(mockUser, 'invitation-token', 'user-import-id');
+
+      expect(mockResend.emails.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockUser.email,
+          subject: expect.stringContaining('Activa tu cuenta'),
+          template: expect.objectContaining({
+            variables: expect.objectContaining({
+              invitationUrl: expect.stringContaining('/create-password?token=invitation-token'),
+            }),
+          }),
+        }),
+        { idempotencyKey: 'user-import-id' }
+      );
+    });
+
     it('sends a templated new submission notification', async () => {
       mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
       envs.resend_new_submission_template_id = 'new-submission-test';
@@ -179,7 +198,11 @@ describe('MailService', () => {
         expect.objectContaining({
           to: mockUser.email,
           subject: 'Recordatorio de entrega: Ensayo final',
-          text: expect.stringContaining('/upload?assignment=assignment-id'),
+          template: expect.objectContaining({
+            variables: expect.objectContaining({
+              url_assignment: expect.stringContaining('/upload?assignment=assignment-id'),
+            }),
+          }),
         }),
         { idempotencyKey: 'assignment-reminder-email' }
       );
@@ -187,7 +210,7 @@ describe('MailService', () => {
 
     it('uses the optional Resend template when it is configured', async () => {
       mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-      envs.resend_assignment_reminder_template_id = 'assignment-reminder-test';
+      envs.resend_task_reminder_template_id = 'assignment-reminder-test';
       const assignment = {
         id: 'assignment-id',
         title: 'Ensayo final',
@@ -209,7 +232,7 @@ describe('MailService', () => {
           })
         );
       } finally {
-        envs.resend_assignment_reminder_template_id = undefined;
+        envs.resend_task_reminder_template_id = undefined;
       }
     });
   });
@@ -262,7 +285,7 @@ describe('MailService', () => {
         expect.objectContaining({
           from: expect.any(String),
           to: mockUser.email,
-          subject: '¡Solicitud de restablecimiento de contraseña 🔐!',
+          subject: '¡Solicitud de restablecimiento de contraseña!',
           template: expect.objectContaining({
             id: expect.any(String),
             variables: expect.objectContaining({

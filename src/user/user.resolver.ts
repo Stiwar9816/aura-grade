@@ -35,6 +35,9 @@ import { DocumentType } from 'src/auth/enums/user-document-type.enum';
 import { Submission } from 'src/submission/entities/submission.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { Course } from 'src/course/entities/course.entity';
+import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
+import { UserImportService } from './import/user-import.service';
+import { UserImportResult } from './import/user-import.types';
 
 type UserFieldContext = {
   req?: {
@@ -44,7 +47,36 @@ type UserFieldContext = {
 
 @Resolver(() => User)
 export class UserResolver {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly userImportService: UserImportService
+  ) {}
+
+  @Mutation(() => UserImportResult, {
+    name: 'importInstitutionUsers',
+    description: 'Imports students and teachers into the current administrator institution.',
+  })
+  @Throttle({ short: { limit: 3, ttl: 15 * 60 * 1000 } })
+  @UseGuards(JwtAuthGuard)
+  importInstitutionUsers(
+    @Args('file', { type: () => GraphQLUpload }) file: FileUpload,
+    @CurrentUser([UserRoles.Administrador]) administrator: User
+  ): Promise<UserImportResult> {
+    return this.userImportService.import(file, administrator);
+  }
+
+  @Mutation(() => UserImportResult, {
+    name: 'importPlatformAdministrators',
+    description: 'Creates the initial administrator for existing institutions by tax ID.',
+  })
+  @Throttle({ short: { limit: 3, ttl: 15 * 60 * 1000 } })
+  @UseGuards(JwtAuthGuard)
+  importPlatformAdministrators(
+    @Args('file', { type: () => GraphQLUpload }) file: FileUpload,
+    @CurrentUser([UserRoles.Administrador]) platformAdministrator: User
+  ): Promise<UserImportResult> {
+    return this.userImportService.importPlatformAdministrators(file, platformAdministrator);
+  }
 
   @Query(() => [User], {
     name: 'users',

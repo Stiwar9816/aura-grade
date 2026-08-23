@@ -44,7 +44,7 @@ export class MailService {
   async sendResetPassword(user: User, plainPassword: string) {
     await this.sendEmail({
       to: user.email,
-      subject: '¡Solicitud de restablecimiento de contraseña 🔐!',
+      subject: '¡Solicitud de restablecimiento de contraseña!',
       templateId: envs.resend_reset_password_template_id,
       variables: {
         name: `${user.name} ${user.last_name}`,
@@ -53,6 +53,21 @@ export class MailService {
         app_name: envs.app_name,
         url_app: envs.frontend_url,
         support_email: 'support@auragrade.com',
+      },
+    });
+  }
+
+  async sendUserInvitation(user: User, token: string, idempotencyKey?: string) {
+    const invitationUrl = `${envs.frontend_url.replace(/\/+$/, '')}/create-password?token=${encodeURIComponent(token)}`;
+    await this.sendEmail({
+      to: user.email,
+      subject: `Activa tu cuenta en ${envs.app_name}`,
+      templateId: envs.resend_user_invitation_template_id,
+      idempotencyKey,
+      variables: {
+        name: `${user.name} ${user.last_name}`,
+        app_name: envs.app_name,
+        invitationUrl,
       },
     });
   }
@@ -109,11 +124,11 @@ export class MailService {
       timeZone: 'America/Bogota',
     }).format(assignment.dueDate);
     const assignmentUrl = `${envs.frontend_url.replace(/\/+$/, '')}/upload?assignment=${assignment.id}`;
-    if (envs.resend_assignment_reminder_template_id) {
+    if (envs.resend_task_reminder_template_id) {
       await this.sendEmail({
         to: student.email,
         subject: `Recordatorio de entrega: ${assignment.title}`,
-        templateId: envs.resend_assignment_reminder_template_id,
+        templateId: envs.resend_task_reminder_template_id,
         idempotencyKey,
         variables: {
           student_name: `${student.name} ${student.last_name}`,

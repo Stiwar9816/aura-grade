@@ -9,16 +9,19 @@ export const SEED_DATA: SeedData = {
     {
       key: 'universidad-aura',
       name: 'Universidad Aura',
+      taxId: '900100001-1',
       isActive: true,
     },
     {
       key: 'instituto-tecnologico-pacifico',
       name: 'Instituto Tecnológico del Pacífico',
+      taxId: '900100002-2',
       isActive: true,
     },
     {
       key: 'colegio-innovacion-andina',
       name: 'Colegio Innovación Andina',
+      taxId: '900100003-3',
       isActive: true,
     },
   ],
@@ -29,6 +32,7 @@ export const SEED_DATA: SeedData = {
       email: 'admin@aura.edu.co',
       password: DEVELOPMENT_PASSWORD,
       role: UserRoles.Administrador,
+      isPlatformAdmin: true,
       document_type: DocumentType.CITIZENSHIP_CARD,
       document_num: 9000000001,
       phone: 3200000001,

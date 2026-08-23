@@ -4,6 +4,7 @@ import { InstitutionApprovalStatus } from 'src/institution';
 export interface SeedInstitution {
   key: string;
   name: string;
+  taxId: string;
   isActive: boolean;
 }
 
@@ -36,6 +37,7 @@ export interface SeedUser {
   document_num: number;
   phone: number;
   institutionKey: string;
+  isPlatformAdmin?: boolean;
   approvalStatus?: InstitutionApprovalStatus;
 }
 

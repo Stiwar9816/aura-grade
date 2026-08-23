@@ -17,19 +17,24 @@ import { RubricModule } from 'src/rubric/rubric.module';
 import { AssignmentModule } from 'src/assignment/assignment.module';
 import { SubmissionModule } from 'src/submission/submission.module';
 import { JwtModule } from '@nestjs/jwt';
+import { UserImportService } from './import/user-import.service';
+import { UserInvitationController } from './import/user-invitation.controller';
+import { InstitutionModule } from 'src/institution';
 
 @Module({
-  providers: [UserResolver, UserService],
+  controllers: [UserInvitationController],
+  providers: [UserResolver, UserService, UserImportService],
   imports: [
     TypeOrmModule.forFeature([User]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule,
+    InstitutionModule,
     forwardRef(() => AuthModule),
     forwardRef(() => CourseModule),
     forwardRef(() => RubricModule),
     forwardRef(() => AssignmentModule),
     forwardRef(() => SubmissionModule),
   ],
-  exports: [UserService, TypeOrmModule],
+  exports: [UserService, UserImportService, TypeOrmModule],
 })
 export class UserModule {}

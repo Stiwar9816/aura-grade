@@ -40,6 +40,12 @@ export class Evaluation {
   @Field(() => Float)
   totalScore: number;
 
+  @Column({ name: 'legacy_total_score', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  legacyTotalScore?: number | null;
+
+  @Column({ name: 'legacy_max_score', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  legacyMaxScore?: number | null;
+
   @ApiProperty({
     example: 'Great job!',
     description: 'General Feedback',
@@ -57,6 +63,12 @@ export class Evaluation {
   @Column({ type: 'jsonb' })
   @Field(() => GraphQLJSON)
   detailedFeedback: any;
+
+  @Column({ name: 'legacy_detailed_feedback', type: 'jsonb', nullable: true })
+  legacyDetailedFeedback?: unknown;
+
+  @Column({ name: 'standardization_metadata', type: 'jsonb', nullable: true })
+  standardizationMetadata?: Record<string, unknown> | null;
 
   @ApiProperty({
     example: 'GPT-4o',

@@ -1,7 +1,17 @@
 // Decorators/GraphQl
-import { Field, Int, InputType } from '@nestjs/graphql';
+import { Field, Float, Int, InputType } from '@nestjs/graphql';
 // Validators
-import { IsNotEmpty, IsInt, IsString, Min, ValidateNested, IsArray, IsUUID } from 'class-validator';
+import {
+  Equals,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
 // Transform
 import { Type } from 'class-transformer';
 // Dto
@@ -14,10 +24,24 @@ export class CreateCriterionInput {
   @IsString({ message: 'El título del criterio debe ser un texto.' })
   title: string;
 
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @Field(() => Int, { description: 'Max points' })
   @IsInt({ message: 'El máximo de puntos debe ser un número entero.' })
-  @Min(1, { message: 'El máximo de puntos debe ser como mínimo 1.' })
-  maxPoints: number;
+  @Equals(5, { message: 'Cada criterio se califica en la escala de 0.0 a 5.0.' })
+  maxPoints: number = 5;
+
+  @Field(() => Float, { description: 'Percentage contribution to the final grade' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  weight: number;
+
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
 
   @Field(() => [CreateCriterionLevelsInput], { description: 'Criterion levels' })
   @IsArray({ message: 'Los niveles deben enviarse como una lista.' })

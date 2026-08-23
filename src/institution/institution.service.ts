@@ -82,6 +82,9 @@ export class InstitutionService {
     if (typeof normalized.contactEmail === 'string') {
       normalized.contactEmail = normalized.contactEmail.toLowerCase();
     }
+    if (typeof normalized.taxId === 'string') {
+      normalized.taxId = normalized.taxId.replace(/\s+/g, '').toUpperCase();
+    }
     return normalized as T;
   }
 

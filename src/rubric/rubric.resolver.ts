@@ -1,4 +1,5 @@
 import { UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 // Graphql
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 // Services
@@ -11,9 +12,15 @@ import { JwtAuthGuard } from 'src/auth/guards';
 import { Rubric } from './entities/rubric.entity';
 import { User } from 'src/user/entities/user.entity';
 // Dto
-import { CreateRubricInput, UpdateRubricInput } from './dto';
+import {
+  CreateRubricInput,
+  GenerateRubricInput,
+  SaveRubricDraftInput,
+  UpdateRubricInput,
+} from './dto';
 // Enums
 import { UserRoles } from 'src/auth/enums/user-roles.enum';
+import { GeneratedRubricType } from './types/generated-rubric.type';
 
 @Resolver(() => Rubric)
 export class RubricResolver {
@@ -26,6 +33,25 @@ export class RubricResolver {
     @CurrentUser([UserRoles.Docente]) user: User
   ) {
     return this.rubricService.create(createRubricInput, user);
+  }
+
+  @Mutation(() => GeneratedRubricType, { name: 'generateRubricDraft' })
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ short: { limit: 5, ttl: 60 * 1000 } })
+  generateRubricDraft(
+    @Args('input') input: GenerateRubricInput,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ) {
+    return this.rubricService.generateDraft(input, user);
+  }
+
+  @Mutation(() => Rubric, { name: 'saveRubricDraft' })
+  @UseGuards(JwtAuthGuard)
+  saveRubricDraft(
+    @Args('input') input: SaveRubricDraftInput,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ) {
+    return this.rubricService.saveDraft(input, user);
   }
 
   @Query(() => [Rubric], { name: 'rubrics' })

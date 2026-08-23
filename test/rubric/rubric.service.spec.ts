@@ -1,6 +1,12 @@
 import { RubricService } from 'src/rubric/rubric.service';
 import { UserRoles } from 'src/auth/enums';
 import type { User } from 'src/user/entities/user.entity';
+import {
+  RubricAcademicLevel,
+  RubricPerformanceLevel,
+  RubricSource,
+  RubricStatus,
+} from 'src/rubric/enums';
 
 describe('RubricService', () => {
   const rubricRepository = {
@@ -11,7 +17,17 @@ describe('RubricService', () => {
     preload: jest.fn(),
     remove: jest.fn(),
   };
-  const service = new RubricService(rubricRepository as never);
+  const dataSource = { transaction: jest.fn() };
+  const aiService = {
+    generateRubricDraft: jest.fn(),
+    verifyRubricGeneration: jest.fn(),
+    consumeRubricGeneration: jest.fn(),
+  };
+  const service = new RubricService(
+    rubricRepository as never,
+    dataSource as never,
+    aiService as never
+  );
 
   const teacher = {
     id: 'teacher-id',
@@ -56,7 +72,8 @@ describe('RubricService', () => {
     const input = {
       title: 'Rúbrica',
       description: 'Descripción',
-      maxTotalScore: 10,
+      maxTotalScore: 5,
+      academicLevel: RubricAcademicLevel.UNIVERSITARIO,
     };
     rubricRepository.create.mockImplementation((value) => value);
     rubricRepository.save.mockResolvedValue({ id: 'rubric-id', user: teacher });
@@ -64,7 +81,13 @@ describe('RubricService', () => {
 
     await service.create(input, teacher);
 
-    expect(rubricRepository.create).toHaveBeenCalledWith({ ...input, user: teacher });
+    expect(rubricRepository.create).toHaveBeenCalledWith({
+      ...input,
+      maxTotalScore: 5,
+      status: RubricStatus.DRAFT,
+      source: RubricSource.MANUAL,
+      user: teacher,
+    });
   });
 
   it('rejects reading a rubric owned by another teacher', async () => {
@@ -87,9 +110,113 @@ describe('RubricService', () => {
 
     await expect(
       service.create(
-        { title: 'Rúbrica', description: 'Descripción', maxTotalScore: 10 },
+        {
+          title: 'Rúbrica',
+          description: 'Descripción',
+          maxTotalScore: 5,
+          academicLevel: RubricAcademicLevel.UNIVERSITARIO,
+        },
         administrator
       )
     ).rejects.toThrow('Solo un docente puede administrar rúbricas.');
+  });
+
+  it('delegates AI draft generation with the authenticated teacher identity', async () => {
+    aiService.generateRubricDraft.mockResolvedValue({ title: 'Rúbrica IA' });
+    const input = {
+      title: 'Ensayo',
+      taskDescription: 'Analiza críticamente un caso.',
+      academicLevel: RubricAcademicLevel.POSGRADO,
+      criterionCount: 4,
+    };
+
+    await service.generateDraft(input, teacher);
+
+    expect(aiService.generateRubricDraft).toHaveBeenCalledWith(input, teacher.id);
+  });
+
+  it('rejects drafts whose criterion percentages do not add up to 100', async () => {
+    await expect(
+      service.saveDraft(
+        {
+          title: 'Rúbrica',
+          description: 'Descripción',
+          academicLevel: RubricAcademicLevel.UNIVERSITARIO,
+          criteria: [
+            {
+              title: 'Argumentación',
+              description: 'Evalúa la calidad de los argumentos.',
+              weight: 90,
+              levels: [
+                { label: 'Excelente' as never, description: 'Dominio completo.' },
+                { label: 'Bueno' as never, description: 'Buen dominio.' },
+                { label: 'Aceptable' as never, description: 'Dominio básico.' },
+                { label: 'Insuficiente' as never, description: 'No alcanza lo esperado.' },
+              ],
+            },
+          ],
+        },
+        teacher
+      )
+    ).rejects.toThrow('Los porcentajes deben sumar 100%');
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects creating another version when the lineage already has a draft', async () => {
+    const current = {
+      id: 'published-id',
+      rootRubricId: 'published-id',
+      version: 1,
+      status: RubricStatus.PUBLISHED,
+      user: teacher,
+    };
+    const queryBuilder = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(current),
+    };
+    const transactionRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      find: jest.fn().mockResolvedValue([
+        current,
+        {
+          id: 'draft-id',
+          rootRubricId: 'published-id',
+          version: 2,
+          status: RubricStatus.DRAFT,
+        },
+      ]),
+    };
+    dataSource.transaction.mockImplementation((callback) =>
+      callback({ getRepository: () => transactionRepository })
+    );
+
+    const levels = [
+      { label: RubricPerformanceLevel.EXCELENTE, description: 'Dominio completo.' },
+      { label: RubricPerformanceLevel.BUENO, description: 'Buen dominio.' },
+      { label: RubricPerformanceLevel.ACEPTABLE, description: 'Dominio básico.' },
+      { label: RubricPerformanceLevel.INSUFICIENTE, description: 'No alcanza lo esperado.' },
+    ];
+
+    await expect(
+      service.saveDraft(
+        {
+          id: current.id,
+          title: 'Nueva versión',
+          description: 'Descripción',
+          academicLevel: RubricAcademicLevel.UNIVERSITARIO,
+          criteria: [
+            {
+              title: 'Argumentación',
+              description: 'Evalúa los argumentos.',
+              weight: 100,
+              levels,
+            },
+          ],
+        },
+        teacher
+      )
+    ).rejects.toThrow('ya tiene un borrador en la versión 2');
   });
 });

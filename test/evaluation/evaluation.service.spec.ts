@@ -50,11 +50,14 @@ describe('EvaluationService', () => {
     id: 'assignment-id',
     title: 'Ensayo',
     user: teacher,
-    rubric: { maxTotalScore: 10 },
+    rubric: {
+      maxTotalScore: 5,
+      criteria: [{ id: 'criterion-id', title: 'Argumentación', weight: 100 }],
+    },
   };
   const draftEvaluation = {
     id: 'evaluation-id',
-    totalScore: 8,
+    totalScore: 4,
     generalFeedback: 'Buen trabajo',
     detailedFeedback: {},
     status: EvaluationStatus.DRAFT,
@@ -84,7 +87,7 @@ describe('EvaluationService', () => {
 
     const result = await service.createDraft({
       submissionId: 'submission-id',
-      totalScore: 8,
+      totalScore: 4,
       generalFeedback: 'Buen trabajo',
       detailedFeedback: {},
     });
@@ -108,7 +111,7 @@ describe('EvaluationService', () => {
 
     const result = await service.createDraft({
       submissionId: 'submission-id',
-      totalScore: 8,
+      totalScore: 4,
       generalFeedback: 'Buen trabajo',
       detailedFeedback: {},
     });
@@ -147,6 +150,7 @@ describe('EvaluationService', () => {
     );
     expect(evaluationRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        totalScore: 4,
         origin: EvaluationOrigin.MANUAL,
         status: EvaluationStatus.DRAFT,
         submission: { id: 'submission-id' },
@@ -298,10 +302,10 @@ describe('EvaluationService', () => {
     await expect(
       service.publish(
         draftEvaluation.id,
-        { id: draftEvaluation.id, totalScore: 11, generalFeedback: 'Revisada' },
+        { id: draftEvaluation.id, totalScore: 5.1, generalFeedback: 'Revisada' },
         teacher
       )
-    ).rejects.toThrow('La calificación debe estar entre 0 y 10.');
+    ).rejects.toThrow('La calificación debe estar entre 0 y 5.');
   });
 
   it('publishes and notifies using the complete student, assignment and evaluation entities', async () => {
@@ -310,7 +314,7 @@ describe('EvaluationService', () => {
 
     const result = await service.publish(
       draftEvaluation.id,
-      { id: draftEvaluation.id, totalScore: 9, generalFeedback: 'Revisión final' },
+      { id: draftEvaluation.id, totalScore: 4.5, generalFeedback: 'Revisión final' },
       teacher
     );
 
@@ -328,10 +332,10 @@ describe('EvaluationService', () => {
   it('keeps a published grade when notification queueing fails', async () => {
     evaluationRepository.findOne.mockResolvedValue({
       ...draftEvaluation,
-      totalScore: 8,
+      totalScore: 4,
       submission: {
         ...draftEvaluation.submission,
-        assignment: { ...assignment, rubric: { maxTotalScore: 10 } },
+        assignment: { ...assignment, rubric: { maxTotalScore: 5 } },
       },
     });
     evaluationRepository.save.mockImplementation((value) => value);

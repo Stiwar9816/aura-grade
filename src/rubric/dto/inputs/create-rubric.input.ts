@@ -1,6 +1,7 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 // Validators
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { Equals, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { RubricAcademicLevel } from '../../enums';
 
 @InputType()
 export class CreateRubricInput {
@@ -14,6 +15,11 @@ export class CreateRubricInput {
   description?: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Field(() => Float, { description: 'Max total score of the rubric' })
-  maxTotalScore: number;
+  @Equals(5, { message: 'La escala máxima de todas las rúbricas es 5.0.' })
+  @Field(() => Float, { description: 'Max total score of the rubric', defaultValue: 5 })
+  maxTotalScore: number = 5;
+
+  @IsEnum(RubricAcademicLevel)
+  @Field(() => RubricAcademicLevel, { defaultValue: RubricAcademicLevel.UNIVERSITARIO })
+  academicLevel: RubricAcademicLevel = RubricAcademicLevel.UNIVERSITARIO;
 }

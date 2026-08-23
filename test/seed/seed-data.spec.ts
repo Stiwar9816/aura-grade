@@ -7,9 +7,18 @@ const hasDuplicates = <T>(values: T[]) => new Set(values).size !== values.length
 describe('SEED_DATA', () => {
   it('has unique institution and user identifiers', () => {
     expect(hasDuplicates(SEED_DATA.institutions.map((institution) => institution.key))).toBe(false);
+    expect(hasDuplicates(SEED_DATA.institutions.map((institution) => institution.taxId))).toBe(
+      false
+    );
     expect(hasDuplicates(SEED_DATA.users.map((user) => user.email))).toBe(false);
     expect(hasDuplicates(SEED_DATA.users.map((user) => user.document_num))).toBe(false);
     expect(hasDuplicates(SEED_DATA.users.map((user) => user.phone))).toBe(false);
+  });
+
+  it('defines exactly one platform administrator for development', () => {
+    const platformAdministrators = SEED_DATA.users.filter((user) => user.isPlatformAdmin);
+    expect(platformAdministrators).toHaveLength(1);
+    expect(platformAdministrators[0].role).toBe(UserRoles.Administrador);
   });
 
   it('has an administrator, teacher and approved student in every institution', () => {

@@ -18,6 +18,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Assignment } from './entities/assignment.entity';
 import { Course } from 'src/course/entities/course.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
+import { RubricService } from 'src/rubric/rubric.service';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
 import { EvaluationStatus } from 'src/enums';
@@ -49,8 +50,7 @@ export class AssignmentService {
     private readonly extensionRepository: Repository<AssignmentExtension>,
     @InjectRepository(Course)
     private readonly courseRepository: Repository<Course>,
-    @InjectRepository(Rubric)
-    private readonly rubricRepository: Repository<Rubric>
+    private readonly rubricService: RubricService
   ) {}
 
   async create(input: CreateAssignmentInput, teacher: User): Promise<Assignment> {
@@ -226,13 +226,7 @@ export class AssignmentService {
   }
 
   private async findOwnedRubric(id: string, teacher: User): Promise<Rubric> {
-    const rubric = await this.rubricRepository.findOne({
-      where: { id, user: { id: teacher.id } },
-      relations: ['user'],
-    });
-    if (!rubric)
-      throw new ForbiddenException('La rúbrica no existe o no pertenece al docente actual.');
-    return rubric;
+    return this.rubricService.publishForAssignment(id, teacher);
   }
 
   private scopeAssignment(assignment: Assignment, actor: User): Assignment {

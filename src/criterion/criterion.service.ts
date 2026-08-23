@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCriterionInput, UpdateCriterionInput } from './dto';
@@ -6,6 +11,8 @@ import { Criterion } from './entities/criterion.entity';
 import { Rubric } from 'src/rubric/entities/rubric.entity';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
+import { RUBRIC_LEVEL_RANGES, RUBRIC_MAX_SCORE } from 'src/rubric/rubric.constants';
+import { RubricStatus } from 'src/rubric/enums';
 
 const CRITERION_RELATIONS = ['rubric', 'rubric.user'];
 
@@ -24,6 +31,8 @@ export class CriterionService {
     const rubric = await this.findOwnedRubric(rubricId, teacher);
     const criterion = this.criterionRepository.create({
       ...criterionData,
+      maxPoints: RUBRIC_MAX_SCORE,
+      levels: this.normalizeLevels(criterionData.levels),
       rubric,
     });
     return this.criterionRepository.save(criterion);
@@ -60,9 +69,15 @@ export class CriterionService {
 
   async update(id: string, input: UpdateCriterionInput, teacher: User): Promise<Criterion> {
     this.assertTeacher(teacher);
-    await this.findOne(id, teacher);
+    const current = await this.findOne(id, teacher);
+    this.assertDraft(current.rubric);
     const { id: _, ...toUpdate } = input;
-    const criterion = await this.criterionRepository.preload({ id, ...toUpdate });
+    const criterion = await this.criterionRepository.preload({
+      id,
+      ...toUpdate,
+      maxPoints: RUBRIC_MAX_SCORE,
+      ...(toUpdate.levels ? { levels: this.normalizeLevels(toUpdate.levels) } : {}),
+    });
     if (!criterion)
       throw new NotFoundException(`No se encontró el criterio con identificador ${id}.`);
     return this.criterionRepository.save(criterion);
@@ -71,6 +86,7 @@ export class CriterionService {
   async remove(id: string, teacher: User): Promise<Criterion> {
     this.assertTeacher(teacher);
     const criterion = await this.findOne(id, teacher);
+    this.assertDraft(criterion.rubric);
     await this.criterionRepository.remove(criterion);
     return { ...criterion, id };
   }
@@ -82,7 +98,25 @@ export class CriterionService {
     });
     if (!rubric)
       throw new ForbiddenException('La rúbrica no existe o no pertenece al docente actual.');
+    this.assertDraft(rubric);
     return rubric;
+  }
+
+  private normalizeLevels(levels: CreateCriterionInput['levels']) {
+    const byLabel = new Map(levels.map((level) => [level.label, level.description?.trim()]));
+    if (byLabel.size !== RUBRIC_LEVEL_RANGES.length)
+      throw new BadRequestException('Cada criterio debe incluir los cuatro niveles obligatorios.');
+    return RUBRIC_LEVEL_RANGES.map((range) => {
+      const description = byLabel.get(range.label);
+      if (!description)
+        throw new BadRequestException(`Falta la descripción del nivel ${range.label}.`);
+      return { ...range, score: range.maxScore, description };
+    });
+  }
+
+  private assertDraft(rubric: Rubric): void {
+    if (rubric.status !== RubricStatus.DRAFT)
+      throw new BadRequestException('Los criterios de una rúbrica publicada son inmutables.');
   }
 
   private assertTeacher(actor: User): void {

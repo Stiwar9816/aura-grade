@@ -18,12 +18,12 @@ describe('AssignmentService', () => {
     delete: jest.fn(),
   };
   const courseRepository = { findOne: jest.fn() };
-  const rubricRepository = { findOne: jest.fn() };
+  const rubricService = { publishForAssignment: jest.fn() };
   const service = new AssignmentService(
     assignmentRepository as never,
     extensionRepository as never,
     courseRepository as never,
-    rubricRepository as never
+    rubricService as never
   );
 
   const teacher = {
@@ -132,7 +132,7 @@ describe('AssignmentService', () => {
     const course = { id: 'course-id', user: teacher };
     const rubric = { id: 'rubric-id', user: teacher };
     courseRepository.findOne.mockResolvedValue(course);
-    rubricRepository.findOne.mockResolvedValue(rubric);
+    rubricService.publishForAssignment.mockResolvedValue(rubric);
     assignmentRepository.create.mockImplementation((value) => value);
     assignmentRepository.save.mockResolvedValue({ id: 'assignment-id' });
     assignmentRepository.findOne.mockResolvedValue({
@@ -179,7 +179,7 @@ describe('AssignmentService', () => {
 
   it('rejects creating an assignment with another teacher course', async () => {
     courseRepository.findOne.mockResolvedValue(null);
-    rubricRepository.findOne.mockResolvedValue({ id: 'rubric-id', user: teacher });
+    rubricService.publishForAssignment.mockResolvedValue({ id: 'rubric-id', user: teacher });
 
     await expect(
       service.create(

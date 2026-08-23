@@ -1,4 +1,4 @@
-import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 // Swagger
 import { ApiProperty } from '@nestjs/swagger';
 import type { Rubric } from 'src/rubric/entities/rubric.entity';
@@ -12,13 +12,28 @@ import {
   UpdateDateColumn,
   Entity,
 } from 'typeorm';
+import { RubricPerformanceLevel } from 'src/rubric/enums';
 
 @ObjectType()
 export class CriterionLevel {
   @ApiProperty({ example: 5, description: 'Score assigned to this level' })
-  @Column({ type: 'integer' })
-  @Field(() => Int)
+  @Column({ type: 'decimal' })
+  @Field(() => Float, {
+    deprecationReason: 'Use minScore and maxScore. Kept for compatibility with older clients.',
+  })
   score: number;
+
+  @Column({ type: 'text' })
+  @Field(() => String)
+  label: RubricPerformanceLevel;
+
+  @Column({ type: 'decimal' })
+  @Field(() => Float)
+  minScore: number;
+
+  @Column({ type: 'decimal' })
+  @Field(() => Float)
+  maxScore: number;
 
   @ApiProperty({ example: 'Desempeño excelente.', description: 'Descripción del nivel' })
   @Column({ type: 'text' })
@@ -47,6 +62,10 @@ export class Criterion {
   @Field(() => String)
   title: string;
 
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, { nullable: true })
+  description?: string | null;
+
   @ApiProperty({ example: 5, description: 'Max points' })
   @Column({
     type: 'integer',
@@ -54,6 +73,20 @@ export class Criterion {
   })
   @Field(() => Int)
   maxPoints: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  @Field(() => Float, { description: 'Percentage contribution to the final grade.' })
+  weight: number;
+
+  @Column({ name: 'sort_order', type: 'integer', default: 0 })
+  @Field(() => Int)
+  sortOrder: number;
+
+  @Column({ name: 'legacy_max_points', type: 'integer', nullable: true })
+  legacyMaxPoints?: number | null;
+
+  @Column({ name: 'legacy_levels', type: 'jsonb', nullable: true })
+  legacyLevels?: unknown;
 
   @ApiProperty({
     type: 'array',

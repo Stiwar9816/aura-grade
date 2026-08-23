@@ -33,6 +33,7 @@ describe('InstitutionService', () => {
     const result = await service.create(
       {
         name: '  Universidad Ágora  ',
+        taxId: ' ab 900765432-1 ',
         contactEmail: ' CONTACTO@AGORA.EDU.CO ',
       },
       administrator
@@ -41,6 +42,7 @@ describe('InstitutionService', () => {
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Universidad Ágora',
+        taxId: 'AB900765432-1',
         contactEmail: 'contacto@agora.edu.co',
       })
     );
@@ -52,7 +54,7 @@ describe('InstitutionService', () => {
     repository.save.mockRejectedValue({ code: '23505' });
 
     await expect(
-      service.create({ name: 'Universidad Aura' }, administrator)
+      service.create({ name: 'Universidad Aura', taxId: '900123456-7' }, administrator)
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -65,7 +67,7 @@ describe('InstitutionService', () => {
 
   it('rejects institution management by an institutional administrator', async () => {
     await expect(
-      service.create({ name: 'Institución no autorizada' }, {
+      service.create({ name: 'Institución no autorizada', taxId: '900111222-3' }, {
         ...administrator,
         isPlatformAdmin: false,
       } as User)
