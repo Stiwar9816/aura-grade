@@ -1,0 +1,35 @@
+const testEnvironment = {
+  PORT: '3000',
+  STATE: 'test',
+  DB_PORT: '5432',
+  DB_PASSWORD: 'test-database-password',
+  DB_NAME: 'aura_grade_test',
+  DB_HOST: '127.0.0.1',
+  DB_USERNAME: 'postgres',
+  DB_SSL_MODE: 'disable',
+  DB_CONNECTION_TIMEOUT_MS: '10000',
+  JWT_SECRET: 'test-jwt-secret',
+  MAIL_FROM: 'Aura Grade Tests <noreply@example.test>',
+  RESEND_API_KEY: 'test-resend-api-key',
+  RESEND_CONFIRMATION_TEMPLATE_ID: 'tmpl_confirmation_test',
+  RESEND_UPDATE_PASSWORD_TEMPLATE_ID: 'tmpl_update_password_test',
+  RESEND_RESET_PASSWORD_TEMPLATE_ID: 'tmpl_reset_password_test',
+  RESEND_NEW_SUBMISSION_TEMPLATE_ID: 'tmpl_new_submission_test',
+  RESEND_GRADE_PUBLISHED_TEMPLATE_ID: 'tmpl_grade_published_test',
+  RESEND_TASK_REMINDER_TEMPLATE_ID: 'tmpl_task_reminder_test',
+  RESEND_USER_INVITATION_TEMPLATE_ID: 'tmpl_user_invitation_test',
+  APP_NAME: 'Aura Grade Test',
+  FRONTEND_URL: 'http://localhost:3001',
+  CLOUDINARY_API_KEY: 'test-cloudinary-api-key',
+  CLOUDINARY_API_SECRET: 'test-cloudinary-api-secret',
+  CLOUDINARY_NAME: 'test-cloudinary-cloud',
+  AI_PROVIDER: 'openai',
+  OPENAI_API_KEY: 'test-openai-api-key',
+  REDIS_HOST: '127.0.0.1',
+  REDIS_PORT: '6379',
+  BASIC_AUTH_PASSWORD: 'test-basic-auth-password',
+};
+
+for (const [name, value] of Object.entries(testEnvironment)) {
+  process.env[name] ??= value;
+}

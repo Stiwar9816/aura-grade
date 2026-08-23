@@ -8,7 +8,3 @@ Object.defineProperty(global, 'localStorage', {
   },
   writable: true,
 });
-
-process.env.RESEND_CONFIRMATION_TEMPLATE_ID ??= 'tmpl_confirmation_test';
-process.env.RESEND_UPDATE_PASSWORD_TEMPLATE_ID ??= 'tmpl_update_password_test';
-process.env.RESEND_RESET_PASSWORD_TEMPLATE_ID ??= 'tmpl_reset_password_test';

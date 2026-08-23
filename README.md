@@ -422,6 +422,11 @@ mismo header y este cuerpo:
 
 ### Ejecutar Tests
 
+Las pruebas unitarias cargan valores ficticios desde `jest.env.js` antes de
+importar la aplicación. No necesitan `.env` ni secretos de producción en
+GitHub Actions; una variable definida explícitamente por el runner conserva su
+valor.
+
 ```bash
 # Tests unitarios
 pnpm test
