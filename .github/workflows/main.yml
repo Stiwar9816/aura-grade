@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm test -- --runInBand
+        run: pnpm test --runInBand
 
       - name: Run Build (Verify compilation)
         run: pnpm run build

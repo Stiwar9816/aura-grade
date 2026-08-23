@@ -258,7 +258,7 @@ Cada vez que realices un cambio en un archivo `.entity.ts`, sigue este flujo:
 7. **Ejecuta las comprobaciones antes de publicar**:
 
    ```bash
-   pnpm test -- --runInBand
+   pnpm test --runInBand
    pnpm run build
    ```
 
