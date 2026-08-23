@@ -50,7 +50,9 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 ### 🔐 Autenticación y Autorización
 
-- ✅ Registro, Login y Recuperación de contraseña (JWT & Emails).
+- ✅ Registro, inicio de sesión y recuperación de contraseña por correo.
+- ✅ Sesiones opacas almacenadas en Redis, con expiración por inactividad y absoluta.
+- ✅ Segundo factor TOTP compatible con Google Authenticator y Microsoft Authenticator.
 - ✅ Roles (Administrador, Docente, Estudiante).
 - ✅ Guards y Decoradores personalizados.
 - ✅ Basic Auth para proteger el panel de monitoreo de Bull Board.
@@ -68,6 +70,8 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - ✅ Confirmación de registro
 - ✅ Actualización de contraseña
 - ✅ Recuperación de contraseña
+- ✅ Invitación de usuarios importados
+- ✅ Avisos de nuevas entregas, calificaciones publicadas y recordatorios de tareas
 - ✅ Templates personalizables
 
 ### 📚 Documentación
@@ -79,12 +83,12 @@ API avanzada para la gestión y calificación automática de trabajos universita
 ### 🛠️ Utilidades
 
 - **Database Seeding**: Poblado automático de base de datos con usuarios y rúbricas de prueba.
-- **GraphQL API**: Schema-first approach con TypeGraphQL.
+- **GraphQL API**: esquema generado desde decoradores de NestJS (code-first).
 
 ## 📋 Requisitos Previos
 
 - Node.js >= 22.x (LTS)
-- pnpm >= 10.x
+- pnpm 11.23.0 (fijado en `package.json` y en la imagen Docker)
 - Docker & Docker Compose (para DB y Redis)
 - Cuenta en Cloudinary
 - Cuenta y API key de Resend
@@ -97,99 +101,61 @@ API avanzada para la gestión y calificación automática de trabajos universita
 ```bash
 git clone <repository-url>
 cd aura-grade
-pnpm install
+corepack enable
+pnpm --version # Debe mostrar 11.23.0
+pnpm install --frozen-lockfile
 ```
+
+Corepack puede descargar pnpm la primera vez que se ejecuta; ese mensaje es
+normal. En CI o en cualquier instalación sin terminal interactiva usa:
+
+```bash
+CI=true pnpm install --frozen-lockfile
+```
+
+El `Dockerfile` ya establece `CI=true` en las etapas `deps`, `builder` y
+`prod-deps`, por lo que no solicita confirmación si debe reconstruir un
+`node_modules` creado con otra versión de pnpm. La imagen final no incluye
+Corepack ni pnpm.
+
+La carpeta `.pnpm-store/` es una caché local recreable: no se versiona ni se
+envía en el contexto de Docker. El archivo que garantiza instalaciones
+reproducibles y sí debe permanecer en Git es `pnpm-lock.yaml`.
 
 ### 2. Configurar Entorno
 
 Copia el archivo `.env.template` a `.env` y configura tus credenciales:
 
-```env
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=aura_grade
-DB_USERNAME=postgres
-DB_PASSWORD=secret
-DB_SSL_MODE=disable
-DB_CONNECTION_TIMEOUT_MS=10000
-
-# JWT
-JWT_SECRET=super-secret-key
-
-# Mail
-MAIL_FROM="Aura Grade <noreply@tu-dominio-verificado.com>"
-RESEND_API_KEY=re_tu_api_key
-RESEND_CONFIRMATION_TEMPLATE_ID=tmpl_xxxxxxxxx
-RESEND_UPDATE_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
-RESEND_RESET_PASSWORD_TEMPLATE_ID=tmpl_xxxxxxxxx
-RESEND_NEW_SUBMISSION_TEMPLATE_ID=tmpl_xxxxxxxxx
-RESEND_GRADE_PUBLISHED_TEMPLATE_ID=tmpl_xxxxxxxxx
-# Opcional; sin esta variable el recordatorio usa texto plano
-RESEND_ASSIGNMENT_REMINDER_TEMPLATE_ID=tmpl_xxxxxxxxx
-
-# Web Push
-VAPID_SUBJECT=mailto:admin@tu-dominio.com
-VAPID_PUBLIC_KEY=tu-clave-publica-vapid
-VAPID_PRIVATE_KEY=tu-clave-privada-vapid
-
-# Cloudinary (Archivos)
-CLOUDINARY_NAME=tu-cloud-name
-CLOUDINARY_API_KEY=tu-api-key
-CLOUDINARY_API_SECRET=tu-api-secret
-
-# OpenAI (Inteligencia Artificial)
-OPENAI_API_KEY=sk-tu-api-key-openai
-
-# Gemini (Inteligencia Artificial)
-GEMINI_API_KEY=tu-api-key-de-google-ai-studio
-
-# AI Provider
-AI_PROVIDER=gemini|openai
-
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-
-# Sesiones opacas respaldadas por Redis
-SESSION_IDLE_SECONDS=1800
-SESSION_ABSOLUTE_SECONDS=28800
-SESSION_REMEMBER_IDLE_SECONDS=604800
-SESSION_REMEMBER_ABSOLUTE_SECONDS=2592000
-SESSION_ADMIN_IDLE_SECONDS=900
-SESSION_ADMIN_ABSOLUTE_SECONDS=14400
-SESSION_REFRESH_INTERVAL_SECONDS=60
-SESSION_MAX_PER_USER=5
-AUTH_2FA_SESSION_TTL_SECONDS=43200
-
-# Seguridad (Bull Board Monitoring)
-BASIC_AUTH_PASSWORD=tu-password-seguro
-
-# Comunicación confiable Next.js BFF -> Backend
-BFF_SHARED_SECRET=un-secreto-aleatorio-de-al-menos-32-caracteres
-TRUST_PROXY_HOPS=1
-
-# Scraping interno de /api/metrics
-METRICS_TOKEN=un-token-aleatorio-de-al-menos-32-caracteres
-
-# Los JWT heredados no se aceptan: toda sesión debe acreditar OTP en Redis.
-
-# Bootstrap de tenancy (solo mientras se aplica la migración inicial)
-BOOTSTRAP_INSTITUTION_NAME="Universidad Aura"
-BOOTSTRAP_INSTITUTION_SLUG=universidad-aura
-BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN=aura.edu.co
-BOOTSTRAP_ADMIN_EMAIL=admin@aura.edu.co
-BOOTSTRAP_ADMIN_PASSWORD=una-clave-inicial-fuerte-y-unica
-BOOTSTRAP_ADMIN_NAME=Administrador
-BOOTSTRAP_ADMIN_LAST_NAME=Institucional
-BOOTSTRAP_ADMIN_DOCUMENT_NUM=1000000000
-BOOTSTRAP_ADMIN_PHONE=3000000000
-
-# App
-APP_NAME='Aura Grade'
-PORT=3000
-FRONTEND_URL=http://localhost:3000
+```bash
+cp .env.template .env
 ```
+
+No copies secretos reales en `.env.template` ni en el repositorio. Como mínimo,
+verifica estos grupos antes de iniciar la API:
+
+- Aplicación: `STATE`, `APP_NAME`, `PORT` y `FRONTEND_URL`.
+- Base de datos: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`,
+  `DB_SSL_MODE` y `DB_CONNECTION_TIMEOUT_MS`.
+- Correo: `MAIL_FROM`, `RESEND_API_KEY` y todos los identificadores
+  `RESEND_*_TEMPLATE_ID`, incluidos `RESEND_TASK_REMINDER_TEMPLATE_ID` y
+  `RESEND_USER_INVITATION_TEMPLATE_ID`.
+- IA: `AI_PROVIDER=openai` o `AI_PROVIDER=gemini` y la clave del proveedor
+  seleccionado.
+- Seguridad: `JWT_SECRET`, `BASIC_AUTH_PASSWORD`, `BFF_SHARED_SECRET`,
+  `METRICS_TOKEN` y `AUTH_2FA_ENCRYPTION_KEY`.
+
+Redis admite dos configuraciones excluyentes según el entorno:
+
+| Ejecución                                | Variables                                  |
+| :--------------------------------------- | :----------------------------------------- |
+| API dentro del Compose de desarrollo     | `REDIS_HOST=redis` y `REDIS_PORT=6379`     |
+| API local con Redis publicado por Docker | `REDIS_HOST=localhost` y `REDIS_PORT=6379` |
+| Producción                               | `REDIS_URL=redis://...` o `rediss://...`   |
+
+En producción, `BFF_SHARED_SECRET`, `METRICS_TOKEN` y
+`AUTH_2FA_ENCRYPTION_KEY` deben tener al menos 32 caracteres. Las variables
+`BOOTSTRAP_*` son temporales: se usan únicamente al crear la primera institución
+y deben retirarse del entorno después de aplicar la migración correspondiente.
 
 Genera `BFF_SHARED_SECRET` y `METRICS_TOKEN` con un alfabeto seguro para
 archivos `.env` (por ejemplo, `openssl rand -hex 32`). Evita valores con `$`
@@ -227,15 +193,28 @@ el envío manual aplica un enfriamiento real de seis horas por estudiante y tare
 
 ### 3. Iniciar Servicios (Docker)
 
+Para ejecutar API, PostgreSQL y Redis dentro de Docker:
+
 ```bash
-docker-compose up -d
+docker compose --env-file .env -f docker-compose.yaml up -d --build
 ```
 
-### 4. Ejecutar Aplicación
+Antes de desplegar la composición de producción, valida que todas las variables
+puedan resolverse:
 
 ```bash
-# Desarrollo
-pnpm start:dev
+docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+```
+
+### 4. Ejecutar la aplicación fuera de Docker
+
+Si prefieres ejecutar NestJS en el host, inicia únicamente la infraestructura y
+apunta la API al puerto publicado de Redis:
+
+```bash
+docker compose --env-file .env -f docker-compose.yaml up -d db redis
+REDIS_HOST=localhost pnpm run start:dev
 ```
 
 ### 5. Gestión de Base de Datos (Migraciones)
@@ -462,25 +441,17 @@ pnpm test:clear
 
 ### Cobertura de Tests
 
-```
-Test Suites: 15 total
-Tests:       160 total (158 passing, 98.75%)
-Coverage:    66.93% statements | 49.38% branches | 49.53% functions | 66.51% lines
-```
-
-**Módulos con 100% de cobertura:**
-
-- ✅ Auth Guards
-- ✅ JWT Strategy
-- ✅ Mail Service
-- ✅ Auth Enums
-- ✅ Login DTO
+`pnpm test:cov` genera el informe vigente en `coverage/`. Las cifras no se
+mantienen manualmente en este documento porque cambian con cada suite añadida.
 
 ## 🔄 CI/CD
 
 El proyecto incluye un pipeline automatizado con **GitHub Actions** (`.github/workflows/main.yml`) que realiza:
 
 - **Build & Push**: Construcción de la imagen Docker y subida automática a Docker Hub.
+- **Instalación reproducible**: Node 22 y pnpm 11.23.0 con lockfile congelado;
+  las instalaciones Docker se ejecutan con `CI=true` para evitar solicitudes de
+  confirmación sin TTY.
 
 ## 📖 Documentación de API
 
@@ -540,7 +511,7 @@ src/
 - **Caché**: **[Redis](https://redis.io/)** + **[Cache Manager](https://github.com/node-cache-manager/node-cache-manager)**
 - **AI**: **[OpenAI](https://openai.com/)** GPT-4o | **[Gemini](https://gemini.com/)** gemini-2.5-flash
 - **Almacenamiento**: **[Cloudinary](https://cloudinary.com/)**
-- **Autenticación**: **[JWT](https://jwt.io/)** + **[Passport](https://www.passportjs.org/)**
+- **Autenticación**: sesiones opacas en Redis + **[Passport](https://www.passportjs.org/)** + TOTP/OTP
 - **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
 - **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**
 - **Testing**: **[Jest](https://jestjs.io/)**

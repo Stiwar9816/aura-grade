@@ -3,7 +3,7 @@
 /node_modules
 /build
 /postgres
-
+.pnpm-store
 # Logs
 logs
 *.log

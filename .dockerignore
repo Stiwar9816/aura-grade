@@ -1,5 +1,6 @@
 dist/
 node_modules/
+.pnpm-store/
 postgres/
 docker-scout-*.sarif.json
 .env

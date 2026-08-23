@@ -16,17 +16,20 @@ WORKDIR /app
 
 # Dependencies stage (Development & Build)
 FROM base AS deps
+ENV CI=true
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # Build stage
 FROM base AS builder
+ENV CI=true
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm run build
 
 # Production dependencies stage
 FROM base AS prod-deps
+ENV CI=true
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
