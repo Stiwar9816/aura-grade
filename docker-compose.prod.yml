@@ -27,6 +27,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-aura-grade@local}
     image: aura_grade:latest
     container_name: aura_grade_prod
     restart: always
@@ -87,6 +91,11 @@ services:
       SESSION_ADMIN_ABSOLUTE_SECONDS: ${SESSION_ADMIN_ABSOLUTE_SECONDS:-14400}
       SESSION_REFRESH_INTERVAL_SECONDS: ${SESSION_REFRESH_INTERVAL_SECONDS:-60}
       SESSION_MAX_PER_USER: ${SESSION_MAX_PER_USER:-5}
+      ## Sentry
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
       ## Institution
       BOOTSTRAP_INSTITUTION_NAME: ${BOOTSTRAP_INSTITUTION_NAME}
       BOOTSTRAP_INSTITUTION_SLUG: ${BOOTSTRAP_INSTITUTION_SLUG}

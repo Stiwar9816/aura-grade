@@ -1,4 +1,5 @@
 import { NotificationQueueEvents } from 'src/notifications/notification-queue.events';
+import * as SentryReporter from 'src/observability/sentry-reporter';
 
 describe('NotificationQueueEvents', () => {
   const queue = { getJob: jest.fn() };
@@ -7,6 +8,7 @@ describe('NotificationQueueEvents', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(SentryReporter, 'captureExhaustedQueueJob').mockImplementation();
   });
 
   it('records a retry while attempts remain', async () => {
@@ -24,6 +26,12 @@ describe('NotificationQueueEvents', () => {
     await listener.onFailed({ jobId: 'job-id', failedReason: 'Permanent failure' });
 
     expect(metrics.increment).toHaveBeenCalledWith('notification_exhausted_total');
+    expect(SentryReporter.captureExhaustedQueueJob).toHaveBeenCalledWith(
+      'notifications',
+      'job-id',
+      5,
+      { notification_type: 'UNKNOWN' }
+    );
   });
 
   it('records completed jobs', () => {

@@ -21,6 +21,7 @@ allowBuilds:
   '@apollo/protobufjs': true
   '@nestjs/core': false
   '@scarf/scarf': false
+  '@sentry/cli': true
   '@swc/core': true
   msgpackr-extract: true
   unrs-resolver: true

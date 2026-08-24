@@ -72,11 +72,7 @@ const envsSchema = joi
       otherwise: joi.optional(),
     }),
     TRUST_PROXY_HOPS: joi.number().integer().min(0).default(0),
-    AUTH_2FA_ENCRYPTION_KEY: joi.string().empty('').min(32).when('STATE', {
-      is: 'prod',
-      then: joi.required(),
-      otherwise: joi.optional(),
-    }),
+    AUTH_2FA_ENCRYPTION_KEY: joi.string().empty('').min(32).required(),
     AUTH_2FA_CHALLENGE_TTL_SECONDS: joi.number().integer().min(60).max(900).default(300),
     AUTH_2FA_MAX_ATTEMPTS: joi.number().integer().min(3).max(10).default(5),
     AUTH_2FA_SESSION_TTL_SECONDS: joi
@@ -99,6 +95,15 @@ const envsSchema = joi
       .optional(),
     VAPID_PUBLIC_KEY: joi.string().min(40).optional(),
     VAPID_PRIVATE_KEY: joi.string().min(40).optional(),
+    SENTRY_ENABLED: joi.boolean().truthy('true').falsy('false').default(false),
+    SENTRY_DSN: joi.string().uri().empty('').when('SENTRY_ENABLED', {
+      is: true,
+      then: joi.required(),
+      otherwise: joi.optional(),
+    }),
+    SENTRY_ENVIRONMENT: joi.string().trim().empty('').optional(),
+    SENTRY_RELEASE: joi.string().trim().empty('').optional(),
+    SENTRY_TRACES_SAMPLE_RATE: joi.number().min(0).max(1).default(0),
   })
   .unknown(true);
 
@@ -154,4 +159,9 @@ export const envs = {
   vapid_subject: envVars.VAPID_SUBJECT,
   vapid_public_key: envVars.VAPID_PUBLIC_KEY,
   vapid_private_key: envVars.VAPID_PRIVATE_KEY,
+  sentry_enabled: envVars.SENTRY_ENABLED,
+  sentry_dsn: envVars.SENTRY_DSN,
+  sentry_environment: envVars.SENTRY_ENVIRONMENT,
+  sentry_release: envVars.SENTRY_RELEASE,
+  sentry_traces_sample_rate: envVars.SENTRY_TRACES_SAMPLE_RATE,
 };

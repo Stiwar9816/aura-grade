@@ -7,6 +7,7 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { Submission } from './entities/submission.entity';
 import { SubmissionStatus } from 'src/enums';
+import { captureExhaustedQueueJob, captureOperationalException } from 'src/observability';
 
 @QueueEventsListener('grading')
 export class GradingQueueEvents extends QueueEventsHost {
@@ -47,19 +48,22 @@ export class GradingQueueEvents extends QueueEventsHost {
 
   @OnQueueEvent('failed')
   async onFailed({ jobId, failedReason }: { jobId: string; failedReason: string }) {
-    this.logger.error(`Falló el trabajo ${jobId}: ${failedReason}.`);
+    const safeFailureReason = this.getSafeFailureReason(failedReason);
+    this.logger.error(`Falló el trabajo ${jobId}: ${safeFailureReason}`);
 
     // Solo notificamos fallo definitivo si ya no quedan intentos
     const job = await this.gradingQueue.getJob(jobId);
     if (job && job.attemptsMade >= (job.opts.attempts || 1)) {
       const { id } = job.data;
+      captureExhaustedQueueJob('grading', jobId, job.attemptsMade, {
+        failure_category: safeFailureReason,
+      });
       const submission = await this.submissionRepository.findOne({
         where: { id },
         relations: ['student'],
       });
 
       if (submission) {
-        const safeFailureReason = this.getSafeFailureReason(failedReason);
         await this.submissionRepository.update(id, {
           status: SubmissionStatus.FAILED,
           gradingFailureReason: safeFailureReason,
@@ -72,6 +76,12 @@ export class GradingQueueEvents extends QueueEventsHost {
         try {
           await this.notificationQueue.enqueueGradingFailed(id, jobId);
         } catch (error) {
+          captureOperationalException(error, {
+            component: 'bullmq',
+            queue: 'notifications',
+            operation: 'enqueue_grading_failed',
+            grading_job_id: jobId,
+          });
           this.logger.error(
             `No se pudo encolar la alerta interna del fallo ${jobId}: ${
               error instanceof Error ? error.message : String(error)

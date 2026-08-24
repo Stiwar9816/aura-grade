@@ -87,9 +87,7 @@ export class TwoFactorService {
   ) {
     this.challengeTtlMs = this.positiveInteger('AUTH_2FA_CHALLENGE_TTL_SECONDS', 300) * 1000;
     this.maxAttempts = this.positiveInteger('AUTH_2FA_MAX_ATTEMPTS', 5);
-    const configuredKey =
-      this.configService.get<string>('AUTH_2FA_ENCRYPTION_KEY') ||
-      this.configService.get<string>('JWT_SECRET');
+    const configuredKey = this.configService.get<string>('AUTH_2FA_ENCRYPTION_KEY');
     if (!configuredKey)
       throw new Error(
         'AUTH_2FA_ENCRYPTION_KEY no está configurado para proteger los secretos TOTP.'

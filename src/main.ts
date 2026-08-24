@@ -1,3 +1,5 @@
+import './instrument';
+
 // NestJS
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -66,6 +68,8 @@ async function bootstrap() {
       'Apollo-Require-Preflight',
       'apollo-require-preflight',
       'X-Apollo-Operation-Name',
+      'sentry-trace',
+      'baggage',
     ],
   });
 

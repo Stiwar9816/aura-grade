@@ -33,7 +33,7 @@ export interface EnvVars {
   BFF_SHARED_SECRET?: string;
   METRICS_TOKEN?: string;
   TRUST_PROXY_HOPS: number;
-  AUTH_2FA_ENCRYPTION_KEY?: string;
+  AUTH_2FA_ENCRYPTION_KEY: string;
   AUTH_2FA_CHALLENGE_TTL_SECONDS?: number;
   AUTH_2FA_MAX_ATTEMPTS?: number;
   AUTH_2FA_SESSION_TTL_SECONDS?: number;
@@ -48,4 +48,9 @@ export interface EnvVars {
   VAPID_SUBJECT?: string;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  SENTRY_DSN?: string;
+  SENTRY_ENABLED?: boolean;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_RELEASE?: string;
+  SENTRY_TRACES_SAMPLE_RATE?: number;
 }

@@ -4,13 +4,20 @@ import {
   ConflictException,
   HttpStatus,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { GraphQLError } from 'graphql';
 import { HttpExceptionFilter } from 'src/common/filters/http-exception.filter';
+import * as SentryReporter from 'src/observability/sentry-reporter';
 
 describe('HttpExceptionFilter GraphQL contract', () => {
   const host = { getType: () => 'graphql' } as unknown as ArgumentsHost;
   const filter = new HttpExceptionFilter();
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    jest.spyOn(SentryReporter, 'captureOperationalException').mockImplementation();
+  });
 
   const capture = (error: unknown): GraphQLError => {
     try {
@@ -46,6 +53,29 @@ describe('HttpExceptionFilter GraphQL contract', () => {
       code: 'INTERNAL_SERVER_ERROR',
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     });
+    expect(SentryReporter.captureOperationalException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        component: 'global_exception_filter',
+        transport: 'graphql',
+        status_code: 500,
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it('reports service-unavailable responses as relevant 5xx errors', () => {
+    const error = capture(new ServiceUnavailableException('Redis no disponible'));
+
+    expect(error.extensions).toEqual({
+      code: 'SERVICE_UNAVAILABLE',
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+    expect(SentryReporter.captureOperationalException).toHaveBeenCalledWith(
+      expect.any(ServiceUnavailableException),
+      expect.objectContaining({ status_code: 503 }),
+      expect.any(Object)
+    );
   });
 
   it('preserves an existing GraphQLError and its extensions', () => {
@@ -54,5 +84,6 @@ describe('HttpExceptionFilter GraphQL contract', () => {
     });
 
     expect(capture(original)).toBe(original);
+    expect(SentryReporter.captureOperationalException).not.toHaveBeenCalled();
   });
 });

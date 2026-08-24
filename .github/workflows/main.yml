@@ -51,6 +51,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Validate Sentry source map configuration
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          test -n "$SENTRY_AUTH_TOKEN" || { echo "::error::Falta el secreto SENTRY_AUTH_TOKEN"; exit 1; }
+          test -n "$SENTRY_ORG" || { echo "::error::Falta la variable SENTRY_ORG"; exit 1; }
+          test -n "$SENTRY_PROJECT" || { echo "::error::Falta la variable SENTRY_PROJECT"; exit 1; }
+
       - name: Build image for security analysis
         uses: docker/build-push-action@v6
         with:
@@ -76,6 +86,12 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
+          build-args: |
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+            SENTRY_RELEASE=aura-grade@${{ github.sha }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/aura_grade:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/aura_grade:${{ github.sha }}

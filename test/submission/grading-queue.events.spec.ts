@@ -1,5 +1,6 @@
 import { GradingQueueEvents } from 'src/submission/grading-queue.events';
 import { SubmissionStatus } from 'src/enums';
+import * as SentryReporter from 'src/observability/sentry-reporter';
 
 describe('GradingQueueEvents', () => {
   const submissionRepository = {
@@ -18,6 +19,8 @@ describe('GradingQueueEvents', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(SentryReporter, 'captureExhaustedQueueJob').mockImplementation();
+    jest.spyOn(SentryReporter, 'captureOperationalException').mockImplementation();
     submissionRepository.findOne.mockResolvedValue({
       id: 'submission-id',
       student: { id: 'student-id' },
@@ -44,6 +47,9 @@ describe('GradingQueueEvents', () => {
       message: 'La evaluación falló tras varios intentos.',
     });
     expect(notificationQueue.enqueueGradingFailed).toHaveBeenCalledWith('submission-id', 'job-id');
+    expect(SentryReporter.captureExhaustedQueueJob).toHaveBeenCalledWith('grading', 'job-id', 3, {
+      failure_category: 'El servicio de IA no pudo completar la evaluación.',
+    });
   });
 
   it('does not mark the submission as failed while retries remain', async () => {
@@ -58,6 +64,7 @@ describe('GradingQueueEvents', () => {
     expect(submissionRepository.update).not.toHaveBeenCalled();
     expect(notificationsGateway.notifyStudent).not.toHaveBeenCalled();
     expect(notificationQueue.enqueueGradingFailed).not.toHaveBeenCalled();
+    expect(SentryReporter.captureExhaustedQueueJob).not.toHaveBeenCalled();
   });
 
   it('stores a safe category instead of the raw provider failure', async () => {
@@ -100,5 +107,9 @@ describe('GradingQueueEvents', () => {
       expect.objectContaining({ status: SubmissionStatus.FAILED })
     );
     expect(notificationsGateway.notifyStudent).toHaveBeenCalled();
+    expect(SentryReporter.captureOperationalException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ operation: 'enqueue_grading_failed' })
+    );
   });
 });

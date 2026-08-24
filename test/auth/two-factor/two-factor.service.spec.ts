@@ -97,6 +97,25 @@ describe('TwoFactorService', () => {
     }
   );
 
+  it('does not use JWT_SECRET as a fallback encryption key', () => {
+    const jwtOnlyConfig = {
+      get: jest.fn((name: string, fallback?: unknown) =>
+        name === 'JWT_SECRET' ? 'legacy-jwt-key-with-at-least-32-characters' : fallback
+      ),
+    };
+
+    expect(
+      () =>
+        new TwoFactorService(
+          redis as never,
+          userRepository as never,
+          dataSource as never,
+          jwtOnlyConfig as never,
+          metrics as never
+        )
+    ).toThrow('AUTH_2FA_ENCRYPTION_KEY no está configurado');
+  });
+
   it('accepts a current TOTP once and persists encrypted enrollment state', async () => {
     const now = 1_787_123_450_000;
     jest.spyOn(Date, 'now').mockReturnValue(now);

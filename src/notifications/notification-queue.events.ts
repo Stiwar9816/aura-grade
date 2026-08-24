@@ -1,7 +1,7 @@
 import { InjectQueue, OnQueueEvent, QueueEventsHost, QueueEventsListener } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { AuthMetricsService } from 'src/observability';
+import { AuthMetricsService, captureExhaustedQueueJob } from 'src/observability';
 import { NOTIFICATIONS_QUEUE, NotificationJobData } from './notification-queue.constants';
 
 @QueueEventsListener(NOTIFICATIONS_QUEUE)
@@ -16,18 +16,27 @@ export class NotificationQueueEvents extends QueueEventsHost {
   }
 
   @OnQueueEvent('failed')
-  async onFailed({ jobId, failedReason }: { jobId: string; failedReason: string }): Promise<void> {
+  async onFailed({
+    jobId,
+    failedReason: _failedReason,
+  }: {
+    jobId: string;
+    failedReason: string;
+  }): Promise<void> {
     const job = await this.queue.getJob(jobId);
     if (!job) return;
 
     if (job.attemptsMade >= (job.opts.attempts ?? 1)) {
       this.metrics.increment('notification_exhausted_total');
-      this.logger.error(`La notificación ${jobId} agotó sus reintentos: ${failedReason}.`);
+      captureExhaustedQueueJob(NOTIFICATIONS_QUEUE, jobId, job.attemptsMade, {
+        notification_type: job.data?.type ?? 'UNKNOWN',
+      });
+      this.logger.error(`La notificación ${jobId} agotó sus reintentos.`);
       return;
     }
 
     this.metrics.increment('notification_retry_total');
-    this.logger.warn(`La notificación ${jobId} será reintentada: ${failedReason}.`);
+    this.logger.warn(`La notificación ${jobId} será reintentada.`);
   }
 
   @OnQueueEvent('completed')

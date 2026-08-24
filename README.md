@@ -93,6 +93,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - Cuenta en Cloudinary
 - Cuenta y API key de Resend
 - API Key de OpenAI o Gemini
+- Proyecto y DSN de Sentry (opcional)
 
 ## 🚀 Instalación y Configuración
 
@@ -143,6 +144,8 @@ verifica estos grupos antes de iniciar la API:
   seleccionado.
 - Seguridad: `JWT_SECRET`, `BASIC_AUTH_PASSWORD`, `BFF_SHARED_SECRET`,
   `METRICS_TOKEN` y `AUTH_2FA_ENCRYPTION_KEY`.
+- Observabilidad: `SENTRY_ENABLED`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`,
+  `SENTRY_RELEASE` y `SENTRY_TRACES_SAMPLE_RATE`.
 
 Redis admite dos configuraciones excluyentes según el entorno:
 
@@ -173,6 +176,46 @@ y backoff exponencial. Cada entrega queda registrada por evento y canal en
 deshabilitados. Los trabajos completados se conservan siete días y los fallidos
 treinta días. `/api/metrics` expone contadores de trabajos encolados, duplicados,
 reintentos, agotados y resultados por canal.
+
+### Sentry
+
+La API reporta excepciones internas no controladas y trabajos de BullMQ que
+agotaron sus reintentos. Los errores HTTP esperados (4xx) no se reportan. La
+carga de la solicitud, cabeceras de autenticación, cookies, secretos, tokens,
+OTP y datos de documento se eliminan antes del envío.
+
+En desarrollo Sentry permanece apagado por defecto. Para producción configura
+las variables en el gestor de secretos del proveedor, nunca en Git:
+
+```dotenv
+SENTRY_ENABLED=true
+SENTRY_DSN=https://public-key@o0.ingest.sentry.io/0
+SENTRY_ENVIRONMENT=production
+SENTRY_RELEASE=aura-grade@1.0.0
+SENTRY_TRACES_SAMPLE_RATE=0.05
+```
+
+Comienza con un muestreo de trazas de `0.05` (5 %) y ajústalo según el volumen.
+`SENTRY_RELEASE` debe coincidir con la versión o SHA desplegada para agrupar los
+errores correctamente. `SENTRY_ENABLED=false` desactiva el envío incluso si hay
+un DSN configurado; durante las pruebas también se desactiva automáticamente.
+
+Sentry Logs está habilitado y recopila las llamadas de consola de nivel `log`,
+`warn` y `error`. Antes del envío se filtran credenciales, tokens, cookies,
+contraseñas, códigos OTP y otros atributos sensibles.
+
+La imagen publicada por CI usa `aura-grade@<git-sha>` como release, inyecta los
+identificadores de depuración, sube los source maps a Sentry y luego elimina los
+`.map` de la imagen pública. Configura en GitHub antes del siguiente despliegue:
+
+- Secret de Actions: `SENTRY_AUTH_TOKEN`, con permisos de proyecto y releases.
+- Variables de Actions: `SENTRY_ORG` y `SENTRY_PROJECT`, usando sus respectivos
+  slugs de Sentry.
+
+El token se monta como secreto de BuildKit y no queda guardado en las capas de
+Docker. El pipeline detiene el despliegue si falta alguno de estos tres valores,
+evitando publicar una release sin mapas. El `SENTRY_RELEASE` de ejecución queda
+incorporado en la imagen y coincide con los artefactos subidos.
 
 El centro interno persiste una sola entrada por usuario y evento en
 `in_app_notifications`. `GET /api/notifications` devuelve el historial paginado

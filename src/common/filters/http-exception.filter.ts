@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { GraphQLError } from 'graphql';
+import { captureOperationalException } from 'src/observability';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -36,8 +37,31 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const errorSource = this.getErrorSource((exception as Error).stack);
 
-    if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(`Error en ${errorSource}: ${message}`, (exception as Error).stack);
+      if (!(exception instanceof GraphQLError)) {
+        const request = this.getRequest(host);
+        const user = request?.user;
+        captureOperationalException(
+          exception,
+          {
+            component: 'global_exception_filter',
+            transport: String(host.getType()),
+            status_code: status,
+            error_source: errorSource,
+            ...(request?.method ? { http_method: request.method } : {}),
+            ...(user?.role ? { user_role: user.role } : {}),
+            ...(user?.institutionId ? { institution_id: user.institutionId } : {}),
+          },
+          {
+            userId: user?.id,
+            extras: {
+              request_id: request?.requestId,
+              route: request?.route?.path,
+            },
+          }
+        );
+      }
     }
 
     if (host.getType() === 'http') {
@@ -65,6 +89,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         },
       });
     }
+  }
+
+  private getRequest(host: ArgumentsHost): ObservedRequest | undefined {
+    if (host.getType() === 'http') return host.switchToHttp().getRequest<ObservedRequest>();
+    if ((host.getType() as string) !== 'graphql') return undefined;
+    const context = host.getArgByIndex?.(2) as { req?: ObservedRequest } | undefined;
+    return context?.req;
   }
 
   private isTypeORMError(exception: unknown): boolean {
@@ -127,3 +158,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     return 'Origen desconocido';
   }
 }
+
+type ObservedRequest = Request & {
+  requestId?: string;
+  user?: {
+    id?: string;
+    institutionId?: string;
+    role?: string;
+  };
+};

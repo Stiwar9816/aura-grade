@@ -28,6 +28,7 @@ const testEnvironment = {
   REDIS_HOST: '127.0.0.1',
   REDIS_PORT: '6379',
   BASIC_AUTH_PASSWORD: 'test-basic-auth-password',
+  AUTH_2FA_ENCRYPTION_KEY: 'test-encryption-key-with-at-least-32-characters',
 };
 
 for (const [name, value] of Object.entries(testEnvironment)) {

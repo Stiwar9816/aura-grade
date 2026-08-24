@@ -44,6 +44,7 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { AuthMetricsService, ObservabilityModule } from './observability';
 import { createGraphqlServerSecurityOptions } from './common/graphql';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -58,6 +59,7 @@ const isDevelopment = envs.state === 'dev';
     ConfigModule.forRoot({ isGlobal: true }),
     // Rate Limiting
     RedisModule,
+    SentryModule.forRoot(),
     ThrottlerModule.forRootAsync({
       imports: [RedisModule, ObservabilityModule],
       inject: [RedisService, AuthMetricsService],
