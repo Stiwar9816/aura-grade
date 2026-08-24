@@ -62,7 +62,7 @@ jobs:
           test -n "$SENTRY_PROJECT" || { echo "::error::Falta la variable SENTRY_PROJECT"; exit 1; }
 
       - name: Build image for security analysis
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -80,7 +80,7 @@ jobs:
           exit-code: true
 
       - name: Build and push verified image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
