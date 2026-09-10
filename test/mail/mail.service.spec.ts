@@ -63,40 +63,35 @@ describe('MailService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('sendUserConfirmation', () => {
-    it('should send user confirmation email with credentials', async () => {
-      const plainPassword = 'Password123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendUserConfirmation(mockUser, plainPassword);
-
-      expect(mockResend.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          from: expect.any(String),
-          to: mockUser.email,
-          subject: expect.stringContaining('Bienvenid@'),
-          template: expect.objectContaining({
-            id: expect.any(String),
-            variables: expect.objectContaining({
-              name: `${mockUser.name} ${mockUser.last_name}`,
-              password: plainPassword,
-              email: mockUser.email,
-              app_name: expect.any(String),
-              url_app: expect.any(String),
-            }),
-          }),
-        })
+  describe('security emails', () => {
+    beforeEach(() =>
+      mockResend.emails.send.mockResolvedValue({ data: { id: 'mail' }, error: null })
+    );
+    it('sends registration status without credentials or legacy templates', async () => {
+      await service.sendUserConfirmation(mockUser);
+      const payload = mockResend.emails.send.mock.calls[0][0];
+      expect(payload.text).toContain('pendiente de aprobación');
+      expect(payload).not.toHaveProperty('template');
+      expect(JSON.stringify(payload)).not.toContain(mockUser.password);
+    });
+    it('sends a change notice without a password', async () => {
+      await service.sendUpdatePassword(mockUser);
+      expect(mockResend.emails.send.mock.calls[0][0].text).toContain('sesiones');
+      expect(JSON.stringify(mockResend.emails.send.mock.calls[0][0])).not.toContain(
+        mockUser.password
       );
     });
-
-    it('should include user full name in email context', async () => {
-      const plainPassword = 'Password123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendUserConfirmation(mockUser, plainPassword);
-
-      const callArgs = mockResend.emails.send.mock.calls[0][0];
-      expect(callArgs.template.variables.name).toBe('John Doe');
+    it('places the reset token in the URL fragment and specifies expiration', async () => {
+      await service.sendResetPassword(mockUser, 'opaque-token');
+      const payload = mockResend.emails.send.mock.calls[0][0];
+      expect(payload.text).toContain('/reset-password#token=opaque-token');
+      expect(payload.text).toContain('30 minutos');
+      expect(payload.text).toContain('soporte@auragrade.co');
+      expect(payload).not.toHaveProperty('template');
+    });
+    it('reports provider failures without exposing provider details', async () => {
+      mockResend.emails.send.mockResolvedValue({ error: { message: 'secret provider detail' } });
+      await expect(service.sendUpdatePassword(mockUser)).rejects.toThrow('correo de seguridad');
     });
   });
 
@@ -234,91 +229,6 @@ describe('MailService', () => {
       } finally {
         envs.resend_task_reminder_template_id = undefined;
       }
-    });
-  });
-
-  describe('sendUpdatePassword', () => {
-    it('should send password update email', async () => {
-      const plainPassword = 'NewPassword123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendUpdatePassword(mockUser, plainPassword);
-
-      expect(mockResend.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          from: expect.any(String),
-          to: mockUser.email,
-          subject: expect.stringContaining('credenciales actualizadas'),
-          template: expect.objectContaining({
-            id: expect.any(String),
-            variables: expect.objectContaining({
-              name: `${mockUser.name} ${mockUser.last_name}`,
-              password: plainPassword,
-              email: mockUser.email,
-              app_name: expect.any(String),
-              url_app: expect.any(String),
-            }),
-          }),
-        })
-      );
-    });
-
-    it('should include updated password in email context', async () => {
-      const plainPassword = 'NewPassword123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendUpdatePassword(mockUser, plainPassword);
-
-      const callArgs = mockResend.emails.send.mock.calls[0][0];
-      expect(callArgs.template.variables.password).toBe(plainPassword);
-    });
-  });
-
-  describe('sendResetPassword', () => {
-    it('should send password reset email', async () => {
-      const plainPassword = 'ResetPassword123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendResetPassword(mockUser, plainPassword);
-
-      expect(mockResend.emails.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          from: expect.any(String),
-          to: mockUser.email,
-          subject: '¡Solicitud de restablecimiento de contraseña!',
-          template: expect.objectContaining({
-            id: expect.any(String),
-            variables: expect.objectContaining({
-              name: `${mockUser.name} ${mockUser.last_name}`,
-              password: plainPassword,
-              email: mockUser.email,
-              app_name: expect.any(String),
-              url_app: expect.any(String),
-              support_email: 'support@auragrade.com',
-            }),
-          }),
-        })
-      );
-    });
-
-    it('should use reset password template id', async () => {
-      const plainPassword = 'ResetPassword123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendResetPassword(mockUser, plainPassword);
-
-      const callArgs = mockResend.emails.send.mock.calls[0][0];
-      expect(callArgs.template.id).toEqual(expect.any(String));
-    });
-
-    it('should include support email in context', async () => {
-      const plainPassword = 'ResetPassword123';
-      mockResend.emails.send.mockResolvedValue({ data: { id: 'email-id' }, error: null });
-
-      await service.sendResetPassword(mockUser, plainPassword);
-
-      const callArgs = mockResend.emails.send.mock.calls[0][0];
-      expect(callArgs.template.variables.support_email).toBe('support@auragrade.com');
     });
   });
 });

@@ -1,3 +1,5 @@
+import { OutboxEvent } from 'src/outbox/entities/outbox-event.entity';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { UserRoles } from 'src/auth/enums';
 import { EvaluationOrigin, EvaluationStatus, SubmissionStatus } from 'src/enums';
@@ -16,9 +18,16 @@ describe('EvaluationService', () => {
     findOne: jest.fn(),
     update: jest.fn(),
   };
+  const outbox = { execute: jest.fn(), insert: jest.fn(), values: jest.fn(), orIgnore: jest.fn() };
   const manager = {
     getRepository: jest.fn((entity) =>
-      entity === Submission ? submissionRepository : evaluationRepository
+      entity === Submission
+        ? submissionRepository
+        : entity === OutboxEvent
+          ? { createQueryBuilder: () => outbox }
+          : entity === Assignment
+            ? { findOne: jest.fn(async () => assignment) }
+            : evaluationRepository
     ),
   };
   const dataSource = { transaction: jest.fn((callback) => callback(manager)) };
@@ -71,10 +80,19 @@ describe('EvaluationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    for (const name of ['insert', 'values', 'orIgnore'] as const)
+      outbox[name].mockReturnValue(outbox);
+    outbox.execute.mockResolvedValue({});
     notificationQueue.enqueuePublishedGrade.mockResolvedValue('grade-published-evaluation-id');
     gradingQueue.getJobs.mockResolvedValue([]);
     manager.getRepository.mockImplementation((entity) =>
-      entity === Submission ? submissionRepository : evaluationRepository
+      entity === Submission
+        ? submissionRepository
+        : entity === OutboxEvent
+          ? { createQueryBuilder: () => outbox }
+          : entity === Assignment
+            ? { findOne: jest.fn(async () => assignment) }
+            : evaluationRepository
     );
     dataSource.transaction.mockImplementation((callback) => callback(manager));
   });
@@ -326,7 +344,9 @@ describe('EvaluationService', () => {
       student.id,
       expect.objectContaining({ evaluationId: draftEvaluation.id })
     );
-    expect(notificationQueue.enqueuePublishedGrade).toHaveBeenCalledWith(result.id);
+    expect(outbox.values).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'grade-published', aggregateId: result.id })
+    );
   });
 
   it('keeps a published grade when notification queueing fails', async () => {

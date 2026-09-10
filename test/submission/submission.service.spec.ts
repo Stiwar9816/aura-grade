@@ -1,3 +1,5 @@
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Submission } from 'src/submission/entities/submission.entity';
 import { SubmissionService } from 'src/submission/submission.service';
 import { UserRoles } from 'src/auth/enums';
 import { EvaluationStatus, SubmissionStatus } from 'src/enums';
@@ -6,6 +8,8 @@ import { Readable } from 'stream';
 
 describe('SubmissionService', () => {
   const submissionRepository = {
+    exists: jest.fn(),
+    manager: { transaction: jest.fn() },
     create: jest.fn(),
     save: jest.fn(),
     find: jest.fn(),
@@ -25,7 +29,8 @@ describe('SubmissionService', () => {
     assignmentRepository as never,
     gradingQueue as never,
     cloudinaryService as never,
-    notificationQueue as never
+    notificationQueue as never,
+    { extractFromBuffer: jest.fn(async () => 'Texto académico') } as never
   );
 
   const student = {
@@ -40,29 +45,37 @@ describe('SubmissionService', () => {
     institutionId: 'institution-id',
     isPlatformAdmin: false,
   } as User;
-  const makeCentralDirectoryEntry = (name: string) => {
-    const nameBuffer = Buffer.from(name);
-    const header = Buffer.alloc(46);
-    header.writeUInt32LE(0x02014b50, 0);
-    header.writeUInt16LE(0, 8);
-    header.writeUInt16LE(0, 10);
-    header.writeUInt32LE(1, 24);
-    header.writeUInt16LE(nameBuffer.length, 28);
-    return Buffer.concat([header, nameBuffer]);
-  };
   const makeDocxContent = () => {
-    const localHeader = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
-    const centralDirectory = Buffer.concat([
-      makeCentralDirectoryEntry('[Content_Types].xml'),
-      makeCentralDirectoryEntry('word/document.xml'),
-    ]);
-    const endOfCentralDirectory = Buffer.alloc(22);
-    endOfCentralDirectory.writeUInt32LE(0x06054b50, 0);
-    endOfCentralDirectory.writeUInt16LE(2, 8);
-    endOfCentralDirectory.writeUInt16LE(2, 10);
-    endOfCentralDirectory.writeUInt32LE(centralDirectory.length, 12);
-    endOfCentralDirectory.writeUInt32LE(localHeader.length, 16);
-    return Buffer.concat([localHeader, centralDirectory, endOfCentralDirectory]);
+    const locals: Buffer[] = [];
+    const centrals: Buffer[] = [];
+    let offset = 0;
+    for (const name of ['[Content_Types].xml', 'word/document.xml']) {
+      const filename = Buffer.from(name);
+      const data = Buffer.from('x');
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(data.length, 22);
+      local.writeUInt16LE(filename.length, 26);
+      const central = Buffer.alloc(46);
+      central.writeUInt32LE(0x02014b50, 0);
+      central.writeUInt32LE(data.length, 20);
+      central.writeUInt32LE(data.length, 24);
+      central.writeUInt16LE(filename.length, 28);
+      central.writeUInt32LE(offset, 42);
+      const entry = Buffer.concat([local, filename, data]);
+      locals.push(entry);
+      centrals.push(Buffer.concat([central, filename]));
+      offset += entry.length;
+    }
+    const directory = Buffer.concat(centrals);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(2, 8);
+    end.writeUInt16LE(2, 10);
+    end.writeUInt32LE(directory.length, 12);
+    end.writeUInt32LE(offset, 16);
+    return Buffer.concat([...locals, directory, end]);
   };
   const validDocxContent = makeDocxContent();
   const makeFile = (overrides: Record<string, unknown> = {}) => ({
@@ -79,8 +92,24 @@ describe('SubmissionService', () => {
     course: { users: [student] },
   };
 
+  const outbox = { execute: jest.fn(), insert: jest.fn(), values: jest.fn(), orIgnore: jest.fn() };
   beforeEach(() => {
     jest.clearAllMocks();
+    submissionRepository.findOne.mockResolvedValue(null);
+    submissionRepository.exists.mockResolvedValue(false);
+    for (const name of ['insert', 'values', 'orIgnore'] as const)
+      outbox[name].mockReturnValue(outbox);
+    outbox.execute.mockResolvedValue({});
+    submissionRepository.manager.transaction.mockImplementation((callback) =>
+      callback({
+        getRepository: (entity: unknown) =>
+          entity === Assignment
+            ? assignmentRepository
+            : entity === Submission
+              ? submissionRepository
+              : { createQueryBuilder: () => outbox },
+      })
+    );
     assignmentRepository.findOne.mockResolvedValue(assignment);
     cloudinaryService.uploadSubmission.mockResolvedValue({
       secureUrl: 'https://example.com/entrega.docx',
@@ -96,9 +125,9 @@ describe('SubmissionService', () => {
   });
 
   it('creates a submission with the authenticated student identity', async () => {
-    const result = await service.create(
+    await service.create(
       makeFile() as never,
-      { assignmentId: assignment.id },
+      { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
       student
     );
 
@@ -109,19 +138,22 @@ describe('SubmissionService', () => {
         status: SubmissionStatus.PENDING,
       })
     );
-    expect(gradingQueue.add).toHaveBeenCalledWith(
-      'grade-submission',
-      { id: 'submission-id', url: 'https://example.com/entrega.docx' },
-      expect.objectContaining({ jobId: 'submission-id', attempts: 3 })
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+    expect(outbox.values).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'grading', aggregateId: 'submission-id' })
     );
-    expect(notificationQueue.enqueueNewSubmission).toHaveBeenCalledWith('submission-id');
-    expect(cloudinaryService.uploadSubmission).toHaveBeenCalledWith(validDocxContent);
-    expect(result.id).toBe('submission-id');
+    expect(outbox.values).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'new-submission', aggregateId: 'submission-id' })
+    );
   });
 
   it('rejects a submission from a user who is not a student', async () => {
     await expect(
-      service.create(makeFile() as never, { assignmentId: 'assignment-id' }, teacher)
+      service.create(
+        makeFile() as never,
+        { assignmentId: 'assignment-id', idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        teacher
+      )
     ).rejects.toThrow('Solo un estudiante puede crear entregas.');
     expect(assignmentRepository.findOne).not.toHaveBeenCalled();
   });
@@ -136,7 +168,11 @@ describe('SubmissionService', () => {
     });
 
     await expect(
-      service.create(makeFile() as never, { assignmentId: 'assignment-id' }, student)
+      service.create(
+        makeFile() as never,
+        { assignmentId: 'assignment-id', idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
     ).rejects.toThrow('No estás matriculado en el curso de esta tarea.');
     expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
@@ -154,7 +190,11 @@ describe('SubmissionService', () => {
     });
 
     await expect(
-      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
     ).resolves.toEqual(expect.objectContaining({ id: 'submission-id' }));
   });
 
@@ -171,7 +211,11 @@ describe('SubmissionService', () => {
     });
 
     await expect(
-      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
     ).rejects.toThrow('fecha límite');
     expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
@@ -180,7 +224,7 @@ describe('SubmissionService', () => {
     await expect(
       service.create(
         makeFile({ createReadStream: () => Readable.from(Buffer.from('not-a-docx')) }) as never,
-        { assignmentId: assignment.id },
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
         student
       )
     ).rejects.toThrow('contenido del archivo no corresponde a un DOCX válido');
@@ -193,7 +237,7 @@ describe('SubmissionService', () => {
     await expect(
       service.create(
         makeFile({ createReadStream: () => Readable.from(oversized) }) as never,
-        { assignmentId: assignment.id },
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
         student
       )
     ).rejects.toThrow('supera el límite de 15 MB');
@@ -204,7 +248,11 @@ describe('SubmissionService', () => {
     cloudinaryService.uploadSubmission.mockRejectedValue(new Error('Cloudinary unavailable'));
 
     await expect(
-      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
     ).rejects.toThrow('Cloudinary unavailable');
 
     expect(submissionRepository.save).not.toHaveBeenCalled();
@@ -212,27 +260,30 @@ describe('SubmissionService', () => {
     expect(notificationQueue.enqueueNewSubmission).not.toHaveBeenCalled();
   });
 
-  it('cleans Cloudinary and the database when queueing fails', async () => {
-    gradingQueue.add.mockRejectedValue(new Error('Redis unavailable'));
-
+  it('cleans storage if the transactional outbox insert fails', async () => {
+    outbox.execute.mockRejectedValueOnce(new Error('Database unavailable'));
     await expect(
-      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
-    ).rejects.toThrow('Redis unavailable');
-
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
+    ).rejects.toThrow('Database unavailable');
     expect(cloudinaryService.deleteSubmission).toHaveBeenCalledWith(
       'auragrade/submissions/generated.docx'
     );
-    expect(submissionRepository.remove).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'submission-id' })
-    );
-    expect(notificationQueue.enqueueNewSubmission).not.toHaveBeenCalled();
+    expect(gradingQueue.add).not.toHaveBeenCalled();
   });
 
   it('keeps the created submission when notification queueing fails', async () => {
     notificationQueue.enqueueNewSubmission.mockRejectedValueOnce(new Error('Queue unavailable'));
 
     await expect(
-      service.create(makeFile() as never, { assignmentId: assignment.id }, student)
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
     ).resolves.toEqual(expect.objectContaining({ id: 'submission-id' }));
 
     expect(submissionRepository.remove).not.toHaveBeenCalled();
@@ -326,12 +377,12 @@ describe('SubmissionService', () => {
       { id: failedSubmission.id, status: SubmissionStatus.FAILED },
       { status: SubmissionStatus.PENDING }
     );
-    expect(gradingQueue.add).toHaveBeenCalledWith(
-      'grade-submission',
-      { id: failedSubmission.id, url: failedSubmission.fileUrl },
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+    expect(outbox.values).toHaveBeenCalledWith(
       expect.objectContaining({
-        jobId: expect.stringMatching(/^submission-id-retry-/),
-        attempts: 3,
+        kind: 'grading',
+        aggregateId: failedSubmission.id,
+        id: expect.stringMatching(/^grading-submission-id-retry-/),
       })
     );
   });
@@ -369,21 +420,90 @@ describe('SubmissionService', () => {
     expect(gradingQueue.add).not.toHaveBeenCalled();
   });
 
-  it('restores the failed status when retry queueing is unavailable', async () => {
+  it('rolls back the retry transaction when its durable event cannot be saved', async () => {
     submissionRepository.findOne.mockResolvedValue({
       id: 'submission-id',
       fileUrl: 'https://example.com/entrega.docx',
       status: SubmissionStatus.FAILED,
       assignment: { user: teacher },
     });
-    gradingQueue.add.mockRejectedValueOnce(new Error('Redis unavailable'));
+    outbox.execute.mockRejectedValueOnce(new Error('Outbox unavailable'));
 
     await expect(service.retryGrading('submission-id', teacher)).rejects.toThrow(
-      'Redis unavailable'
+      'Outbox unavailable'
     );
-    expect(submissionRepository.update).toHaveBeenLastCalledWith(
-      { id: 'submission-id', status: SubmissionStatus.PENDING },
-      { status: SubmissionStatus.FAILED }
-    );
+    expect(gradingQueue.add).not.toHaveBeenCalled();
+  });
+  it('rejects a new version after publication before accepting bytes', async () => {
+    submissionRepository.exists.mockResolvedValue(true);
+    const file = makeFile();
+    await expect(
+      service.create(
+        file as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
+    ).rejects.toThrow('ya fue calificada');
+    expect(file.createReadStream).not.toHaveBeenCalled();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+  });
+
+  it('returns the original submission for a repeated request without uploading again', async () => {
+    const original = {
+      id: 'original-id',
+      student,
+      assignment,
+      cloudinaryPublicId: 'auragrade/submissions/original.docx',
+    };
+    submissionRepository.findOne.mockResolvedValue(original);
+    const file = makeFile();
+    await expect(
+      service.create(
+        file as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
+    ).resolves.toEqual(expect.objectContaining({ id: 'original-id' }));
+    expect(file.createReadStream).not.toHaveBeenCalled();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+  });
+
+  it('rejects reuse of a submission key for another assignment', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'original-id',
+      assignment: { id: 'another-assignment' },
+    });
+    await expect(
+      service.create(
+        makeFile() as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
+    ).rejects.toThrow('otra tarea');
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a download to another student', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      id: 'original-id',
+      student: { id: 'another-student' },
+      assignment,
+      cloudinaryPublicId: 'auragrade/submissions/original.docx',
+    });
+    await expect(service.download('original-id', student)).rejects.toThrow('No puedes acceder');
+  });
+
+  it('rejects forged ZIP expansion sizes before uploading', async () => {
+    const malformed = Buffer.from(validDocxContent);
+    const directoryOffset = malformed.readUInt32LE(malformed.length - 22 + 16);
+    malformed.writeUInt32LE(0, directoryOffset + 24);
+    await expect(
+      service.create(
+        makeFile({ createReadStream: () => Readable.from(malformed) }) as never,
+        { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
+        student
+      )
+    ).rejects.toThrow();
+    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
   });
 });

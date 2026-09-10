@@ -6,7 +6,11 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
+import { inflateRawSync } from 'zlib';
+import { recordOutboxEvent } from 'src/outbox/outbox';
+import { ExtractorService } from 'src/extractor/extractor.service';
+import { AiSanitizer } from 'src/common/helpers/ai-sanitizer.helper';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 // TypeORM
@@ -60,7 +64,8 @@ export class SubmissionService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectQueue('grading') private readonly gradingQueue: Queue,
     private readonly cloudinaryService: CloudinaryService,
-    private readonly notificationQueue: NotificationQueueService
+    private readonly notificationQueue: NotificationQueueService,
+    private readonly extractor: ExtractorService
   ) {}
 
   async create(
@@ -69,70 +74,108 @@ export class SubmissionService {
     user: User
   ): Promise<Submission> {
     this.assertStudent(user);
-    const { assignmentId, ...submissionData } = createSubmissionInput;
-    // 1. Validaciones previas
-    const assignment = await this.assignmentRepository.findOne({
-      where: { id: assignmentId },
-      relations: [
-        'user',
-        'course',
-        'course.user',
-        'course.users',
-        'extensions',
-        'extensions.student',
-      ],
+    const { assignmentId, idempotencyKey } = createSubmissionInput;
+    const existing = await this.submissionRepository.findOne({
+      where: { student: { id: user.id }, idempotencyKey },
+      relations: ['assignment'],
     });
-    if (!assignment)
-      throw new NotFoundException(`No se encontró la tarea con identificador ${assignmentId}.`);
+    if (existing) {
+      if (existing.assignment?.id && existing.assignment.id !== assignmentId)
+        throw new ConflictException('La clave del envío pertenece a otra tarea.');
+      return this.findOne(existing.id, user);
+    }
+    // Validate ownership before accepting or storing bytes.
+    await this.assertAccepting(assignmentId, user);
+    const fileBuffer = await this.readAndValidateDocx(file);
+    const extractedText = AiSanitizer.clean(await this.extractor.extractFromBuffer(fileBuffer));
+    const contentHash = createHash('sha256').update(fileBuffer).digest('hex');
+    const storedFile = await this.cloudinaryService.uploadSubmission(fileBuffer);
+    let saved: Submission;
+    try {
+      saved = await this.submissionRepository.manager.transaction(async (manager) => {
+        // Shares the assignment lock with editing/publication; check again after upload.
+        await manager
+          .getRepository(Assignment)
+          .findOne({ where: { id: assignmentId }, lock: { mode: 'pessimistic_write' } });
+        const submissions = manager.getRepository(Submission);
+        const repeated = await submissions.findOne({
+          where: { student: { id: user.id }, idempotencyKey },
+          relations: ['assignment'],
+        });
+        if (repeated) {
+          if (repeated.assignment.id !== assignmentId || repeated.contentHash !== contentHash)
+            throw new ConflictException(
+              'La clave del envío ya se utilizó para otro archivo o tarea.'
+            );
+          return repeated;
+        }
+        await this.assertAccepting(
+          assignmentId,
+          user,
+          manager.getRepository(Assignment),
+          submissions
+        );
+        const submission = await submissions.save(
+          submissions.create({
+            fileUrl: storedFile.secureUrl,
+            cloudinaryPublicId: storedFile.publicId,
+            extractedText,
+            contentHash,
+            idempotencyKey,
+            assignment: { id: assignmentId },
+            student: { id: user.id },
+            status: SubmissionStatus.PENDING,
+          })
+        );
+        await recordOutboxEvent(manager, 'grading', submission.id);
+        await recordOutboxEvent(manager, 'new-submission', submission.id);
+        return submission;
+      });
+    } catch (error) {
+      await this.cleanupFailedSubmission(storedFile.publicId);
+      throw error;
+    }
+    if (saved.cloudinaryPublicId !== storedFile.publicId)
+      await this.cleanupFailedSubmission(storedFile.publicId);
+    return this.hideStudentDraft(saved, user);
+  }
+
+  private async assertAccepting(
+    assignmentId: string,
+    user: User,
+    assignments = this.assignmentRepository,
+    submissions = this.submissionRepository
+  ): Promise<void> {
+    const assignment = await assignments.findOne({
+      where: { id: assignmentId },
+      relations: ['course', 'course.users', 'extensions', 'extensions.student'],
+    });
+    if (!assignment) throw new NotFoundException('No se encontró la tarea.');
     if (!assignment.isActive)
       throw new BadRequestException('Esta tarea no está activa y no acepta entregas.');
     if (!assignment.course?.users?.some((student) => student.id === user.id))
       throw new ForbiddenException('No estás matriculado en el curso de esta tarea.');
     if (new Date() > getEffectiveAssignmentDueDate(assignment, user.id))
       throw new BadRequestException('La fecha límite de esta tarea ya pasó.');
+    if (
+      await submissions.exists({
+        where: {
+          assignment: { id: assignmentId },
+          student: { id: user.id },
+          evaluation: { status: EvaluationStatus.PUBLISHED },
+        },
+      })
+    )
+      throw new BadRequestException('Esta tarea ya fue calificada y no acepta nuevas versiones.');
+  }
 
-    const fileBuffer = await this.readAndValidateDocx(file);
-    const storedFile = await this.cloudinaryService.uploadSubmission(fileBuffer);
-
-    const submission = this.submissionRepository.create({
-      ...submissionData,
-      fileUrl: storedFile.secureUrl,
-      assignment: { id: assignmentId },
-      student: { id: user.id },
-      status: SubmissionStatus.PENDING,
-    });
-
-    let savedSubmission: Submission | undefined;
-    try {
-      savedSubmission = await this.submissionRepository.save(submission);
-
-      await this.gradingQueue.add(
-        'grade-submission',
-        { id: savedSubmission.id, url: savedSubmission.fileUrl },
-        {
-          jobId: savedSubmission.id,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 5000 },
-          removeOnComplete: { age: 86400, count: 1000 },
-          removeOnFail: { age: 604800, count: 5000 },
-        }
+  async download(id: string, actor: User): Promise<string> {
+    const submission = await this.findOne(id, actor);
+    if (!submission.cloudinaryPublicId)
+      throw new NotFoundException(
+        'El documento requiere migración a almacenamiento privado. Contacta a soporte.'
       );
-    } catch (error) {
-      await this.cleanupFailedSubmission(storedFile.publicId, savedSubmission);
-      throw error;
-    }
-
-    try {
-      await this.notificationQueue.enqueueNewSubmission(savedSubmission.id);
-    } catch (error) {
-      this.logger.error(
-        `La entrega ${savedSubmission.id} fue creada, pero no se pudo encolar su notificación: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`
-      );
-    }
-
-    return savedSubmission;
+    return this.cloudinaryService.downloadUrl(submission.cloudinaryPublicId);
   }
 
   async findAll(actor: User): Promise<Submission[]> {
@@ -188,32 +231,14 @@ export class SubmissionService {
     if (!submission.fileUrl)
       throw new BadRequestException('La entrega no tiene un archivo disponible para reprocesar.');
 
-    const claimed = await this.submissionRepository.update(
-      { id, status: SubmissionStatus.FAILED },
-      { status: SubmissionStatus.PENDING }
-    );
-    if ((claimed.affected ?? 0) !== 1)
-      throw new ConflictException('La entrega ya fue tomada para reprocesamiento.');
-
-    try {
-      await this.gradingQueue.add(
-        'grade-submission',
-        { id: submission.id, url: submission.fileUrl },
-        {
-          jobId: `${submission.id}-retry-${randomUUID()}`,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 5000 },
-          removeOnComplete: { age: 86400, count: 1000 },
-          removeOnFail: { age: 604800, count: 5000 },
-        }
-      );
-    } catch (error) {
-      await this.submissionRepository.update(
-        { id, status: SubmissionStatus.PENDING },
-        { status: SubmissionStatus.FAILED }
-      );
-      throw error;
-    }
+    await this.submissionRepository.manager.transaction(async (manager) => {
+      const claimed = await manager
+        .getRepository(Submission)
+        .update({ id, status: SubmissionStatus.FAILED }, { status: SubmissionStatus.PENDING });
+      if ((claimed.affected ?? 0) !== 1)
+        throw new ConflictException('La entrega ya fue tomada para reprocesamiento.');
+      await recordOutboxEvent(manager, 'grading', id, `grading-${id}-retry-${randomUUID()}`);
+    });
 
     submission.status = SubmissionStatus.PENDING;
     return submission;
@@ -304,7 +329,9 @@ export class SubmissionService {
 
       const flags = content.readUInt16LE(cursor + 8);
       const compressionMethod = content.readUInt16LE(cursor + 10);
+      const compressedSize = content.readUInt32LE(cursor + 20);
       const uncompressedSize = content.readUInt32LE(cursor + 24);
+      const localOffset = content.readUInt32LE(cursor + 42);
       const fileNameLength = content.readUInt16LE(cursor + 28);
       const extraLength = content.readUInt16LE(cursor + 30);
       const commentLength = content.readUInt16LE(cursor + 32);
@@ -317,6 +344,29 @@ export class SubmissionService {
       )
         return false;
 
+      if (
+        localOffset + 30 > centralDirectoryOffset ||
+        content.readUInt32LE(localOffset) !== 0x04034b50
+      )
+        return false;
+      const dataStart =
+        localOffset +
+        30 +
+        content.readUInt16LE(localOffset + 26) +
+        content.readUInt16LE(localOffset + 28);
+      if (dataStart + compressedSize > centralDirectoryOffset) return false;
+      try {
+        const compressed = content.subarray(dataStart, dataStart + compressedSize);
+        const actual =
+          compressionMethod === 0
+            ? compressed
+            : inflateRawSync(compressed, {
+                maxOutputLength: Math.max(1, MAX_DOCX_UNCOMPRESSED_SIZE - totalUncompressedSize),
+              });
+        if (actual.length !== uncompressedSize) return false;
+      } catch {
+        return false;
+      }
       totalUncompressedSize += uncompressedSize;
       if (totalUncompressedSize > MAX_DOCX_UNCOMPRESSED_SIZE) return false;
       entries.add(content.toString('utf8', cursor + 46, cursor + 46 + fileNameLength));
@@ -337,7 +387,7 @@ export class SubmissionService {
     cleanupResults.forEach((result) => {
       if (result.status === 'rejected')
         this.logger.error(
-          `No se pudo completar la limpieza: ${result.reason?.message ?? result.reason}`
+          'No se pudo eliminar un archivo huérfano de una entrega; revisar almacenamiento.'
         );
     });
   }

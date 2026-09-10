@@ -28,10 +28,16 @@ export class AiService {
     private readonly redis: RedisService
   ) {}
 
+  get modelName(): string {
+    return this.aiProvider.modelName;
+  }
+
   async evaluateSubmission(extractedText: string, rubric: any, assignmentTitle: string) {
     // Generar una llave única basada en el contenido
     const hash = createHash('sha256')
-      .update(`${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}`)
+      .update(
+        `grading-v2-${this.aiProvider.modelName}-${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}`
+      )
       .digest('hex');
     const cacheKey = `ai-evaluation:${hash}`;
 

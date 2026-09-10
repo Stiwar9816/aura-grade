@@ -8,7 +8,7 @@ describe('SubmissionProcessor', () => {
     update: jest.fn(),
   };
   const extractorService = { extractTextFromUrl: jest.fn() };
-  const aiService = { evaluateSubmission: jest.fn() };
+  const aiService = { evaluateSubmission: jest.fn(), modelName: 'gemini-3.5-flash' };
   const evaluationService = { createDraft: jest.fn() };
   const notificationsGateway = { notifyStudent: jest.fn() };
   const config = { get: jest.fn().mockReturnValue('gemini') };
@@ -18,7 +18,8 @@ describe('SubmissionProcessor', () => {
     aiService as never,
     evaluationService as never,
     notificationsGateway as never,
-    config as never
+    config as never,
+    { downloadUrl: jest.fn(() => 'https://api.cloudinary.com/download') } as never
   );
   const job = {
     id: 'job-id',
@@ -26,6 +27,7 @@ describe('SubmissionProcessor', () => {
     updateProgress: jest.fn(),
   };
   const submission = {
+    cloudinaryPublicId: 'auragrade/submissions/file.docx',
     id: 'submission-id',
     student: { id: 'student-id' },
     assignment: {

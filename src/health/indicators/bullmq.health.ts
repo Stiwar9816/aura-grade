@@ -14,14 +14,12 @@ export class BullMQHealthIndicator extends HealthIndicator {
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
-      // Accessing the redis client from the queue
-      const client = await this.gradingQueue.client;
-      await client.ping();
+      await this.gradingQueue.getJobCounts('waiting');
       return this.getStatus(key, true);
-    } catch (error) {
+    } catch {
       throw new HealthCheckError(
         'Falló la conexión con BullMQ.',
-        this.getStatus(key, false, { message: error.message })
+        this.getStatus(key, false, { message: 'La cola no está disponible.' })
       );
     }
   }

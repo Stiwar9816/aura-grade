@@ -122,7 +122,7 @@ describe('CloudinaryService', () => {
 
     expect(cloudinary.uploader.destroy).toHaveBeenCalledWith(
       'auragrade/submissions/generated.docx',
-      { resource_type: 'raw', invalidate: true }
+      { resource_type: 'raw', type: 'authenticated', invalidate: true }
     );
   });
 

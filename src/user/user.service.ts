@@ -206,7 +206,6 @@ export class UserService {
     if (password) {
       // Encrypt password
       user.password = await this.passwordService.hash(password);
-      await this.mailService.sendUpdatePassword(user, password);
     }
 
     let savedUser: User;
@@ -214,6 +213,14 @@ export class UserService {
       savedUser = await this.userRepository.save(user);
     } catch (error) {
       this.handleDBException(error);
+    }
+    if (password) {
+      try {
+        await this.mailService.sendUpdatePassword(savedUser);
+      } catch {
+        this.logger.error('No se pudo enviar el aviso de cambio de contraseña.');
+      }
+      delete savedUser.password;
     }
     if (mustInvalidateSessions)
       this.logger.log(
@@ -250,10 +257,15 @@ export class UserService {
 
   async resetPasswordAuth(password: string, user: User): Promise<User> {
     const userFound = await this.findOneById(user.id);
-    await this.mailService.sendUpdatePassword(userFound, password);
     userFound.password = await this.passwordService.hash(password);
     userFound.authVersion = (userFound.authVersion ?? 1) + 1;
     const savedUser = await this.userRepository.save(userFound);
+    try {
+      await this.mailService.sendUpdatePassword(savedUser);
+    } catch {
+      this.logger.error('No se pudo enviar el aviso de cambio de contraseña.');
+    }
+    delete savedUser.password;
     this.logger.log(`El cambio de contraseña invalidó las sesiones del usuario ${savedUser.id}.`);
     return savedUser;
   }

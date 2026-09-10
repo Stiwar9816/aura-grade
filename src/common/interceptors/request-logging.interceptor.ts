@@ -15,7 +15,7 @@ import { AuditOutcome } from '../../audit/enums';
 
 const MUTATING_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const SENSITIVE_KEY_PATTERN =
-  /password|token|secret|authorization|cookie|credential|document_num|documentNumber/i;
+  /password|token|secret|recovery|otp|authorization|cookie|credential|document_num|documentNumber/i;
 
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {

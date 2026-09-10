@@ -9,6 +9,15 @@ export class VerifyOtpDto {
 
   @ApiProperty({ description: 'Six-digit code from the authenticator application' })
   @IsString()
-  @Matches(/^\d{6}$/, { message: 'El código debe tener exactamente 6 dígitos.' })
+  @Matches(/^(?:\d{6}|[a-fA-F0-9]{24})$/, {
+    message:
+      'Introduce los 6 dígitos del autenticador o un código de recuperación de 24 caracteres.',
+  })
+  otp: string;
+}
+
+export class RecoveryCodesDto {
+  @IsString()
+  @Matches(/^\d{6}$/)
   otp: string;
 }

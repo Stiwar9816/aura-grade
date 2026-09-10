@@ -3,10 +3,11 @@ import { envs } from './config';
 
 const enabled = envs.sentry_enabled && Boolean(envs.sentry_dsn) && envs.state !== 'test';
 const configuredSampleRate = Number(envs.sentry_traces_sample_rate ?? 0);
-const sensitiveKey = /authorization|cookie|password|token|secret|credential|api.?key|otp|document/i;
+const sensitiveKey =
+  /authorization|cookie|password|token|secret|credential|api.?key|otp|recovery|document/i;
 const sensitiveValuePatterns = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
-  /\b(password|token|secret|credential|api[_-]?key|otp)\s*[:=]\s*[^\s,;]+/gi,
+  /\b(password|token|secret|credential|api[_-]?key|otp|recovery)\s*[:=]\s*[^\s,;]+/gi,
   /:\/\/[^\s/@:]+:[^\s/@]+@/g,
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
 ];

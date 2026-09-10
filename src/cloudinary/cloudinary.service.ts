@@ -28,6 +28,7 @@ export class CloudinaryService {
         {
           folder: SUBMISSIONS_FOLDER,
           resource_type: 'raw',
+          type: 'authenticated',
           public_id: publicId,
           use_filename: false,
           unique_filename: false,
@@ -44,11 +45,23 @@ export class CloudinaryService {
     });
   }
 
+  downloadUrl(publicId: string): string {
+    if (!/^auragrade\/submissions\/[a-zA-Z0-9_-]+\.docx$/.test(publicId))
+      throw new Error('El identificador del documento no es válido.');
+    return cloudinary.utils.private_download_url(publicId, '', {
+      resource_type: 'raw',
+      type: 'authenticated',
+      expires_at: Math.floor(Date.now() / 1000) + 60,
+      attachment: true,
+    });
+  }
+
   async deleteSubmission(publicId: string): Promise<void> {
     if (!publicId.startsWith(`${SUBMISSIONS_FOLDER}/`))
       throw new Error('El identificador de Cloudinary no pertenece a entregas.');
     await cloudinary.uploader.destroy(publicId, {
       resource_type: 'raw',
+      type: 'authenticated',
       invalidate: true,
     });
   }

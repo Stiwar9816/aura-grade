@@ -23,6 +23,8 @@ import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
 import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { recordOutboxEvent } from 'src/outbox/outbox';
 
 @Injectable()
 export class EvaluationService {
@@ -130,61 +132,63 @@ export class EvaluationService {
     updateEvaluationInput: UpdateEvaluationInput | undefined,
     teacher: User
   ): Promise<Evaluation> {
-    const evaluation = await this.evaluationRepository.findOne({
-      where: { id },
-      relations: this.evaluationRelations,
+    const savedEvaluation = await this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Evaluation);
+      const initial = await repository.findOne({
+        where: { id },
+        relations: this.evaluationRelations,
+      });
+      if (!initial) throw new NotFoundException('No se encontró la evaluación.');
+      this.assertTeacherOwner(initial, teacher);
+      await manager.getRepository(Assignment).findOne({
+        where: { id: initial.submission.assignment.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      await repository.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      const evaluation = await repository.findOne({
+        where: { id },
+        relations: this.evaluationRelations,
+      });
+      if (!evaluation) throw new NotFoundException('No se encontró la evaluación.');
+      this.assertTeacherOwner(evaluation, teacher);
+      if (evaluation.status === EvaluationStatus.PUBLISHED) return evaluation;
+      if (updateEvaluationInput) {
+        if (updateEvaluationInput.id !== id)
+          throw new BadRequestException('La evaluación de la ruta no coincide con la enviada.');
+        const { id: _, ...toUpdate } = updateEvaluationInput;
+        Object.assign(evaluation, toUpdate);
+      }
+
+      if (evaluation.origin === EvaluationOrigin.MANUAL) {
+        const normalizedFeedback = this.normalizeWeightedFeedback(
+          evaluation.detailedFeedback,
+          evaluation.submission.assignment.rubric?.criteria ?? []
+        );
+        evaluation.detailedFeedback = normalizedFeedback.items;
+        evaluation.totalScore = normalizedFeedback.totalScore;
+      }
+
+      const score = Number(evaluation.totalScore);
+      const maxScore = Number(evaluation.submission.assignment?.rubric?.maxTotalScore);
+      if (!Number.isFinite(score) || score < 0 || !Number.isFinite(maxScore) || score > maxScore)
+        throw new BadRequestException(`La calificación debe estar entre 0 y ${maxScore}.`);
+      if (!evaluation.generalFeedback?.trim())
+        throw new BadRequestException('La retroalimentación final es obligatoria.');
+
+      evaluation.status = EvaluationStatus.PUBLISHED;
+      const saved = await repository.save(evaluation);
+      await manager
+        .getRepository(Submission)
+        .update(evaluation.submission.id, { status: SubmissionStatus.PUBLISHED });
+      await recordOutboxEvent(manager, 'grade-published', saved.id);
+      return saved;
     });
-
-    if (!evaluation)
-      throw new NotFoundException(`No se encontró la evaluación con identificador ${id}.`);
-    this.assertTeacherOwner(evaluation, teacher);
-
-    if (updateEvaluationInput) {
-      if (updateEvaluationInput.id !== id)
-        throw new BadRequestException('La evaluación de la ruta no coincide con la enviada.');
-      const { id: _, ...toUpdate } = updateEvaluationInput;
-      Object.assign(evaluation, toUpdate);
-    }
-
-    if (evaluation.origin === EvaluationOrigin.MANUAL) {
-      const normalizedFeedback = this.normalizeWeightedFeedback(
-        evaluation.detailedFeedback,
-        evaluation.submission.assignment.rubric?.criteria ?? []
-      );
-      evaluation.detailedFeedback = normalizedFeedback.items;
-      evaluation.totalScore = normalizedFeedback.totalScore;
-    }
-
-    const score = Number(evaluation.totalScore);
-    const maxScore = Number(evaluation.submission.assignment?.rubric?.maxTotalScore);
-    if (!Number.isFinite(score) || score < 0 || !Number.isFinite(maxScore) || score > maxScore)
-      throw new BadRequestException(`La calificación debe estar entre 0 y ${maxScore}.`);
-    if (!evaluation.generalFeedback?.trim())
-      throw new BadRequestException('La retroalimentación final es obligatoria.');
-
-    evaluation.status = EvaluationStatus.PUBLISHED;
-    const savedEvaluation = await this.evaluationRepository.save(evaluation);
-
-    await this.submissionRepository.update(evaluation.submission.id, {
-      status: SubmissionStatus.PUBLISHED,
-    });
-
-    this.notificationsGateway.notifyStudent(evaluation.submission.student.id, {
-      submissionId: evaluation.submission.id,
+    this.notificationsGateway.notifyStudent(savedEvaluation.submission.student.id, {
+      submissionId: savedEvaluation.submission.id,
       status: SubmissionStatus.PUBLISHED,
       message: '¡Tu calificación ha sido revisada y publicada!',
-      evaluationId: evaluation.id,
+      evaluationId: savedEvaluation.id,
     });
-    try {
-      await this.notificationQueue.enqueuePublishedGrade(savedEvaluation.id);
-    } catch (error) {
-      this.logger.error(
-        `La calificación ${savedEvaluation.id} fue publicada, pero no se pudo encolar su notificación: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`
-      );
-    }
-
     return savedEvaluation;
   }
 

@@ -12,49 +12,55 @@ type MailTemplateVariables = Record<string, string | number>;
 export class MailService {
   constructor(@Inject(RESEND_CLIENT) private readonly resend: Resend) {}
 
-  async sendUserConfirmation(user: User, plainPassword: string) {
-    await this.sendEmail({
-      to: user.email,
-      subject: `¡Bienvenid@ a ${envs.app_name}! Aquí están tus credenciales`,
-      templateId: envs.resend_confirmation_template_id,
-      variables: {
-        name: `${user.name} ${user.last_name}`,
-        password: plainPassword,
-        email: user.email,
-        app_name: envs.app_name,
-        url_app: envs.frontend_url,
-      },
-    });
-  }
-  async sendUpdatePassword(user: User, plainPassword: string) {
-    await this.sendEmail({
-      to: user.email,
-      subject: `¡Hola ${user.name} ${user.last_name}! Aquí están tus credenciales actualizadas`,
-      templateId: envs.resend_update_password_template_id,
-      variables: {
-        name: `${user.name} ${user.last_name}`,
-        password: plainPassword,
-        email: user.email,
-        app_name: envs.app_name,
-        url_app: envs.frontend_url,
-      },
-    });
+  async sendUserConfirmation(user: User) {
+    await this.sendSecurityEmail(
+      user,
+      `Bienvenid@ a ${envs.app_name}`,
+      [
+        `Hola ${user.name} ${user.last_name},`,
+        'Tu registro fue recibido y está pendiente de aprobación institucional.',
+        `Cuando sea aprobado, inicia sesión en ${envs.frontend_url}.`,
+        'Nunca te pediremos tu contraseña ni tus códigos de autenticación por correo.',
+      ].join('\n\n')
+    );
   }
 
-  async sendResetPassword(user: User, plainPassword: string) {
-    await this.sendEmail({
+  async sendUpdatePassword(user: User) {
+    await this.sendSecurityEmail(
+      user,
+      'Tu contraseña fue actualizada',
+      [
+        `Hola ${user.name} ${user.last_name},`,
+        'La contraseña de tu cuenta fue cambiada y tus sesiones anteriores quedaron invalidadas.',
+        'Si no reconoces esta acción, solicita recuperación de acceso y escribe a soporte@auragrade.co.',
+      ].join('\n\n')
+    );
+  }
+
+  async sendResetPassword(user: User, token: string) {
+    const url = `${envs.frontend_url.replace(/\/+$/, '')}/reset-password#token=${encodeURIComponent(token)}`;
+    await this.sendSecurityEmail(
+      user,
+      'Restablece tu contraseña de Aura Grade',
+      [
+        `Hola ${user.name} ${user.last_name},`,
+        'Usa este enlace una sola vez durante los próximos 30 minutos para elegir una contraseña nueva:',
+        url,
+        'Si no solicitaste este cambio, ignora el mensaje. Tu contraseña y tus sesiones siguen vigentes.',
+        'Soporte: soporte@auragrade.co',
+      ].join('\n\n')
+    );
+  }
+
+  private async sendSecurityEmail(user: User, subject: string, text: string) {
+    // Do not reuse legacy templates that requested a plaintext password.
+    const { error } = await this.resend.emails.send({
+      from: envs.mail_from,
       to: user.email,
-      subject: '¡Solicitud de restablecimiento de contraseña!',
-      templateId: envs.resend_reset_password_template_id,
-      variables: {
-        name: `${user.name} ${user.last_name}`,
-        password: plainPassword,
-        email: user.email,
-        app_name: envs.app_name,
-        url_app: envs.frontend_url,
-        support_email: 'support@auragrade.com',
-      },
+      subject,
+      text,
     });
+    if (error) throw new InternalServerErrorException('No se pudo enviar el correo de seguridad.');
   }
 
   async sendUserInvitation(user: User, token: string, idempotencyKey?: string) {

@@ -21,11 +21,13 @@ import { AuthAttemptService } from './security';
 import { InstitutionModule } from 'src/institution';
 import { PasswordService } from './security';
 import { TwoFactorService } from './two-factor';
+import { PasswordResetService } from './security/password-reset.service';
 
 @Global()
 @Module({
   controllers: [AuthController],
   providers: [
+    PasswordResetService,
     AuthService,
     JwtStrategy,
     JwtAuthGuard,

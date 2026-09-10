@@ -1,3 +1,4 @@
+import { PasswordResetService } from 'src/auth/security/password-reset.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
@@ -51,6 +52,7 @@ describe('AuthService', () => {
     checkFieldsBeforeUpdate: jest.fn(),
   };
 
+  const passwordReset = { request: jest.fn(), complete: jest.fn() };
   const mockAuthRepository = {
     create: jest.fn(),
     save: jest.fn(),
@@ -112,6 +114,7 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: PasswordResetService, useValue: passwordReset },
         {
           provide: getRepositoryToken(User),
           useValue: mockAuthRepository,
@@ -215,10 +218,7 @@ describe('AuthService', () => {
         password: hashedPassword,
       });
       expect(mockAuthRepository.save).toHaveBeenCalled();
-      expect(mockMailService.sendUserConfirmation).toHaveBeenCalledWith(
-        createdUser,
-        createUserDto.password
-      );
+      expect(mockMailService.sendUserConfirmation).toHaveBeenCalledWith(createdUser);
       expect(mockInstitutionService.findActiveById).toHaveBeenCalledWith(institutionId);
       expect(mockSessionService.create).not.toHaveBeenCalled();
       expect(result.pendingApproval).toBe(true);
@@ -294,30 +294,16 @@ describe('AuthService', () => {
     });
   });
 
-  describe('forgotPassword', () => {
-    it('should send a temporary password before persisting it', async () => {
-      const user = { ...mockUser, password: 'previous-password', authVersion: 1 };
-      mockAuthRepository.findOne.mockResolvedValue(user);
-      mockMailService.sendResetPassword.mockResolvedValue(true);
-      mockAuthRepository.save.mockResolvedValue(user);
-
-      const result = await service.forgotPassword(' JOHN.DOE@EXAMPLE.COM ');
-
-      expect(mockAuthRepository.findOne).toHaveBeenCalledWith({
-        where: { email: 'john.doe@example.com' },
-      });
-      expect(mockMailService.sendResetPassword).toHaveBeenCalledWith(user, expect.any(String));
-      expect(mockAuthRepository.save).toHaveBeenCalledWith(user);
-      expect(user.authVersion).toBe(2);
-      expect(result).toBe(user);
-    });
-
-    it('should not persist a new password when email delivery fails', async () => {
-      mockAuthRepository.findOne.mockResolvedValue({ ...mockUser });
-      mockMailService.sendResetPassword.mockRejectedValue(new Error('Email delivery failed'));
-
-      await expect(service.forgotPassword(mockUser.email)).rejects.toThrow('Email delivery failed');
+  describe('password recovery', () => {
+    it('delegates recovery without changing the user or sending credentials', async () => {
+      await service.forgotPassword(mockUser.email);
+      expect(passwordReset.request).toHaveBeenCalledWith(mockUser.email);
       expect(mockAuthRepository.save).not.toHaveBeenCalled();
+      expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
+    });
+    it('requires successful token consumption before returning success', async () => {
+      passwordReset.complete.mockRejectedValueOnce(new BadRequestException('Expired'));
+      await expect(service.resetPassword('token', 'password')).rejects.toThrow('Expired');
     });
   });
 
@@ -470,6 +456,25 @@ describe('AuthService', () => {
   });
 
   describe('verifyOtp', () => {
+    it('requires new enrollment after recovery before creating a session', async () => {
+      const account = { ...mockUser, authVersion: 2 };
+      mockTwoFactorService.verifyChallenge.mockResolvedValue({
+        user: account,
+        rememberMe: false,
+        recoveryUsed: true,
+      });
+      mockTwoFactorService.createChallenge.mockResolvedValue({
+        requiresTwoFactor: true,
+        requiresTwoFactorSetup: true,
+        challengeToken: 'new-enrollment',
+      });
+      await expect(
+        service.verifyOtp({ challengeToken: 'recovery-challenge', otp: '1234567890abcdef12345678' })
+      ).resolves.toEqual(expect.objectContaining({ requiresTwoFactorSetup: true }));
+      expect(mockSessionService.create).not.toHaveBeenCalled();
+      expect(mockTwoFactorService.createChallenge).toHaveBeenCalledWith(account, false);
+    });
+
     it.each([UserRoles.Administrador, UserRoles.Docente, UserRoles.Estudiante])(
       'creates the opaque session for %s only after the second factor succeeds',
       async (role) => {

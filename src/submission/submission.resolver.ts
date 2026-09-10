@@ -2,7 +2,7 @@
 import { ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 // Graphql
-import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, ResolveField, Parent } from '@nestjs/graphql';
 // Services
 import { SubmissionService } from './submission.service';
 // Entities
@@ -23,6 +23,12 @@ import { User } from 'src/user/entities/user.entity';
 @Resolver(() => Submission)
 export class SubmissionResolver {
   constructor(private readonly submissionService: SubmissionService) {}
+
+  @ResolveField(() => String, { nullable: true })
+  fileUrl(@Parent() submission: Submission): string | null {
+    // Download endpoint revalidates the session and ownership on every access.
+    return submission.fileUrl ? `/api/submissions/${submission.id}/download` : null;
+  }
 
   @Mutation(() => Submission, { name: 'createSubmission' })
   @Throttle({ short: { limit: 5, ttl: 60000 } })

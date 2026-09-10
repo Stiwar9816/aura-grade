@@ -45,6 +45,7 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
 import { AuthMetricsService, ObservabilityModule } from './observability';
 import { createGraphqlServerSecurityOptions } from './common/graphql';
 import { SentryModule } from '@sentry/nestjs/setup';
+import { OutboxModule } from './outbox/outbox.module';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -56,6 +57,7 @@ const isDevelopment = envs.state === 'dev';
 
 @Module({
   imports: [
+    OutboxModule,
     ConfigModule.forRoot({ isGlobal: true }),
     // Rate Limiting
     RedisModule,

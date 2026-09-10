@@ -18,6 +18,8 @@ import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 // Services
 import { AuthService } from './auth.service';
+import { RecoveryCodesDto } from './dto/verify-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 // Dto
 import { CreateUserDto, ForgotPasswordDto, LoginUserDto, AuthResponse, VerifyOtpDto } from './dto';
 // Entities
@@ -94,6 +96,21 @@ export class AuthController {
   async forgotPassword(@Body() { email }: ForgotPasswordDto) {
     await this.authService.forgotPassword(email);
     return { message: 'Revisa tu correo para continuar con el restablecimiento de contraseña.' };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 5, ttl: 15 * 60 * 1000 } })
+  resetPassword(@Body() input: ResetPasswordDto) {
+    return this.authService.resetPassword(input.token, input.newPassword);
+  }
+
+  @Post('recovery-codes')
+  @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ short: { limit: 5, ttl: 15 * 60 * 1000 } })
+  recoveryCodes(@Body() input: RecoveryCodesDto, @CurrentUser() user: User) {
+    return this.authService.generateRecoveryCodes(user, input.otp);
   }
 
   @Get('me')

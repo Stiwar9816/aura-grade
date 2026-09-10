@@ -603,6 +603,11 @@ input UpsertAssignmentExtensionInput {
 input CreateSubmissionInput {
   """ID of the assignment"""
   assignmentId: ID!
+
+  """
+  Unique identifier of this upload attempt; reuse when retrying the same request
+  """
+  idempotencyKey: ID!
 }
 
 input UpdateEvaluationInput {

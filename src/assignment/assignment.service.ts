@@ -13,6 +13,7 @@ import {
 } from './dto';
 // TypeORM
 import { LessThanOrEqual, Repository } from 'typeorm';
+import { Submission } from 'src/submission/entities/submission.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 // Entities
 import { Assignment } from './entities/assignment.entity';
@@ -113,40 +114,69 @@ export class AssignmentService {
 
   async update(id: string, input: UpdateAssignmentInput, teacher: User): Promise<Assignment> {
     this.assertTeacher(teacher);
-    const currentAssignment = await this.findOne(id, teacher);
+    await this.findOne(id, teacher);
 
     const { id: _, rubricId, courseId, ...toUpdate } = input;
-    const [course, rubric] = await Promise.all([
-      courseId ? this.findOwnedCourse(courseId, teacher) : Promise.resolve(undefined),
-      rubricId ? this.findOwnedRubric(rubricId, teacher) : Promise.resolve(undefined),
-    ]);
 
-    const assignment = await this.assignmentRepository.preload({
-      id,
-      ...toUpdate,
-      ...(course ? { course } : {}),
-      ...(rubric ? { rubric } : {}),
-    });
-
-    if (!assignment)
-      throw new NotFoundException(`No se encontró la tarea con identificador ${id}.`);
-
-    const savedAssignment = await this.assignmentRepository.save(assignment);
-    if (course && course.id !== currentAssignment.course?.id) {
-      await this.extensionRepository.delete({ assignment: { id } });
-    } else if (input.dueDate) {
-      await this.extensionRepository.delete({
-        assignment: { id },
-        extendedDueDate: LessThanOrEqual(new Date(savedAssignment.dueDate)),
+    await this.assignmentRepository.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Assignment);
+      const current = await repository.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+        relations: [],
       });
-    }
+      if (!current) throw new NotFoundException('No se encontró la tarea.');
+      const currentAssignment = await repository.findOne({
+        where: { id },
+        relations: ['course', 'rubric'],
+      });
+      const hasSubmissions = await manager
+        .getRepository(Submission)
+        .exists({ where: { assignment: { id } } });
+      if (
+        hasSubmissions &&
+        ((rubricId && rubricId !== currentAssignment.rubric?.id) ||
+          (courseId && courseId !== currentAssignment.course?.id))
+      )
+        throw new BadRequestException(
+          'La tarea ya tiene entregas: no se puede cambiar su curso ni su rúbrica. Crea una tarea nueva.'
+        );
+      const [course, rubric] = await Promise.all([
+        courseId ? this.findOwnedCourse(courseId, teacher) : Promise.resolve(undefined),
+        rubricId ? this.findOwnedRubric(rubricId, teacher) : Promise.resolve(undefined),
+      ]);
+      const assignment = await repository.preload({
+        id,
+        ...toUpdate,
+        ...(course ? { course } : {}),
+        ...(rubric ? { rubric } : {}),
+      });
+      if (!assignment) throw new NotFoundException('No se encontró la tarea.');
+      const savedAssignment = await repository.save(assignment);
+      const extensions = manager.getRepository(AssignmentExtension);
+      if (course && course.id !== currentAssignment.course?.id)
+        await extensions.delete({ assignment: { id } });
+      else if (input.dueDate)
+        await extensions.delete({
+          assignment: { id },
+          extendedDueDate: LessThanOrEqual(new Date(savedAssignment.dueDate)),
+        });
+    });
     return this.findOne(id, teacher);
   }
 
   async remove(id: string, teacher: User): Promise<Assignment> {
     this.assertTeacher(teacher);
     const assignment = await this.findOne(id, teacher);
-    await this.assignmentRepository.remove(assignment);
+    await this.assignmentRepository.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Assignment);
+      await repository.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (await manager.getRepository(Submission).exists({ where: { assignment: { id } } }))
+        throw new BadRequestException(
+          'La tarea tiene entregas. Desactívala para conservar el historial.'
+        );
+      await repository.remove(assignment);
+    });
     return { ...assignment, id };
   }
 

@@ -24,32 +24,21 @@ export class ExtractorService {
         timeout: DOWNLOAD_TIMEOUT_MS,
         maxContentLength: MAX_FILE_SIZE,
         maxBodyLength: MAX_FILE_SIZE,
+        maxRedirects: 0,
       });
       const buffer = Buffer.from(response.data);
       if (buffer.length === 0 || buffer.length > MAX_FILE_SIZE)
         throw new BadRequestException('El archivo descargado no tiene un tamaño válido.');
 
-      // 2. Determinar el tipo de archivo por la extensión en la URL (limpiando query params)
-      const cleanUrl = url.split('?')[0];
-      const extension = cleanUrl.split('.').pop()?.toLowerCase();
-
-      if (extension === 'docx') {
-        const extractedText = await this.extractFromDocx(buffer);
-        if (!extractedText.trim())
-          throw new BadRequestException('El documento no contiene texto que se pueda evaluar.');
-        return extractedText;
-      } else {
-        throw new Error('Formato de archivo no compatible. Solo se permiten archivos DOCX.');
-      }
+      return this.extractFromBuffer(buffer);
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       if (axios.isAxiosError(error)) {
         this.logger.error(`Error de Axios: ${error.message} - Estado: ${error.response?.status}`);
-        this.logger.error(`Encabezados: ${JSON.stringify(error.response?.headers)}`);
       } else {
         this.logger.error(`Error al extraer el contenido: ${error.message}`);
       }
-      throw new InternalServerErrorException(`No se pudo extraer el texto: ${error.message}`);
+      throw new InternalServerErrorException('No se pudo extraer el texto del documento.');
     }
   }
 
@@ -57,8 +46,10 @@ export class ExtractorService {
     return this.extractTextFromUrl(url);
   }
 
-  private async extractFromDocx(buffer: Buffer): Promise<string> {
+  async extractFromBuffer(buffer: Buffer): Promise<string> {
     const result = await mammoth.extractRawText({ buffer });
+    if (!result.value.trim())
+      throw new BadRequestException('El documento no contiene texto que se pueda evaluar.');
     return result.value;
   }
 }

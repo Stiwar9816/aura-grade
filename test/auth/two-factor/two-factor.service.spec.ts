@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { TwoFactorService } from 'src/auth/two-factor';
 import { UserRoles } from 'src/auth/enums';
@@ -62,6 +63,7 @@ describe('TwoFactorService', () => {
       twoFactorEnabledAt: null,
       twoFactorSecretEncrypted: null,
       twoFactorLastCounter: null,
+      twoFactorRecoveryHashes: null,
     });
     userRepository.findOne.mockResolvedValue({ ...user });
     queryBuilder.getOne.mockResolvedValue(lockedUser);
@@ -139,6 +141,12 @@ describe('TwoFactorService', () => {
       otp
     );
 
+    expect(result.recoveryCodes).toHaveLength(10);
+    expect(new Set(result.recoveryCodes).size).toBe(10);
+    expect(lockedUser.twoFactorRecoveryHashes).toEqual(
+      result.recoveryCodes!.map((code) => createHash('sha256').update(code).digest('hex'))
+    );
+    expect(result.user.twoFactorRecoveryHashes).toBeUndefined();
     expect(result.rememberMe).toBe(true);
     expect(lockedUser.twoFactorSecretEncrypted).toBe(secretEncrypted);
     expect(lockedUser.twoFactorEnabledAt).toBeInstanceOf(Date);
@@ -218,5 +226,74 @@ describe('TwoFactorService', () => {
       service.verifyChallenge('challenge-token-with-more-than-32-characters', '123456')
     ).rejects.toThrow('La cuenta no puede completar el segundo factor.');
     expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+  it('requires new enrollment and invalidates all sessions and recovery codes after recovery', async () => {
+    const code = '1234567890abcdef12345678';
+    const encrypted = (service as any).encrypt((service as any).base32(Buffer.alloc(20, 19)));
+    Object.assign(lockedUser, {
+      twoFactorSecretEncrypted: encrypted,
+      twoFactorEnabledAt: new Date(),
+      twoFactorRecoveryHashes: [createHash('sha256').update(code).digest('hex')],
+    });
+    userRepository.findOne.mockResolvedValue({ ...lockedUser });
+    const challenge = JSON.stringify({
+      attempts: 0,
+      authVersion: 1,
+      rememberMe: false,
+      secretEncrypted: encrypted,
+      setup: false,
+      userId: user.id,
+    });
+    redis.client.get.mockResolvedValue(challenge);
+    redis.client.eval.mockResolvedValue(challenge);
+    const result = await service.verifyChallenge('recovery-challenge-token', code);
+    expect(result.recoveryUsed).toBe(true);
+    expect(result.user.authVersion).toBe(2);
+    expect(lockedUser.twoFactorSecretEncrypted).toBeNull();
+    expect(lockedUser.twoFactorRecoveryHashes).toBeNull();
+    expect((await service.createChallenge(result.user, false)).requiresTwoFactorSetup).toBe(true);
+    await expect(service.verifyChallenge('recovery-challenge-token', code)).rejects.toThrow();
+  });
+
+  it('rejects an unknown recovery code without changing the authenticator', async () => {
+    const encrypted = (service as any).encrypt((service as any).base32(Buffer.alloc(20, 19)));
+    Object.assign(lockedUser, {
+      twoFactorSecretEncrypted: encrypted,
+      twoFactorEnabledAt: new Date(),
+      twoFactorRecoveryHashes: [],
+    });
+    userRepository.findOne.mockResolvedValue({ ...lockedUser });
+    const challenge = JSON.stringify({
+      attempts: 0,
+      authVersion: 1,
+      rememberMe: false,
+      secretEncrypted: encrypted,
+      setup: false,
+      userId: user.id,
+    });
+    redis.client.get.mockResolvedValue(challenge);
+    redis.client.eval.mockResolvedValue(challenge);
+    await expect(service.verifyChallenge('challenge', '1234567890abcdef12345678')).rejects.toThrow(
+      'recuperación inválido'
+    );
+    expect(save).not.toHaveBeenCalled();
+    expect(lockedUser.twoFactorSecretEncrypted).toBe(encrypted);
+  });
+
+  it('rotates recovery codes only after a fresh authenticator code and rejects replay', async () => {
+    const secret = (service as any).base32(Buffer.alloc(20, 17));
+    Object.assign(lockedUser, {
+      twoFactorSecretEncrypted: (service as any).encrypt(secret),
+      twoFactorEnabledAt: new Date(),
+      twoFactorRecoveryHashes: ['old-hash'],
+    });
+    const otp = (service as any).totp(secret, BigInt(Math.floor(Date.now() / 30000)));
+    const codes = await service.generateRecoveryCodes(user, otp);
+    expect(codes).toHaveLength(10);
+    expect(lockedUser.twoFactorRecoveryHashes).not.toContain('old-hash');
+    expect(lockedUser.twoFactorRecoveryHashes).toEqual(
+      codes.map((code) => createHash('sha256').update(code).digest('hex'))
+    );
+    await expect(service.generateRecoveryCodes(user, otp)).rejects.toThrow('código nuevo');
   });
 });

@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { Logger } from '@nestjs/common';
 // BullMQ
 import { Processor, WorkerHost } from '@nestjs/bullmq';
@@ -21,7 +22,7 @@ import { AiSanitizer } from 'src/common/helpers/ai-sanitizer.helper';
 
 type GradingJobData = {
   id: string;
-  url: string;
+  url?: string;
 };
 
 type GradingJobResult = {
@@ -41,14 +42,15 @@ export class SubmissionProcessor extends WorkerHost {
     private readonly aiService: AiService,
     private readonly evaluationService: EvaluationService,
     private readonly notificationsGateway: NotificationsGateway,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly cloudinary: CloudinaryService
   ) {
     super();
   }
 
   async process(job: Job<GradingJobData, GradingJobResult, string>): Promise<GradingJobResult> {
-    const { id, url } = job.data;
-    if (!id || !url) throw new Error('El trabajo de calificación no tiene datos válidos.');
+    const { id } = job.data;
+    if (!id) throw new Error('El trabajo de calificación no tiene datos válidos.');
     this.logger.log(`Procesando el trabajo de calificación ${job.id} para la entrega ${id}.`);
 
     try {
@@ -79,7 +81,15 @@ export class SubmissionProcessor extends WorkerHost {
       });
 
       await job.updateProgress(10);
-      const text = await this.extractorService.extractTextFromUrl(url);
+      const text =
+        submission.extractedText ||
+        (submission.cloudinaryPublicId
+          ? await this.extractorService.extractTextFromUrl(
+              this.cloudinary.downloadUrl(submission.cloudinaryPublicId)
+            )
+          : (() => {
+              throw new Error('El documento requiere migración a almacenamiento privado.');
+            })());
       await job.updateProgress(30);
 
       await this.submissionRepository.update(id, {
@@ -116,7 +126,7 @@ export class SubmissionProcessor extends WorkerHost {
         totalScore: aiResponse.totalScore,
         generalFeedback: aiResponse.generalFeedback,
         detailedFeedback: aiResponse.detailedFeedback,
-        aiModelUsed: this.config.get('AI_PROVIDER'),
+        aiModelUsed: this.aiService.modelName,
       });
       await job.updateProgress(90);
 

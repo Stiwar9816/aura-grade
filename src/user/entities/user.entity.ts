@@ -147,6 +147,33 @@ export class User {
   @Column({ type: 'int', default: 1 })
   authVersion: number;
 
+  @Column({
+    name: 'password_reset_token_hash',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    select: false,
+  })
+  @HideField()
+  passwordResetTokenHash?: string | null;
+
+  @Column({ name: 'password_reset_expires_at', type: 'timestamptz', nullable: true, select: false })
+  @HideField()
+  passwordResetExpiresAt?: Date | null;
+
+  @Column({
+    name: 'password_reset_requested_at',
+    type: 'timestamptz',
+    nullable: true,
+    select: false,
+  })
+  @HideField()
+  passwordResetRequestedAt?: Date | null;
+
+  @Column({ name: 'password_reset_auth_version', type: 'integer', nullable: true, select: false })
+  @HideField()
+  passwordResetAuthVersion?: number | null;
+
   @Column({ name: 'is_platform_admin', type: 'boolean', default: false })
   @Field(() => Boolean)
   isPlatformAdmin: boolean;
@@ -161,6 +188,10 @@ export class User {
   @Column({ name: 'two_factor_last_counter', type: 'bigint', nullable: true, select: false })
   @HideField()
   twoFactorLastCounter?: string | null;
+
+  @Column({ name: 'two_factor_recovery_hashes', type: 'jsonb', nullable: true, select: false })
+  @HideField()
+  twoFactorRecoveryHashes?: string[] | null;
 
   @Column({ name: 'email_notifications_enabled', type: 'boolean', default: true })
   emailNotificationsEnabled?: boolean;

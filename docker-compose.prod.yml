@@ -61,6 +61,7 @@ services:
       TZ: America/Bogota
       ## JWT
       JWT_SECRET: ${JWT_SECRET}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:?BASIC_AUTH_PASSWORD is required}
       ## FRONTEND
       FRONTEND_URL: ${FRONTEND_URL}
       ## Cloudinary
@@ -111,6 +112,7 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       ## Resend
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM is required}
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_CONFIRMATION_TEMPLATE_ID: ${RESEND_CONFIRMATION_TEMPLATE_ID}
       RESEND_UPDATE_PASSWORD_TEMPLATE_ID: ${RESEND_UPDATE_PASSWORD_TEMPLATE_ID}
@@ -147,6 +149,14 @@ services:
     image: redis:7-alpine
     container_name: aura_grade_redis_prod
     restart: always
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory', '192mb', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - aura_net
     deploy:
@@ -161,3 +171,4 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:

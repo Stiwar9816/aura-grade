@@ -1,9 +1,13 @@
+import { Assignment } from 'src/assignment/entities/assignment.entity';
+import { Submission } from 'src/submission/entities/submission.entity';
 import { AssignmentService } from 'src/assignment/assignment.service';
 import { UserRoles } from 'src/auth/enums';
 import type { User } from 'src/user/entities/user.entity';
 
 describe('AssignmentService', () => {
+  const submissions = { exists: jest.fn() };
   const assignmentRepository = {
+    manager: { transaction: jest.fn() },
     create: jest.fn(),
     save: jest.fn(),
     find: jest.fn(),
@@ -34,6 +38,17 @@ describe('AssignmentService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    submissions.exists.mockResolvedValue(false);
+    assignmentRepository.manager.transaction.mockImplementation((callback) =>
+      callback({
+        getRepository: (entity: unknown) =>
+          entity === Assignment
+            ? assignmentRepository
+            : entity === Submission
+              ? submissions
+              : extensionRepository,
+      })
+    );
   });
 
   it('scopes teacher assignment listing to the authenticated owner', async () => {
@@ -313,5 +328,32 @@ describe('AssignmentService', () => {
         teacher
       )
     ).rejects.toThrow('tarea inactiva');
+  });
+  it.each([{ courseId: 'new-course' }, { rubricId: 'new-rubric' }])(
+    'freezes course and rubric when submissions exist: %s',
+    async (input) => {
+      const assignment = {
+        id: 'assignment-id',
+        user: teacher,
+        course: { id: 'course-id' },
+        rubric: { id: 'rubric-id' },
+        dueDate: new Date(),
+      };
+      assignmentRepository.findOne.mockResolvedValue(assignment);
+      submissions.exists.mockResolvedValue(true);
+      await expect(
+        service.update(assignment.id, { id: assignment.id, ...input }, teacher)
+      ).rejects.toThrow('ya tiene entregas');
+      expect(assignmentRepository.save).not.toHaveBeenCalled();
+      expect(rubricService.publishForAssignment).not.toHaveBeenCalled();
+    }
+  );
+
+  it('preserves assignment history instead of deleting submissions', async () => {
+    const assignment = { id: 'assignment-id', user: teacher, dueDate: new Date() };
+    assignmentRepository.findOne.mockResolvedValue(assignment);
+    submissions.exists.mockResolvedValue(true);
+    await expect(service.remove(assignment.id, teacher)).rejects.toThrow('Desactívala');
+    expect(assignmentRepository.remove).not.toHaveBeenCalled();
   });
 });

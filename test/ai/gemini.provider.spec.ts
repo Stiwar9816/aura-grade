@@ -25,7 +25,7 @@ describe('GeminiProvider', () => {
     new GeminiProvider(config);
 
     expect(config.getOrThrow).toHaveBeenCalledWith('GEMINI_API_KEY');
-    expect(GoogleGenAI).toHaveBeenCalledWith({ apiKey });
+    expect(GoogleGenAI).toHaveBeenCalledWith({ apiKey, httpOptions: { timeout: 60000 } });
   });
 
   it('requests a structured evaluation from the configured model', async () => {
@@ -47,7 +47,7 @@ describe('GeminiProvider', () => {
     expect(client.models.generateContent).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'gemini-3.5-flash',
-        config: { responseMimeType: 'application/json' },
+        config: expect.objectContaining({ responseMimeType: 'application/json' }),
       })
     );
   });

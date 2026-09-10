@@ -147,7 +147,12 @@ export class TwoFactorService {
   async verifyChallenge(
     challengeToken: string,
     otp: string
-  ): Promise<{ rememberMe: boolean; user: User }> {
+  ): Promise<{
+    rememberMe: boolean;
+    user: User;
+    recoveryCodes?: string[];
+    recoveryUsed?: boolean;
+  }> {
     const challengeHash = this.hash(challengeToken);
     const challenge = await this.getChallenge(challengeHash);
     const user = await this.userRepository.findOne({
@@ -164,8 +169,11 @@ export class TwoFactorService {
     )
       throw new ForbiddenException('La cuenta no puede completar el segundo factor.');
 
-    const counter = this.matchingCounter(this.decrypt(challenge.secretEncrypted), otp);
-    if (counter === null) {
+    const recovery = /^[a-f0-9]{24}$/i.test(otp);
+    const counter = recovery
+      ? null
+      : this.matchingCounter(this.decrypt(challenge.secretEncrypted), otp);
+    if ((!recovery && counter === null) || (recovery && challenge.setup)) {
       await this.registerInvalidAttempt(challengeHash, challenge.userId);
       this.metrics.increment('auth_otp_failure_total');
       throw new UnauthorizedException('Código inválido o expirado.');
@@ -174,30 +182,59 @@ export class TwoFactorService {
     const consumed = await this.consume(challengeHash, challenge.userId);
     if (!consumed) throw new UnauthorizedException('Código inválido o expirado.');
 
+    let recoveryCodes: string[] | undefined;
     await this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(User);
       const locked = await repository
         .createQueryBuilder('user')
-        .addSelect(['user.twoFactorSecretEncrypted', 'user.twoFactorLastCounter'])
+        .addSelect([
+          'user.twoFactorSecretEncrypted',
+          'user.twoFactorLastCounter',
+          'user.twoFactorRecoveryHashes',
+        ])
         .where('user.id = :userId', { userId: challenge.userId })
         .setLock('pessimistic_write')
         .getOne();
-      if (!locked || !locked.isActive)
+      if (
+        !locked ||
+        !locked.isActive ||
+        locked.authVersion !== challenge.authVersion ||
+        locked.approvalStatus !== InstitutionApprovalStatus.APPROVED
+      )
         throw new UnauthorizedException('Código inválido o expirado.');
+      if (recovery) {
+        if (
+          !locked.twoFactorRecoveryHashes?.includes(this.hash(otp.toLowerCase())) ||
+          locked.twoFactorSecretEncrypted !== challenge.secretEncrypted
+        )
+          throw new UnauthorizedException('Código de recuperación inválido o utilizado.');
+        // A recovery login must enrol a new authenticator before obtaining a session.
+        locked.twoFactorRecoveryHashes = null;
+        locked.twoFactorSecretEncrypted = null;
+        locked.twoFactorEnabledAt = null;
+        locked.twoFactorLastCounter = null;
+        locked.authVersion += 1;
+        await repository.save(locked);
+        user.authVersion = locked.authVersion;
+        user.twoFactorEnabledAt = null;
+        return;
+      }
       const lastCounter = locked.twoFactorLastCounter
         ? BigInt(locked.twoFactorLastCounter)
         : undefined;
-      if (lastCounter !== undefined && counter <= lastCounter)
+      if (lastCounter !== undefined && counter! <= lastCounter)
         throw new UnauthorizedException('Este código ya fue utilizado.');
       if (challenge.setup) {
         if (locked.twoFactorEnabledAt || locked.twoFactorSecretEncrypted)
           throw new UnauthorizedException('El segundo factor ya fue configurado.');
         locked.twoFactorSecretEncrypted = challenge.secretEncrypted;
         locked.twoFactorEnabledAt = new Date();
+        recoveryCodes = Array.from({ length: 10 }, () => randomBytes(12).toString('hex'));
+        locked.twoFactorRecoveryHashes = recoveryCodes.map((code) => this.hash(code));
       } else if (locked.twoFactorSecretEncrypted !== challenge.secretEncrypted) {
         throw new UnauthorizedException('La configuración del segundo factor cambió.');
       }
-      locked.twoFactorLastCounter = counter.toString();
+      locked.twoFactorLastCounter = counter!.toString();
       await repository.save(locked);
     });
 
@@ -205,7 +242,42 @@ export class TwoFactorService {
     delete user.password;
     delete user.twoFactorSecretEncrypted;
     delete user.twoFactorLastCounter;
-    return { rememberMe: challenge.rememberMe, user };
+    delete user.twoFactorRecoveryHashes;
+    return {
+      rememberMe: challenge.rememberMe,
+      user,
+      ...(recoveryCodes ? { recoveryCodes } : {}),
+      ...(recovery ? { recoveryUsed: true } : {}),
+    };
+  }
+
+  async generateRecoveryCodes(actor: User, otp: string): Promise<string[]> {
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(User);
+      const user = await repository
+        .createQueryBuilder('user')
+        .addSelect(['user.twoFactorSecretEncrypted', 'user.twoFactorLastCounter'])
+        .where('user.id = :id', { id: actor.id })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (
+        !user?.isActive ||
+        !user.twoFactorSecretEncrypted ||
+        user.authVersion !== actor.authVersion
+      )
+        throw new UnauthorizedException('La sesión o el autenticador ya no son válidos.');
+      const counter = this.matchingCounter(this.decrypt(user.twoFactorSecretEncrypted), otp);
+      if (
+        counter === null ||
+        (user.twoFactorLastCounter && counter <= BigInt(user.twoFactorLastCounter))
+      )
+        throw new UnauthorizedException('Usa un código nuevo de tu autenticador.');
+      const codes = Array.from({ length: 10 }, () => randomBytes(12).toString('hex'));
+      user.twoFactorRecoveryHashes = codes.map((code) => this.hash(code));
+      user.twoFactorLastCounter = counter.toString();
+      await repository.save(user);
+      return codes;
+    });
   }
 
   private async getChallenge(hash: string): Promise<StoredChallenge> {

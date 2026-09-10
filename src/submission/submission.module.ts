@@ -5,6 +5,7 @@ import { BullBoardModule } from '@bull-board/nestjs';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 // Services
 import { SubmissionService } from './submission.service';
+import { SubmissionController } from './submission.controller';
 import { SubmissionProcessor } from './submission.processor';
 import { GradingQueueEvents } from './grading-queue.events';
 // Resolvers
@@ -23,6 +24,7 @@ import { AiModule } from 'src/ai/ai.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
+  controllers: [SubmissionController],
   providers: [SubmissionResolver, SubmissionService, SubmissionProcessor, GradingQueueEvents],
   imports: [
     TypeOrmModule.forFeature([Submission]),

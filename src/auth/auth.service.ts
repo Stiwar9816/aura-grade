@@ -26,7 +26,7 @@ import { Logger } from '@nestjs/common';
 import { AuthMetricsService } from '../observability';
 import { AuthAttemptService, PasswordService } from './security';
 import { InstitutionApprovalStatus, InstitutionService } from 'src/institution';
-import { randomPassword } from './common';
+import { PasswordResetService } from './security/password-reset.service';
 import { TwoFactorService } from './two-factor';
 
 @Injectable()
@@ -45,7 +45,8 @@ export class AuthService {
     private readonly metrics: AuthMetricsService,
     private readonly institutionService: InstitutionService,
     private readonly passwordService: PasswordService,
-    private readonly twoFactorService: TwoFactorService
+    private readonly twoFactorService: TwoFactorService,
+    private readonly passwordResetService: PasswordResetService
   ) {}
 
   getToken(payload: JwtPayload) {
@@ -71,7 +72,8 @@ export class AuthService {
     });
 
     // Convertir IDs (string[]) → [{ id }, { id }, ...]
-    if (courses?.length) user.courses = courses.map((id) => ({ id })) as any;
+    if (courses?.length)
+      throw new BadRequestException('La matrícula debe gestionarla el docente o administrador.');
 
     try {
       await this.authRepository.save(user);
@@ -79,7 +81,11 @@ export class AuthService {
       this.handleDBException(error);
     }
 
-    await this.mailService.sendUserConfirmation(user, password);
+    try {
+      await this.mailService.sendUserConfirmation(user);
+    } catch {
+      this.logger.error('Registro completado; no se pudo enviar el aviso de bienvenida.');
+    }
     delete user.password;
     return {
       user,
@@ -154,30 +160,30 @@ export class AuthService {
   }
 
   async verifyOtp({ challengeToken, otp }: VerifyOtpDto, device?: SessionDevice) {
-    const { rememberMe, user } = await this.twoFactorService.verifyChallenge(challengeToken, otp);
+    const { rememberMe, user, recoveryCodes, recoveryUsed } =
+      await this.twoFactorService.verifyChallenge(challengeToken, otp);
+    if (recoveryUsed) return this.twoFactorService.createChallenge(user, rememberMe);
     const session = await this.sessionService.create(user, rememberMe, 'mfa', device);
     this.metrics.increment('auth_login_success_total');
     this.logger.log(`Segundo factor validado y sesión creada para el usuario ${user.id}.`);
-    return { ...this.authResponse(user, session), rememberMe };
+    return {
+      ...this.authResponse(user, session),
+      rememberMe,
+      ...(recoveryCodes ? { recoveryCodes } : {}),
+    };
   }
 
-  async forgotPassword(email: string): Promise<User | undefined> {
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = await this.authRepository.findOne({ where: { email: normalizedEmail } });
-    if (!user) {
-      await this.passwordService.verify(randomPassword(), AuthService.DUMMY_PASSWORD_HASH);
-      return undefined;
-    }
+  async generateRecoveryCodes(user: User, otp: string) {
+    return { recoveryCodes: await this.twoFactorService.generateRecoveryCodes(user, otp) };
+  }
 
-    const newPassword = randomPassword();
-    await this.mailService.sendResetPassword(user, newPassword);
-    user.password = await this.passwordService.hash(newPassword);
-    user.authVersion = (user.authVersion ?? 1) + 1;
-    const savedUser = await this.authRepository.save(user);
-    this.logger.log(
-      `El restablecimiento de contraseña invalidó las sesiones del usuario ${savedUser.id}.`
-    );
-    return savedUser;
+  async forgotPassword(email: string): Promise<void> {
+    return this.passwordResetService.request(email);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ success: true }> {
+    await this.passwordResetService.complete(token, newPassword);
+    return { success: true };
   }
 
   async validateUser(id: string): Promise<User> {

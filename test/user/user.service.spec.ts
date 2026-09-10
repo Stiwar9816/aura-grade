@@ -439,15 +439,12 @@ describe('UserService', () => {
 
       const result = await service.update(mockUser.id, updateUserInput, mockUser);
 
-      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(
-        updatedUser,
-        updateUserInput.password
-      );
+      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(updatedUser);
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(updatedUser);
     });
 
-    it('should not persist a password change when its email cannot be sent', async () => {
+    it('keeps a successful password change even if its notification fails', async () => {
       const updateUserInput: UpdateUserInput = {
         id: mockUser.id,
         password: 'NewPassword123',
@@ -458,10 +455,11 @@ describe('UserService', () => {
       mockUserRepository.preload.mockResolvedValue({ ...mockUser });
       mockMailService.sendUpdatePassword.mockRejectedValue(new Error('Email delivery failed'));
 
-      await expect(service.update(mockUser.id, updateUserInput, mockUser)).rejects.toThrow(
-        'Email delivery failed'
-      );
-      expect(mockUserRepository.save).not.toHaveBeenCalled();
+      mockUserRepository.save.mockImplementation(async (user) => user);
+      await expect(service.update(mockUser.id, updateUserInput, mockUser)).resolves.toMatchObject({
+        id: mockUser.id,
+      });
+      expect(mockUserRepository.save).toHaveBeenCalled();
     });
 
     it('allows every authenticated role to update only its own personal data', async () => {
@@ -636,7 +634,7 @@ describe('UserService', () => {
 
       const result = await service.resetPasswordAuth(newPassword, mockUser);
 
-      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(mockUser, newPassword);
+      expect(mockMailService.sendUpdatePassword).toHaveBeenCalledWith(mockUser);
       expect(mockMailService.sendResetPassword).not.toHaveBeenCalled();
       expect(mockUserRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
