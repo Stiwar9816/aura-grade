@@ -64,6 +64,13 @@ export class Evaluation {
   @Field(() => GraphQLJSON)
   detailedFeedback: any;
 
+  // Internal evidence: intentionally absent from the GraphQL public schema.
+  @Column({ name: 'original_draft_snapshot', type: 'jsonb', nullable: true })
+  originalDraftSnapshot?: Record<string, unknown> | null;
+
+  @Column({ name: 'teacher_review_snapshot', type: 'jsonb', nullable: true })
+  teacherReviewSnapshot?: Record<string, unknown> | null;
+
   @Column({ name: 'legacy_detailed_feedback', type: 'jsonb', nullable: true })
   legacyDetailedFeedback?: unknown;
 

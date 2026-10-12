@@ -68,7 +68,14 @@ describe('EvaluationService', () => {
     id: 'evaluation-id',
     totalScore: 4,
     generalFeedback: 'Buen trabajo',
-    detailedFeedback: {},
+    detailedFeedback: [
+      {
+        criterionId: 'criterion-id',
+        criterion: 'Argumentación',
+        score: 4,
+        observations: 'Buen argumento',
+      },
+    ],
     status: EvaluationStatus.DRAFT,
     origin: EvaluationOrigin.AI,
     submission: {
@@ -315,7 +322,7 @@ describe('EvaluationService', () => {
   });
 
   it('rejects a score above the rubric maximum', async () => {
-    evaluationRepository.findOne.mockResolvedValue(draftEvaluation);
+    evaluationRepository.findOne.mockResolvedValue(structuredClone(draftEvaluation));
 
     await expect(
       service.publish(
@@ -332,7 +339,14 @@ describe('EvaluationService', () => {
 
     const result = await service.publish(
       draftEvaluation.id,
-      { id: draftEvaluation.id, totalScore: 4.5, generalFeedback: 'Revisión final' },
+      {
+        id: draftEvaluation.id,
+        totalScore: 4.5,
+        generalFeedback: 'Revisión final',
+        detailedFeedback: [
+          { criteriaId: 'criterion-id', score: 4.5, feedback: 'Revisión por criterio' },
+        ],
+      },
       teacher
     );
 
@@ -355,7 +369,7 @@ describe('EvaluationService', () => {
       totalScore: 4,
       submission: {
         ...draftEvaluation.submission,
-        assignment: { ...assignment, rubric: { maxTotalScore: 5 } },
+        assignment,
       },
     });
     evaluationRepository.save.mockImplementation((value) => value);
@@ -364,5 +378,120 @@ describe('EvaluationService', () => {
     await expect(service.publish(draftEvaluation.id, undefined, teacher)).resolves.toEqual(
       expect.objectContaining({ status: EvaluationStatus.PUBLISHED })
     );
+  });
+
+  it('recalculates an AI review from server weights and preserves original and final snapshots', async () => {
+    evaluationRepository.findOne.mockResolvedValue(structuredClone(draftEvaluation));
+    evaluationRepository.save.mockImplementation((value) => value);
+    const result = await service.publish(
+      draftEvaluation.id,
+      {
+        id: draftEvaluation.id,
+        totalScore: 4.9,
+        generalFeedback: 'Corregido por el docente',
+        detailedFeedback: [
+          {
+            criteriaId: 'criterion-id',
+            score: 0,
+            weight: 1,
+            weightedContribution: 4.9,
+            feedback: 'No hay evidencia',
+          },
+        ],
+      },
+      teacher
+    );
+    expect(result.totalScore).toBe(0);
+    expect(result.detailedFeedback[0]).toMatchObject({
+      score: 0,
+      weight: 100,
+      weightedContribution: 0,
+      feedback: 'No hay evidencia',
+    });
+    expect(result.originalDraftSnapshot).toMatchObject({
+      totalScore: 4,
+      detailedFeedback: [{ score: 4 }],
+      origin: 'AI',
+    });
+    expect(result.teacherReviewSnapshot).toMatchObject({
+      totalScore: 0,
+      reviewerId: teacher.id,
+      detailedFeedback: [{ score: 0 }],
+      context: { assignment: { title: 'Ensayo' } },
+    });
+  });
+
+  it.each([null, true, '', ' ', '4', -1, 5.1, NaN])(
+    'rejects malformed AI criterion score %p',
+    async (score) => {
+      evaluationRepository.findOne.mockResolvedValue(structuredClone(draftEvaluation));
+      await expect(
+        service.publish(
+          draftEvaluation.id,
+          { id: draftEvaluation.id, detailedFeedback: [{ criteriaId: 'criterion-id', score }] },
+          teacher
+        )
+      ).rejects.toThrow();
+      expect(evaluationRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(
+    [
+      [],
+      [null],
+      [{ criteriaId: 'unknown', name: 'Argumentación', score: 4 }],
+      [{ criteriaId: 'criterion-id', criterionId: 'unknown', score: 4 }],
+      [
+        { criteriaId: 'criterion-id', score: 4 },
+        { criteriaId: 'criterion-id', score: 3 },
+      ],
+      [
+        { criteriaId: 'criterion-id', score: 4 },
+        { criteriaId: 'unknown', score: 3 },
+      ],
+    ].map((detailedFeedback) => ({ detailedFeedback }))
+  )('rejects missing, duplicate or foreign criteria: %p', async ({ detailedFeedback }) => {
+    evaluationRepository.findOne.mockResolvedValue(structuredClone(draftEvaluation));
+    await expect(
+      service.publish(draftEvaluation.id, { id: draftEvaluation.id, detailedFeedback }, teacher)
+    ).rejects.toThrow();
+    expect(evaluationRepository.save).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -10, 90, NaN])('rejects invalid rubric weights: %p', async (weight) => {
+    const draft = structuredClone(draftEvaluation);
+    draft.submission.assignment.rubric.criteria[0].weight = weight;
+    evaluationRepository.findOne.mockResolvedValue(draft);
+    await expect(service.publish(draftEvaluation.id, undefined, teacher)).rejects.toThrow();
+  });
+
+  it('accepts unedited AI fields without requiring the frontend to rename them', async () => {
+    evaluationRepository.findOne.mockResolvedValue(structuredClone(draftEvaluation));
+    evaluationRepository.save.mockImplementation((value) => value);
+    const result = await service.publish(draftEvaluation.id, undefined, teacher);
+    expect(result.totalScore).toBe(4);
+    expect(result.detailedFeedback[0]).toMatchObject({
+      criteriaId: 'criterion-id',
+      feedback: 'Buen argumento',
+    });
+  });
+
+  it('keeps existing published snapshots immutable on retry', async () => {
+    const published = {
+      ...structuredClone(draftEvaluation),
+      status: EvaluationStatus.PUBLISHED,
+      originalDraftSnapshot: { totalScore: 4 },
+      teacherReviewSnapshot: { totalScore: 3 },
+    };
+    evaluationRepository.findOne.mockResolvedValue(published);
+    const result = await service.publish(
+      published.id,
+      { id: published.id, totalScore: 1 },
+      teacher
+    );
+    expect(result.originalDraftSnapshot).toEqual({ totalScore: 4 });
+    expect(result.teacherReviewSnapshot).toEqual({ totalScore: 3 });
+    expect(evaluationRepository.save).not.toHaveBeenCalled();
   });
 });

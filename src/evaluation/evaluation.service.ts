@@ -25,6 +25,7 @@ import { User } from 'src/user/entities/user.entity';
 import { UserRoles } from 'src/auth/enums';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { recordOutboxEvent } from 'src/outbox/outbox';
+import { normalizeWeightedEvaluation } from './weighted-evaluation';
 
 @Injectable()
 export class EvaluationService {
@@ -101,7 +102,7 @@ export class EvaluationService {
           'Solo se puede iniciar una calificación manual para una entrega fallida.'
         );
 
-      const normalizedFeedback = this.normalizeWeightedFeedback(
+      const normalizedFeedback = normalizeWeightedEvaluation(
         input.detailedFeedback,
         submission.assignment.rubric?.criteria ?? []
       );
@@ -116,6 +117,10 @@ export class EvaluationService {
         status: EvaluationStatus.DRAFT,
         submission: { id: input.submissionId } as Submission,
       });
+      manualEvaluation.originalDraftSnapshot = this.snapshotEvaluation(
+        { ...manualEvaluation, submission } as Evaluation,
+        'DRAFT_CREATED'
+      );
       const saved = await evaluationRepository.save(manualEvaluation);
       await submissionRepository.update(input.submissionId, {
         status: SubmissionStatus.REVIEW_PENDING,
@@ -152,15 +157,25 @@ export class EvaluationService {
       if (!evaluation) throw new NotFoundException('No se encontró la evaluación.');
       this.assertTeacherOwner(evaluation, teacher);
       if (evaluation.status === EvaluationStatus.PUBLISHED) return evaluation;
+      const originalDraftSnapshot =
+        evaluation.originalDraftSnapshot ??
+        this.snapshotEvaluation(evaluation, 'PRE_PUBLICATION_LEGACY_DRAFT');
       if (updateEvaluationInput) {
         if (updateEvaluationInput.id !== id)
           throw new BadRequestException('La evaluación de la ruta no coincide con la enviada.');
-        const { id: _, ...toUpdate } = updateEvaluationInput;
-        Object.assign(evaluation, toUpdate);
+        if (updateEvaluationInput.totalScore !== undefined)
+          this.validateScore(
+            updateEvaluationInput.totalScore,
+            evaluation.submission.assignment.rubric?.maxTotalScore
+          );
+        if (updateEvaluationInput.generalFeedback !== undefined)
+          evaluation.generalFeedback = updateEvaluationInput.generalFeedback;
+        if (updateEvaluationInput.detailedFeedback !== undefined)
+          evaluation.detailedFeedback = updateEvaluationInput.detailedFeedback;
       }
 
-      if (evaluation.origin === EvaluationOrigin.MANUAL) {
-        const normalizedFeedback = this.normalizeWeightedFeedback(
+      {
+        const normalizedFeedback = normalizeWeightedEvaluation(
           evaluation.detailedFeedback,
           evaluation.submission.assignment.rubric?.criteria ?? []
         );
@@ -172,9 +187,15 @@ export class EvaluationService {
       const maxScore = Number(evaluation.submission.assignment?.rubric?.maxTotalScore);
       if (!Number.isFinite(score) || score < 0 || !Number.isFinite(maxScore) || score > maxScore)
         throw new BadRequestException(`La calificación debe estar entre 0 y ${maxScore}.`);
-      if (!evaluation.generalFeedback?.trim())
+      if (typeof evaluation.generalFeedback !== 'string' || !evaluation.generalFeedback.trim())
         throw new BadRequestException('La retroalimentación final es obligatoria.');
 
+      evaluation.generalFeedback = evaluation.generalFeedback.trim();
+      evaluation.originalDraftSnapshot = originalDraftSnapshot;
+      evaluation.teacherReviewSnapshot = {
+        ...this.snapshotEvaluation(evaluation, 'TEACHER_PUBLICATION'),
+        reviewerId: teacher.id,
+      };
       evaluation.status = EvaluationStatus.PUBLISHED;
       const saved = await repository.save(evaluation);
       await manager
@@ -270,6 +291,12 @@ export class EvaluationService {
     await this.lockSubmission(submissionRepository, input.submissionId);
     const submission = await submissionRepository.findOne({
       where: { id: input.submissionId },
+      relations: [
+        'assignment',
+        'assignment.user',
+        'assignment.rubric',
+        'assignment.rubric.criteria',
+      ],
     });
     if (!submission)
       throw new NotFoundException(`No se encontró la entrega ${input.submissionId}.`);
@@ -287,6 +314,10 @@ export class EvaluationService {
       submission: { id: submissionId } as Submission,
       status: EvaluationStatus.DRAFT,
     });
+    evaluation.originalDraftSnapshot = this.snapshotEvaluation(
+      { ...evaluation, submission } as Evaluation,
+      'DRAFT_CREATED'
+    );
     const savedEvaluation = await evaluationRepository.save(evaluation);
     await submissionRepository.update(submissionId, {
       status: SubmissionStatus.REVIEW_PENDING,
@@ -311,49 +342,49 @@ export class EvaluationService {
       throw new BadRequestException(`La calificación debe estar entre 0 y ${maxScore}.`);
   }
 
-  private normalizeWeightedFeedback(
-    rawFeedback: unknown,
-    criteria: Array<{ id: string; title: string; weight: number }>
-  ): { totalScore: number; items: Array<Record<string, unknown>> } {
-    if (!criteria.length)
-      throw new BadRequestException('La rúbrica no contiene criterios ponderados.');
-    if (!Array.isArray(rawFeedback))
-      throw new BadRequestException('La calificación manual debe incluir el detalle por criterio.');
-
-    const feedback = rawFeedback as Array<Record<string, unknown>>;
-    let totalScore = 0;
-    const items = criteria.map((criterion) => {
-      const item = feedback.find(
-        (candidate) =>
-          candidate.criteriaId === criterion.id ||
-          String(candidate.name ?? candidate.criterion ?? '')
-            .trim()
-            .toLocaleLowerCase('es') === criterion.title.trim().toLocaleLowerCase('es')
-      );
-      if (!item)
-        throw new BadRequestException(`Falta la calificación del criterio “${criterion.title}”.`);
-      const score = Number(item.score);
-      if (!Number.isFinite(score) || score < 0 || score > 5)
-        throw new BadRequestException(
-          `La puntuación de “${criterion.title}” debe estar entre 0.0 y 5.0.`
-        );
-      const weight = Number(criterion.weight);
-      if (!Number.isFinite(weight) || weight <= 0)
-        throw new BadRequestException(
-          `El criterio “${criterion.title}” tiene un porcentaje inválido.`
-        );
-      const weightedContribution = Number(((score * weight) / 100).toFixed(2));
-      totalScore += weightedContribution;
-      return {
-        ...item,
-        criteriaId: criterion.id,
-        name: criterion.title,
-        score: Number(score.toFixed(2)),
-        weight: Number(weight.toFixed(2)),
-        weightedContribution,
-      };
-    });
-    return { totalScore: Number(totalScore.toFixed(2)), items };
+  private snapshotEvaluation(
+    evaluation: Evaluation,
+    captureStage: string
+  ): Record<string, unknown> {
+    const submission = evaluation.submission;
+    const assignment = submission?.assignment;
+    const rubric = assignment?.rubric;
+    return JSON.parse(
+      JSON.stringify({
+        version: 1,
+        capturedAt: new Date().toISOString(),
+        captureStage,
+        origin: evaluation.origin,
+        aiModelUsed: evaluation.aiModelUsed ?? null,
+        totalScore: evaluation.totalScore,
+        generalFeedback: evaluation.generalFeedback,
+        detailedFeedback: evaluation.detailedFeedback,
+        context: {
+          submissionId: submission?.id,
+          contentHash: submission?.contentHash ?? null,
+          extractedText: submission?.extractedText ?? null,
+          institutionId: assignment?.user?.institutionId ?? null,
+          assignment: assignment
+            ? { id: assignment.id, title: assignment.title, description: assignment.description }
+            : null,
+          rubric: rubric
+            ? {
+                id: rubric.id,
+                title: rubric.title,
+                maxTotalScore: rubric.maxTotalScore,
+                criteria: rubric.criteria?.map((criterion) => ({
+                  id: criterion.id,
+                  title: criterion.title,
+                  description: criterion.description,
+                  weight: criterion.weight,
+                  maxPoints: criterion.maxPoints,
+                  levels: criterion.levels,
+                })),
+              }
+            : null,
+        },
+      })
+    );
   }
 
   private async cancelPendingGradingJobs(submissionId: string): Promise<void> {

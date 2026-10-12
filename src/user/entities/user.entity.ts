@@ -208,6 +208,12 @@ export class User {
   @Column({ name: 'reminder_notifications_enabled', type: 'boolean', default: true })
   reminderNotificationsEnabled?: boolean;
 
+  @Column({ name: 'onboarding_completed_steps', type: 'jsonb', default: () => "'[]'::jsonb" })
+  onboardingCompletedSteps?: string[];
+
+  @Column({ name: 'onboarding_dismissed_at', type: 'timestamp with time zone', nullable: true })
+  onboardingDismissedAt?: Date | null;
+
   // Relations - Many-to-Many with Course
   @ManyToMany(
     () => require('../../course/entities/course.entity').Course,

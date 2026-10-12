@@ -22,6 +22,7 @@ describe('RequestLoggingInterceptor audit', () => {
         name: 'Universidad Aura',
         password: 'NeverPersistThis',
         nested: { sessionToken: 'NeverPersistThisEither' },
+        message: 'Contenido privado del comentario',
       },
       user: {
         id: '1553d33b-798b-4ce5-b943-1fa8bf8ea01c',
@@ -53,6 +54,7 @@ describe('RequestLoggingInterceptor audit', () => {
           name: 'Universidad Aura',
           password: '[REDACTED]',
           nested: { sessionToken: '[REDACTED]' },
+          message: '[REDACTED]',
         },
         outcome: AuditOutcome.SUCCESS,
         errorCode: undefined,

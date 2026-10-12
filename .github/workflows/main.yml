@@ -12,6 +12,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: aura_grade_ci
+          POSTGRES_USER: aura_ci
+          POSTGRES_PASSWORD: ci_database_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aura_ci -d aura_grade_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -29,11 +46,37 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
+      - name: Type check
+        run: pnpm exec tsc --noEmit --incremental false
+
+      - name: Run tests including Redis integration
+        env:
+          RUN_REDIS_INTEGRATION: 'true'
+          REDIS_URL: redis://127.0.0.1:6379
         run: pnpm test --runInBand
 
       - name: Run Build (Verify compilation)
         run: pnpm run build
+
+      - name: Verify migrations on an isolated PostgreSQL database
+        env:
+          STATE: prod
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_NAME: aura_grade_ci
+          DB_USERNAME: aura_ci
+          DB_PASSWORD: ci_database_only
+          DB_SSL_MODE: disable
+          BOOTSTRAP_INSTITUTION_NAME: CI Institution
+          BOOTSTRAP_INSTITUTION_SLUG: ci-institution
+          BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN: example.test
+          BOOTSTRAP_ADMIN_EMAIL: admin@example.test
+          BOOTSTRAP_ADMIN_PASSWORD: CiFixtureOnly2026
+          BOOTSTRAP_ADMIN_NAME: CI
+          BOOTSTRAP_ADMIN_LAST_NAME: Administrator
+          BOOTSTRAP_ADMIN_DOCUMENT_NUM: '987654321'
+          BOOTSTRAP_ADMIN_PHONE: '3999999999'
+        run: node scripts/check-migrations.cjs
 
   build-and-push:
     needs: test

@@ -67,7 +67,8 @@ describeRedis('SessionService Redis integration', () => {
 
   it('shares sessions across instances and enforces the concurrent limit atomically', async () => {
     const sessions = [];
-    for (let index = 0; index < 6; index += 1) sessions.push(await firstInstance.create(user));
+    for (let index = 0; index < 6; index += 1)
+      sessions.push(await firstInstance.create(user, false, 'mfa'));
 
     await expect(secondInstance.validate(sessions[0].sessionToken)).resolves.toBeNull();
     await expect(secondInstance.validate(sessions[5].sessionToken)).resolves.toMatchObject({

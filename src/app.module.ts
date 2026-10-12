@@ -46,6 +46,9 @@ import { AuthMetricsService, ObservabilityModule } from './observability';
 import { createGraphqlServerSecurityOptions } from './common/graphql';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { OutboxModule } from './outbox/outbox.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { OperationsModule } from './operations/operations.module';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -122,6 +125,9 @@ const isDevelopment = envs.state === 'dev';
     HealthModule,
     ObservabilityModule,
     AuditModule,
+    FeedbackModule,
+    OnboardingModule,
+    OperationsModule,
   ],
   providers: [
     {
