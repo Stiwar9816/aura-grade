@@ -23,12 +23,12 @@ jobs:
     env:
       STATE: prod
       DB_HOST: ${{ secrets.PRODUCTION_DB_HOST }}
-      DB_PORT: ${{ secrets.PRODUCTION_DB_PORT }}
+      DB_PORT: ${{ secrets.PRODUCTION_DB_PORT || '5432' }}
       DB_NAME: ${{ secrets.PRODUCTION_DB_NAME }}
       DB_USERNAME: ${{ secrets.PRODUCTION_DB_USERNAME }}
       DB_PASSWORD: ${{ secrets.PRODUCTION_DB_PASSWORD }}
-      DB_SSL_MODE: ${{ secrets.PRODUCTION_DB_SSL_MODE }}
-      DB_CONNECTION_TIMEOUT_MS: ${{ secrets.PRODUCTION_DB_CONNECTION_TIMEOUT_MS }}
+      DB_SSL_MODE: ${{ secrets.PRODUCTION_DB_SSL_MODE || 'require' }}
+      DB_CONNECTION_TIMEOUT_MS: ${{ secrets.PRODUCTION_DB_CONNECTION_TIMEOUT_MS || '3000' }}
       BOOTSTRAP_INSTITUTION_NAME: ${{ secrets.BOOTSTRAP_INSTITUTION_NAME }}
       BOOTSTRAP_INSTITUTION_SLUG: ${{ secrets.BOOTSTRAP_INSTITUTION_SLUG }}
       BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN: ${{ secrets.BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN }}
@@ -58,6 +58,18 @@ jobs:
               exit 1
             fi
           done
+          if [[ "$DB_HOST" == *"://"* || "$DB_HOST" == *"/"* ]]; then
+            echo "DB_HOST debe contener solo el hostname, no la URL de conexión."
+            exit 1
+          fi
+          if [[ "$DB_HOST" == dpg-* && "$DB_HOST" != *"."* ]]; then
+            echo "GitHub Actions necesita el hostname de la External Database URL de Render, no el hostname interno."
+            exit 1
+          fi
+          if [[ "$DB_HOST" == *".render.com" && "$DB_SSL_MODE" != "require" ]]; then
+            echo "Render exige TLS para conexiones externas. Configura PRODUCTION_DB_SSL_MODE=require."
+            exit 1
+          fi
 
       - name: Check out repository
         uses: actions/checkout@v4
