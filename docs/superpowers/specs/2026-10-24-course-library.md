@@ -6,7 +6,7 @@ Segunda entrega de la ruta acordada, sobre dev. API REST protegida por sesión/B
 
 Un documento lógico pertenece a un curso y tiene título y tipo GUIDE, SCHEDULE o MATERIAL. Solo una guía y un cronograma por curso; los materiales admiten múltiples documentos. Sus versiones conservan archivo original privado, nombre, formato, tamaño, SHA-256, texto y páginas extraídas, resultado de extracción, autor, revisión y fechas de publicación/archivo.
 
-Crear documento → subir versión PDF/DOCX → revisar texto → confirmar revisión del hash → publicar. Numeración monotónica por documento bajo bloqueo de fila. Una sola versión publicada por documento, protegida también por índice único parcial; publicar otra archiva la anterior en la misma transacción. Las versiones archivadas no se republican: subir otra versión. Retirar una publicación archiva sus versiones publicadas sin borrar los archivos originales ni el historial.
+Crear documento → subir versión PDF/DOCX → revisar texto → confirmar revisión del hash → publicar. Numeración monotónica por documento bajo bloqueo de fila. Una sola versión publicada por documento, protegida también por índice único parcial; publicar otra archiva la anterior en la misma transacción. La última publicación retirada puede reabrirse conservando su archivo y revisión confirmada; las versiones sustituidas por una publicación posterior requieren subir otra versión. Retirar una publicación archiva sus versiones publicadas sin borrar los archivos originales ni el historial.
 
 La revisión confirma el contenido extraído de ese archivo inmutable, no permite modificarlo en la base de datos y desalinearlo de la guía descargable. La extracción vacía queda NEEDS_TEXT y no puede revisarse/publicarse; hay que subir una versión legible. El PDF con texto conserva números de página; DOCX no inventa números de página. No se extraen fechas automáticamente al calendario en esta entrega.
 
@@ -31,7 +31,7 @@ Base `/api/courses/:courseId/documents`:
 - POST `/:documentId/versions`: multipart `file` + Idempotency-Key.
 - GET `/:documentId/versions/:versionId`: detalle y texto extraído autorizado.
 - POST `/:documentId/versions/:versionId/review`: `{confirmed: true, contentHash}`.
-- POST `/:documentId/versions/:versionId/publish`: publicar versión revisada.
+- POST `/:documentId/versions/:versionId/publish`: publicar versión revisada o reabrir la última publicación retirada.
 - POST `/:documentId/archive`: retirar publicación.
 - GET `/:documentId/versions/:versionId/download`: `{url}` con no-store.
 

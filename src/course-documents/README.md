@@ -10,7 +10,7 @@ API backend para conservar la guía, el cronograma y materiales que el docente c
 4. Confirmar la revisión enviando el `contentHash` del detalle.
 5. Publicar. La publicación anterior pasa a `ARCHIVED` en la misma transacción. Los estudiantes ven únicamente la publicación vigente.
 
-Retirar una publicación conserva archivos e historial. Las versiones archivadas no se republican; para recuperar un contenido anterior se sube una nueva versión. Un borrador anterior a la última publicación tampoco puede reemplazarla.
+Retirar una publicación conserva archivos e historial. Se puede reabrir la última publicación retirada si conserva texto legible y revisión confirmada. Las versiones archivadas por una publicación posterior no se republican; para recuperar ese contenido se sube una nueva versión. Un borrador anterior a la última publicación tampoco puede reemplazarla.
 
 ## Contrato HTTP
 
@@ -22,9 +22,9 @@ Base: `/api/courses/:courseId/documents`. UUID en identificadores. Todas las rut
 | `GET /?page=1&limit=20` | `{ items, total, page, limit }`, metadatos de documentos visibles |
 | `GET /:documentId/versions?page=1&limit=20` | Versiones visibles, metadatos paginados |
 | `POST /:documentId/versions` | Multipart con un único campo `file`; cabecera `Idempotency-Key` UUID → metadatos de versión |
-| `GET /:documentId/versions/:versionId` | Metadatos, `extractedText` y `pages: [{ page, text }]` |
+| `GET /:documentId/versions/:versionId` | Metadatos, `extractedText`, `pages: [{ page, text }]` y `canReopen` |
 | `POST /:documentId/versions/:versionId/review` | `{ "confirmed": true, "contentHash": "<SHA-256 del detalle>" }` |
-| `POST /:documentId/versions/:versionId/publish` | Publica una versión revisada |
+| `POST /:documentId/versions/:versionId/publish` | Publica un borrador revisado o reabre la última publicación retirada |
 | `POST /:documentId/archive` | Retira la publicación vigente |
 | `GET /:documentId/versions/:versionId/download` | `{ "url": "<enlace privado temporal>" }` |
 

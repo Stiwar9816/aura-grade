@@ -158,8 +158,16 @@ export class CourseDocumentsService {
 
   async detail(courseId: string, documentId: string, versionId: string, actor: User) {
     const version = await this.readVersion(courseId, documentId, versionId, actor);
+    const document = await this.document(courseId, documentId);
     return {
       ...this.versionView(version),
+      canReopen:
+        version.status === DocumentVersionStatus.ARCHIVED &&
+        version.version === document.lastPublishedVersion &&
+        !!version.reviewedAt &&
+        !!version.reviewedById &&
+        version.extractionState === DocumentExtractionState.READY &&
+        !!version.extractedText.trim(),
       extractedText: version.extractedText,
       pages: version.pages,
     };
@@ -209,9 +217,13 @@ export class CourseDocumentsService {
       const document = await this.document(courseId, documentId, manager, true);
       const version = await this.version(documentId, versionId, manager);
       if (version.status === DocumentVersionStatus.PUBLISHED) return this.versionView(version);
+      const reopening =
+        version.status === DocumentVersionStatus.ARCHIVED &&
+        version.version === document.lastPublishedVersion;
       if (
-        version.status !== DocumentVersionStatus.DRAFT ||
-        version.version <= document.lastPublishedVersion
+        !reopening &&
+        (version.status !== DocumentVersionStatus.DRAFT ||
+          version.version <= document.lastPublishedVersion)
       )
         throw new ConflictException('Sube una nueva versión; esta versión ya no puede publicarse.');
       if (
@@ -231,6 +243,7 @@ export class CourseDocumentsService {
       );
       version.status = DocumentVersionStatus.PUBLISHED;
       version.publishedAt = now;
+      version.archivedAt = null;
       document.lastPublishedVersion = version.version;
       await manager.getRepository(CourseDocument).save(document);
       return this.versionView(await repo.save(version));

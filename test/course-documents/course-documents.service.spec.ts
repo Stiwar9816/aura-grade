@@ -213,7 +213,7 @@ describe('CourseDocumentsService', () => {
     );
     expect(document.lastPublishedVersion).toBe(1);
   });
-  it('cannot review an unreadable source or republish a retired version', async () => {
+  it('cannot review an unreadable source or publish an archive that was never official', async () => {
     version.extractionState = DocumentExtractionState.NEEDS_TEXT;
     await expect(
       service.review('course', document.id, version.id, teacher, {
@@ -226,6 +226,62 @@ describe('CourseDocumentsService', () => {
     await expect(
       service.publish('course', document.id, version.id, teacher)
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+  it('reopens the last withdrawn publication with its review and original file intact', async () => {
+    document.lastPublishedVersion = 1;
+    version.status = DocumentVersionStatus.ARCHIVED;
+    version.reviewedAt = new Date();
+    version.reviewedById = teacher.id;
+    version.publishedAt = new Date('2026-10-20');
+    version.archivedAt = new Date('2026-10-21');
+    expect(await service.detail('course', document.id, version.id, teacher)).toMatchObject({
+      canReopen: true,
+    });
+    const reopened = await service.publish('course', document.id, version.id, teacher);
+    expect(reopened.status).toBe('PUBLISHED');
+    expect(reopened.archivedAt).toBeNull();
+    expect(document.lastPublishedVersion).toBe(1);
+    expect(document.nextVersion).toBe(2);
+    expect(version.reviewedById).toBe(teacher.id);
+    expect(storage.uploadCourseDocument).not.toHaveBeenCalled();
+    await expect(service.detail('course', document.id, version.id, student)).resolves.toMatchObject(
+      { status: 'PUBLISHED' }
+    );
+  });
+  it('does not reopen a superseded archive or bypass a missing review', async () => {
+    version.status = DocumentVersionStatus.ARCHIVED;
+    version.reviewedAt = new Date();
+    version.reviewedById = teacher.id;
+    document.lastPublishedVersion = 2;
+    expect(await service.detail('course', document.id, version.id, teacher)).toMatchObject({
+      canReopen: false,
+    });
+    await expect(
+      service.publish('course', document.id, version.id, teacher)
+    ).rejects.toBeInstanceOf(ConflictException);
+    document.lastPublishedVersion = 1;
+    version.reviewedAt = null;
+    expect(await service.detail('course', document.id, version.id, teacher)).toMatchObject({
+      canReopen: false,
+    });
+    await expect(
+      service.publish('course', document.id, version.id, teacher)
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(versions.save).not.toHaveBeenCalled();
+  });
+  it('denies reopening to students and inactive owners', async () => {
+    document.lastPublishedVersion = 1;
+    version.status = DocumentVersionStatus.ARCHIVED;
+    version.reviewedAt = new Date();
+    version.reviewedById = teacher.id;
+    await expect(
+      service.publish('course', document.id, version.id, student)
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    users.findOne.mockResolvedValue({ ...teacher, isActive: false });
+    await expect(
+      service.publish('course', document.id, version.id, teacher)
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(versions.save).not.toHaveBeenCalled();
   });
   it('rejects publishing an older draft after a newer version was official', async () => {
     document.lastPublishedVersion = 2;
