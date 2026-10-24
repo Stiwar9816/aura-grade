@@ -49,6 +49,8 @@ import { OutboxModule } from './outbox/outbox.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { OperationsModule } from './operations/operations.module';
+import { AcademicAccessModule } from './academic-access/academic-access.module';
+import { CourseDocumentsModule } from './course-documents/course-documents.module';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -60,6 +62,8 @@ const isDevelopment = envs.state === 'dev';
 
 @Module({
   imports: [
+    AcademicAccessModule,
+    CourseDocumentsModule,
     OutboxModule,
     ConfigModule.forRoot({ isGlobal: true }),
     // Rate Limiting

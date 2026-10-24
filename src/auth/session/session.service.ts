@@ -13,7 +13,7 @@ import { User } from '../../user/entities/user.entity';
 import { RedisService } from '../../redis';
 import { AuthMetricsService } from '../../observability';
 import { ActiveSession, CreatedSession, SessionDevice, StoredSession } from './session.types';
-import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
+import { hasAcademicAccess } from '../../academic-access/academic-access.policy';
 
 interface SessionPolicy {
   idleTtlMs: number;
@@ -167,10 +167,7 @@ export class SessionService {
       relations: ['institution'],
     });
     if (
-      !user ||
-      !user.isActive ||
-      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
-      !user.institution?.isActive ||
+      !hasAcademicAccess(user) ||
       user.authVersion !== session.authVersion ||
       session.authenticationLevel !== 'mfa' ||
       !Number.isFinite(session.mfaExpiresAt) ||

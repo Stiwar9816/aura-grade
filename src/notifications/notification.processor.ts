@@ -5,11 +5,11 @@ import { Job } from 'bullmq';
 import { And, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { getEffectiveAssignmentDueDate } from 'src/assignment/assignment-deadline';
-import { UserRoles } from 'src/auth/enums';
+import { canStudentAccessCourse } from 'src/academic-access/academic-access.policy';
 import { Evaluation } from 'src/evaluation/entities/evaluation.entity';
 import { AuthMetricsService } from 'src/observability';
 import { Submission } from 'src/submission/entities/submission.entity';
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationStatus, SubmissionStatus } from 'src/enums';
 import { NotificationDeliveryEntity } from './entities/notification-delivery.entity';
 import {
   NOTIFICATIONS_QUEUE,
@@ -107,14 +107,34 @@ export class NotificationProcessor extends WorkerHost {
   }
 
   private async processPublishedGrade(data: NotificationJobData): Promise<NotificationJobResult> {
+    if (await this.wereAllChannelsSkipped(data)) return { status: 'RECIPIENT_INELIGIBLE' };
     const evaluation = await this.evaluationRepository.findOne({
       where: { id: data.aggregateId },
-      relations: ['submission', 'submission.student', 'submission.assignment'],
+      relations: [
+        'submission',
+        'submission.student',
+        'submission.student.institution',
+        'submission.assignment',
+        'submission.assignment.course',
+        'submission.assignment.course.user',
+        'submission.assignment.course.users',
+      ],
     });
     if (!evaluation) {
       this.metrics.increment('notification_source_missing_total');
       this.logger.warn(`No existe la calificación de la notificación ${data.eventKey}.`);
       return { status: 'SOURCE_NOT_FOUND' };
+    }
+
+    if (
+      evaluation.status !== EvaluationStatus.PUBLISHED ||
+      !canStudentAccessCourse(
+        evaluation.submission.student,
+        evaluation.submission.assignment.course
+      )
+    ) {
+      await this.skipChannels(data);
+      return { status: 'RECIPIENT_INELIGIBLE' };
     }
 
     await this.notificationsService.createPublishedGradeInApp(
@@ -177,7 +197,9 @@ export class NotificationProcessor extends WorkerHost {
       ],
       relations: [
         'course',
+        'course.user',
         'course.users',
+        'course.users.institution',
         'submissions',
         'submissions.student',
         'extensions',
@@ -196,8 +218,7 @@ export class NotificationProcessor extends WorkerHost {
         (assignment.course?.users ?? [])
           .filter(
             (student) =>
-              student.role === UserRoles.Estudiante &&
-              student.isActive !== false &&
+              canStudentAccessCourse(student, assignment.course) &&
               student.reminderNotificationsEnabled !== false &&
               !submittedStudentIds.has(student.id)
           )
@@ -234,11 +255,14 @@ export class NotificationProcessor extends WorkerHost {
   private async processAssignmentReminder(
     data: NotificationJobData
   ): Promise<NotificationJobResult> {
+    if (await this.wereAllChannelsSkipped(data)) return { status: 'RECIPIENT_INELIGIBLE' };
     const assignment = await this.assignmentRepository.findOne({
       where: { id: data.aggregateId },
       relations: [
         'course',
+        'course.user',
         'course.users',
+        'course.users.institution',
         'submissions',
         'submissions.student',
         'extensions',
@@ -261,11 +285,12 @@ export class NotificationProcessor extends WorkerHost {
       assignment.isActive &&
       currentDueDate.getTime() > Date.now() &&
       currentDueDate.getTime() === data.dueDateEpoch &&
-      student?.role === UserRoles.Estudiante &&
-      student.isActive !== false &&
+      canStudentAccessCourse(student, assignment.course) &&
+      student &&
       student.reminderNotificationsEnabled !== false &&
       !hasSubmitted;
     if (!student || !isEligible) {
+      await this.skipChannels(data);
       this.metrics.increment('assignment_reminder_ineligible_total');
       return { status: 'RECIPIENT_INELIGIBLE' };
     }
@@ -292,6 +317,24 @@ export class NotificationProcessor extends WorkerHost {
         ),
     });
     return { status: 'DELIVERED', channels };
+  }
+
+  private async wereAllChannelsSkipped(data: NotificationJobData): Promise<boolean> {
+    const deliveries = await Promise.all(
+      Object.values(NotificationChannel).map((channel) =>
+        this.deliveryRepository.findOne({ where: { eventKey: data.eventKey, channel } })
+      )
+    );
+    // A fully discarded event stays terminal even if the student later regains access.
+    // A normal replay after channel opt-outs also needs no in-app recreation: it was stored first.
+    return deliveries.every((delivery) => delivery?.status === NotificationDeliveryStatus.SKIPPED);
+  }
+
+  private async skipChannels(data: NotificationJobData): Promise<void> {
+    await this.processChannels(data, {
+      email: async () => false,
+      push: async () => false,
+    });
   }
 
   private async processChannels(

@@ -8,7 +8,17 @@ import {
 } from 'src/notifications/notification-queue.constants';
 import { NotificationProcessor } from 'src/notifications/notification.processor';
 import { UserRoles } from 'src/auth/enums';
-import { SubmissionStatus } from 'src/enums';
+import { EvaluationStatus, SubmissionStatus } from 'src/enums';
+import { InstitutionApprovalStatus } from 'src/institution';
+
+const academicStudent = {
+  role: UserRoles.Estudiante,
+  isActive: true,
+  approvalStatus: InstitutionApprovalStatus.APPROVED,
+  institutionId: 'institution-id',
+  institution: { id: 'institution-id', isActive: true },
+};
+const courseOwner = { institutionId: 'institution-id' };
 
 describe('NotificationProcessor', () => {
   const submission = {
@@ -16,15 +26,17 @@ describe('NotificationProcessor', () => {
     status: SubmissionStatus.FAILED,
     gradingAttemptCount: 3,
     gradingFailureReason: 'El servicio de IA no pudo completar la evaluación.',
-    student: { id: 'student-id', name: 'Ana', last_name: 'Pérez' },
+    student: { ...academicStudent, id: 'student-id', name: 'Ana', last_name: 'Pérez' },
     assignment: {
       id: 'assignment-id',
       title: 'Ensayo',
       user: { id: 'teacher-id' },
+      course: { user: courseOwner, users: [{ id: 'student-id' }] },
     },
   } as any;
   const evaluation = {
     id: 'evaluation-id',
+    status: EvaluationStatus.PUBLISHED,
     totalScore: 4.5,
     submission,
   } as any;
@@ -242,9 +254,10 @@ describe('NotificationProcessor', () => {
         isActive: true,
         dueDate: new Date(now + 23 * 60 * 60 * 1000),
         course: {
+          user: courseOwner,
           users: [
-            { id: 'pending-id', role: 'Estudiante', isActive: true },
-            { id: 'submitted-id', role: 'Estudiante', isActive: true },
+            { ...academicStudent, id: 'pending-id' },
+            { ...academicStudent, id: 'submitted-id' },
           ],
         },
         submissions: [{ student: { id: 'submitted-id' } }],
@@ -272,6 +285,7 @@ describe('NotificationProcessor', () => {
   it('rechecks enrollment and submissions before delivering an assignment reminder', async () => {
     const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const student = {
+      ...academicStudent,
       id: 'student-id',
       role: 'Estudiante',
       isActive: true,
@@ -282,7 +296,7 @@ describe('NotificationProcessor', () => {
       title: 'Ensayo',
       isActive: true,
       dueDate,
-      course: { users: [student] },
+      course: { user: courseOwner, users: [student] },
       submissions: [],
     };
     assignmentRepository.findOne.mockResolvedValue(reminderAssignment);
@@ -314,6 +328,7 @@ describe('NotificationProcessor', () => {
   it('queues and delivers reminders using the individual extended deadline', async () => {
     const now = Date.now();
     const student = {
+      ...academicStudent,
       id: 'extended-student-id',
       role: UserRoles.Estudiante,
       isActive: true,
@@ -325,7 +340,7 @@ describe('NotificationProcessor', () => {
       title: 'Proyecto',
       isActive: true,
       dueDate: new Date(now - 24 * 60 * 60 * 1000),
-      course: { users: [student] },
+      course: { user: courseOwner, users: [student] },
       submissions: [],
       extensions: [{ student, extendedDueDate }],
     };
@@ -365,5 +380,156 @@ describe('NotificationProcessor', () => {
       expect.objectContaining({ dueDate: extendedDueDate }),
       'extended-reminder-key-email'
     );
+  });
+
+  it.each([
+    ['inactive', { isActive: false }],
+    ['pending approval', { approvalStatus: InstitutionApprovalStatus.PENDING }],
+    ['inactive institution', { institution: { id: 'institution-id', isActive: false } }],
+    ['missing institution', { institution: undefined }],
+    ['another institution', { institutionId: 'another-institution' }],
+  ])('skips queued grade channels for a student with %s access', async (_label, changes) => {
+    evaluationRepository.findOne.mockResolvedValue({
+      ...evaluation,
+      submission: { ...submission, student: { ...submission.student, ...changes } },
+    });
+
+    await expect(
+      processor.process(makeJob(NotificationJobType.GRADE_PUBLISHED, evaluation.id) as any)
+    ).resolves.toEqual({ status: 'RECIPIENT_INELIGIBLE' });
+    expect(notificationsService.createPublishedGradeInApp).not.toHaveBeenCalled();
+    expect(notificationsService.sendPublishedGradeEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendPublishedGradePush).not.toHaveBeenCalled();
+    expect(deliveries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ channel: 'EMAIL', status: 'SKIPPED' }),
+        expect.objectContaining({ channel: 'PUSH', status: 'SKIPPED' }),
+      ])
+    );
+  });
+
+  it('does not notify a draft or a student removed from the course', async () => {
+    evaluationRepository.findOne.mockResolvedValueOnce({
+      ...evaluation,
+      status: EvaluationStatus.DRAFT,
+    });
+    evaluationRepository.findOne.mockResolvedValueOnce({
+      ...evaluation,
+      submission: {
+        ...submission,
+        assignment: { ...submission.assignment, course: { user: courseOwner, users: [] } },
+      },
+    });
+    for (let index = 0; index < 2; index++) {
+      await expect(
+        processor.process(makeJob(NotificationJobType.GRADE_PUBLISHED, evaluation.id) as any)
+      ).resolves.toEqual({ status: 'RECIPIENT_INELIGIBLE' });
+    }
+    expect(notificationsService.sendPublishedGradeEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not resurrect a discarded grade notification after reactivation and queue replay', async () => {
+    const job = makeJob(NotificationJobType.GRADE_PUBLISHED, evaluation.id);
+    evaluationRepository.findOne.mockResolvedValueOnce({
+      ...evaluation,
+      submission: { ...submission, student: { ...submission.student, isActive: false } },
+    });
+    await processor.process(job as any);
+    // The same durable event may be replayed after the worker crashes before acknowledging it.
+    await processor.process(job as any);
+    expect(notificationsService.createPublishedGradeInApp).not.toHaveBeenCalled();
+    expect(notificationsService.sendPublishedGradeEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendPublishedGradePush).not.toHaveBeenCalled();
+  });
+
+  it('does not resurrect a discarded reminder after reactivation and queue replay', async () => {
+    const dueDate = new Date(Date.now() + 3600000);
+    const student = { ...academicStudent, id: 'student-id', isActive: false };
+    const assignment = {
+      id: 'assignment-id',
+      isActive: true,
+      dueDate,
+      course: { user: courseOwner, users: [student] },
+      submissions: [],
+    };
+    assignmentRepository.findOne.mockResolvedValue(assignment);
+    const job = {
+      data: {
+        type: NotificationJobType.ASSIGNMENT_REMINDER,
+        aggregateId: assignment.id,
+        eventKey: 'discarded-reminder',
+        recipientId: student.id,
+        reminderKind: AssignmentReminderKind.AUTO_24H,
+        dueDateEpoch: dueDate.getTime(),
+      },
+    };
+    await processor.process(job as any);
+    student.isActive = true;
+    await processor.process(job as any);
+    expect(notificationsService.createAssignmentReminderInApp).not.toHaveBeenCalled();
+    expect(notificationsService.sendAssignmentReminderEmail).not.toHaveBeenCalled();
+    expect(notificationsService.sendAssignmentReminderPush).not.toHaveBeenCalled();
+  });
+
+  it('rechecks institutional approval after a reminder was queued', async () => {
+    const dueDate = new Date(Date.now() + 3600000);
+    const student = {
+      ...academicStudent,
+      id: 'student-id',
+      approvalStatus: InstitutionApprovalStatus.REJECTED,
+    };
+    assignmentRepository.findOne.mockResolvedValue({
+      id: 'assignment-id',
+      isActive: true,
+      dueDate,
+      course: { user: courseOwner, users: [student] },
+      submissions: [],
+    });
+    await expect(
+      processor.process({
+        data: {
+          type: NotificationJobType.ASSIGNMENT_REMINDER,
+          aggregateId: 'assignment-id',
+          eventKey: 'revoked-reminder',
+          recipientId: student.id,
+          reminderKind: AssignmentReminderKind.AUTO_24H,
+          dueDateEpoch: dueDate.getTime(),
+        },
+      } as any)
+    ).resolves.toEqual({ status: 'RECIPIENT_INELIGIBLE' });
+    expect(notificationsService.sendAssignmentReminderEmail).not.toHaveBeenCalled();
+    expect(notificationsService.createAssignmentReminderInApp).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue reminders for pending students or disabled institutions', async () => {
+    assignmentRepository.find.mockResolvedValue([
+      {
+        id: 'assignment-id',
+        isActive: true,
+        dueDate: new Date(Date.now() + 3600000),
+        course: {
+          user: courseOwner,
+          users: [
+            {
+              ...academicStudent,
+              id: 'pending',
+              approvalStatus: InstitutionApprovalStatus.PENDING,
+            },
+            { ...academicStudent, id: 'disabled', institution: { isActive: false } },
+          ],
+        },
+        submissions: [],
+      },
+    ]);
+    await expect(
+      processor.process({
+        data: {
+          type: NotificationJobType.DEADLINE_REMINDER_SCAN,
+          aggregateId: 'scan',
+          eventKey: 'scan',
+        },
+      } as any)
+    ).resolves.toEqual({ status: 'SCANNED', queuedCount: 0 });
+    expect(notificationQueue.enqueueAssignmentReminder).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,8 @@ describe('NotificationsService', () => {
     role: UserRoles.Administrador,
     approvalStatus: InstitutionApprovalStatus.APPROVED,
     institutionId: '223e4567-e89b-12d3-a456-426614174000',
+    isActive: true,
+    institution: { id: '223e4567-e89b-12d3-a456-426614174000', isActive: true },
     emailNotificationsEnabled: true,
     browserNotificationsEnabled: false,
     submissionNotificationsEnabled: true,
@@ -316,6 +318,7 @@ describe('NotificationsService', () => {
       dueDate,
       user: teacher,
       course: {
+        user: teacher,
         users: [
           { ...user, id: 'pending-id', role: UserRoles.Estudiante },
           { ...user, id: 'submitted-id', role: UserRoles.Estudiante },
@@ -350,7 +353,7 @@ describe('NotificationsService', () => {
       isActive: true,
       dueDate,
       user: teacher,
-      course: { users: [student] },
+      course: { user: teacher, users: [student] },
       submissions: [],
     });
     notificationQueue.enqueueAssignmentReminder.mockResolvedValue({
@@ -379,7 +382,7 @@ describe('NotificationsService', () => {
       isActive: true,
       dueDate: new Date('2026-08-14T12:00:00.000Z'),
       user: teacher,
-      course: { users: [student] },
+      course: { user: teacher, users: [student] },
       submissions: [],
       extensions: [{ student, extendedDueDate }],
     });
@@ -402,6 +405,33 @@ describe('NotificationsService', () => {
       AssignmentReminderKind.MANUAL,
       new Date('2026-08-15T12:00:00.000Z')
     );
+  });
+
+  it('excludes unapproved and institution-disabled students from manual reminders', async () => {
+    const teacher = Object.assign(new User(), user, { role: UserRoles.Docente });
+    assignmentRepository.findOne.mockResolvedValue({
+      id: 'assignment-id',
+      isActive: true,
+      dueDate: new Date(Date.now() + 3600000),
+      user: teacher,
+      course: {
+        user: teacher,
+        users: [
+          {
+            ...user,
+            id: 'pending',
+            role: UserRoles.Estudiante,
+            approvalStatus: InstitutionApprovalStatus.PENDING,
+          },
+          { ...user, id: 'disabled', role: UserRoles.Estudiante, institution: { isActive: false } },
+        ],
+      },
+      submissions: [],
+    });
+    await expect(service.sendManualAssignmentReminders(teacher, 'assignment-id')).resolves.toEqual(
+      expect.objectContaining({ eligibleCount: 0, queuedCount: 0 })
+    );
+    expect(notificationQueue.enqueueAssignmentReminder).not.toHaveBeenCalled();
   });
 
   it('creates and sends enabled assignment reminder channels', async () => {

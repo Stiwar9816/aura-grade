@@ -22,11 +22,51 @@ export class CloudinaryService {
   }
 
   async uploadSubmission(content: Buffer): Promise<StoredSubmissionFile> {
-    const publicId = `${randomUUID()}.docx`;
+    return this.uploadPrivate(content, SUBMISSIONS_FOLDER, 'docx');
+  }
+
+  async uploadCourseDocument(
+    content: Buffer,
+    format: 'pdf' | 'docx'
+  ): Promise<StoredSubmissionFile> {
+    if (!['pdf', 'docx'].includes(format)) throw new Error('Formato de documento inválido.');
+    return this.uploadPrivate(content, 'auragrade/course-documents', format);
+  }
+
+  courseDocumentDownloadUrl(publicId: string): string {
+    this.validateCourseDocumentId(publicId);
+    return cloudinary.utils.private_download_url(publicId, '', {
+      resource_type: 'raw',
+      type: 'authenticated',
+      expires_at: Math.floor(Date.now() / 1000) + 60,
+      attachment: true,
+    });
+  }
+
+  async deleteCourseDocument(publicId: string): Promise<void> {
+    this.validateCourseDocumentId(publicId);
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'raw',
+      type: 'authenticated',
+      invalidate: true,
+    });
+  }
+
+  private validateCourseDocumentId(publicId: string): void {
+    if (!/^auragrade\/course-documents\/[a-zA-Z0-9_-]+\.(pdf|docx)$/.test(publicId))
+      throw new Error('Identificador de documento oficial inválido.');
+  }
+
+  private async uploadPrivate(
+    content: Buffer,
+    folder: string,
+    format: string
+  ): Promise<StoredSubmissionFile> {
+    const publicId = `${randomUUID()}.${format}`;
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: SUBMISSIONS_FOLDER,
+          folder,
           resource_type: 'raw',
           type: 'authenticated',
           public_id: publicId,

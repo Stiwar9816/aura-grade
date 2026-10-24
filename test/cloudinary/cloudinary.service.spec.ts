@@ -98,6 +98,27 @@ describe('CloudinaryService', () => {
     );
   });
 
+  it('stores official PDFs privately in a separate folder', async () => {
+    await service.uploadCourseDocument(Buffer.from('pdf'), 'pdf');
+    expect(cloudinary.uploader.upload_stream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        folder: 'auragrade/course-documents',
+        type: 'authenticated',
+        resource_type: 'raw',
+        overwrite: false,
+        public_id: expect.stringMatching(/^[0-9a-f-]+\.pdf$/),
+      }),
+      expect.any(Function)
+    );
+  });
+
+  it('never deletes a submission through the official document API', async () => {
+    await expect(
+      service.deleteCourseDocument('auragrade/submissions/generated.docx')
+    ).rejects.toThrow();
+    expect(cloudinary.uploader.destroy).not.toHaveBeenCalled();
+  });
+
   it('propagates an upload error without returning a partial reference', async () => {
     (cloudinary.uploader.upload_stream as jest.Mock).mockImplementation(
       (_options, callback) =>

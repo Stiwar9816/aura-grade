@@ -70,6 +70,7 @@
     "openai": "^6.49.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pdf-parse": "2.4.5",
     "pg": "^8.23.0",
     "redis": "^4.7.1",
     "reflect-metadata": "^0.2.2",
