@@ -7,6 +7,11 @@ import { AddCourseActivityConfirmations1793188800000 } from '../src/migrations/1
 import { CoursePreparationService } from '../src/course-preparation/course-preparation.service';
 import { CourseDocumentsService } from '../src/course-documents/course-documents.service';
 import { AcademicAccessService } from '../src/academic-access/academic-access.service';
+import { AcademicQueriesService } from '../src/academic-queries/academic-queries.service';
+import { Submission } from '../src/submission/entities/submission.entity';
+import { Evaluation } from '../src/evaluation/entities/evaluation.entity';
+import { EvaluationStatus, SubmissionStatus } from '../src/enums';
+import { verifyQueryHttp } from './course-pilot/verify-query-http';
 import { User } from '../src/user/entities/user.entity';
 import { Institution } from '../src/institution/entities/institution.entity';
 import { Course } from '../src/course/entities/course.entity';
@@ -107,6 +112,7 @@ async function main() {
       schedule = await source(CourseDocumentKind.SCHEDULE);
     const transactionDb = {
       getRepository: m.getRepository.bind(m),
+      query: m.query.bind(m),
       transaction: async (fn) => fn(m),
     };
     const access = new AcademicAccessService(m.getRepository(User), m.getRepository(Course));
@@ -117,6 +123,7 @@ async function main() {
       access
     );
     const service = new CoursePreparationService(transactionDb as never, documents);
+    const queries = new AcademicQueriesService(transactionDb as never, access);
     const list = await service.list(course.id, teacher);
     assert.equal(list.items[0].status, 'UNCONFIRMED');
     const input = {
@@ -147,6 +154,75 @@ async function main() {
     assert.equal(personal.effectiveDueDate.toISOString(), '2026-12-03T15:00:00.000Z');
     assert.equal(personal.activityHash, undefined);
     assert.equal(JSON.stringify(personal).includes(other.id), false);
+    const queryItems = await queries.activities(student.id, course.id);
+    assert.equal(queryItems.items.length, 1);
+    assert.equal(queryItems.items[0].effectiveDueDate.toISOString(), '2026-12-03T15:00:00.000Z');
+    assert.equal((await queries.result(student.id, course.id, activity.id)).state, 'NOT_SUBMITTED');
+    const ownSubmission = await m.getRepository(Submission).save({
+      student,
+      assignment: activity,
+      status: SubmissionStatus.REVIEW_PENDING,
+      extractedText: 'private original submission',
+    });
+    const otherSubmission = await m.getRepository(Submission).save({
+      student: other,
+      assignment: activity,
+      status: SubmissionStatus.PUBLISHED,
+    });
+    const ownEvaluation = await m.getRepository(Evaluation).save({
+      submission: ownSubmission,
+      status: EvaluationStatus.DRAFT,
+      totalScore: 0,
+      generalFeedback: 'Teacher feedback',
+      detailedFeedback: [
+        { criteriaId: 'criterion', score: 0, feedback: 'Revise', private: 'never expose' },
+      ],
+      originalDraftSnapshot: { private: 'never expose' },
+    });
+    await m.getRepository(Evaluation).save({
+      submission: otherSubmission,
+      status: EvaluationStatus.PUBLISHED,
+      totalScore: 5,
+      generalFeedback: 'Other student private feedback',
+      detailedFeedback: [],
+    });
+    assert.equal((await queries.result(student.id, course.id, activity.id)).evaluation, null);
+    await m
+      .getRepository(Evaluation)
+      .update(ownEvaluation.id, { status: EvaluationStatus.PUBLISHED });
+    const grade = await queries.result(student.id, course.id, activity.id);
+    assert.equal(grade.evaluation?.totalScore, 0);
+    assert.equal(grade.evaluation?.generalFeedback, 'Teacher feedback');
+    assert.doesNotMatch(JSON.stringify(grade), /Other student|never expose|private original/);
+    if (process.env.RUN_HTTP_INTEGRATION === 'true')
+      await verifyQueryHttp(m, queries, student, course.id, activity.id);
+    const nextActivity = await m.getRepository(Assignment).save({
+      title: 'Future sorting check',
+      description: 'Fixture',
+      dueDate: new Date('2100-01-01T04:59:00Z'),
+      course,
+      user: teacher,
+      rubric,
+    });
+    await m
+      .getRepository(AssignmentExtension)
+      .update(
+        { assignment: { id: activity.id }, student: { id: student.id } },
+        { extendedDueDate: new Date('2101-01-01T04:59:00Z') }
+      );
+    const upcoming = await queries.activities(student.id, course.id, { upcoming: true, limit: 1 });
+    assert.equal(upcoming.total, 2);
+    assert.equal(upcoming.items[0].id, nextActivity.id);
+    assert.equal(
+      (await queries.activities(student.id, course.id, { upcoming: true, limit: 1, page: 2 }))
+        .items[0].id,
+      activity.id
+    );
+    await m.getRepository(Assignment).update(nextActivity.id, { isActive: false });
+    await assert.rejects(
+      queries.result(student.id, course.id, nextActivity.id),
+      /Actividad no disponible/
+    );
     await documents.archive(course.id, guide.documentId, teacher);
     assert.equal((await service.list(course.id, student)).items[0].guide, null);
     await documents.publish(course.id, guide.documentId, guide.id, teacher);
@@ -157,10 +233,59 @@ async function main() {
       service.confirm(course.id, activity.id, teacher, input),
       ConflictException
     );
+
+    // Reuse the same actor object so stale session data cannot grant academic access.
+    let providerCalls = 0;
+    const provider = async () => {
+      providerCalls++;
+      return 'synthetic response';
+    };
+    const denied = async () => {
+      await assert.rejects(service.list(course.id, student), ForbiddenException);
+      await assert.rejects(documents.list(course.id, student), ForbiddenException);
+      await assert.rejects(queries.activities(student.id, course.id), ForbiddenException);
+      await assert.rejects(queries.result(student.id, course.id, activity.id), ForbiddenException);
+      await assert.rejects(
+        access.runForStudentCourse(student.id, course.id, provider),
+        ForbiddenException
+      );
+      assert.equal(providerCalls, 0, 'Denied access must never invoke an AI provider');
+    };
+    for (const approvalStatus of [
+      InstitutionApprovalStatus.PENDING,
+      InstitutionApprovalStatus.REJECTED,
+    ]) {
+      await m.getRepository(User).update(student.id, { approvalStatus });
+      await denied();
+    }
+    await m.getRepository(User).update(student.id, {
+      approvalStatus: InstitutionApprovalStatus.APPROVED,
+    });
+    await m.getRepository(Institution).update(institution.id, { isActive: false });
+    await denied();
+    await m.getRepository(Institution).update(institution.id, { isActive: true });
+    await m.createQueryBuilder().relation(Course, 'users').of(course.id).remove(student.id);
+    await denied();
+    await m.createQueryBuilder().relation(Course, 'users').of(course.id).add(student.id);
+    const foreignInstitution = await m
+      .getRepository(Institution)
+      .save({ name: 'Temporary foreign institution', isActive: true });
+    await m.getRepository(User).update(student.id, { institutionId: foreignInstitution.id });
+    await denied();
+    await m.getRepository(User).update(student.id, { institutionId: institution.id });
+
+    // Model a job authorized at enqueue time and executed after deactivation.
+    await access.requireStudentCourse(student.id, course.id);
     await m.getRepository(User).update(student.id, { isActive: false });
-    await assert.rejects(service.list(course.id, student), ForbiddenException);
+    await denied();
+    await m.getRepository(User).update(student.id, { isActive: true });
+    assert.equal(
+      await access.runForStudentCourse(student.id, course.id, provider),
+      'synthetic response'
+    );
+    assert.equal(providerCalls, 1, 'Reactivation must permit a fresh authorized operation');
     console.log(
-      'PostgreSQL: migration up/down/up (when pending), real queries, confirmation, source withdrawal/reopening, stale snapshot, personal deadline and inactive access passed. Fixtures rolled back.'
+      'PostgreSQL: confirmation, source withdrawal/reopening, stale snapshot, personal deadlines, pending/rejected approval, inactive institution, withdrawn enrollment, foreign institution, deactivation before job execution and reactivation passed. Denials invoked no provider; rollback follows.'
     );
   } finally {
     await runner.rollbackTransaction();

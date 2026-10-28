@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:17-alpine
+    build:
+      context: ./docker/postgres
+    image: aura-grade-postgres:17-vector0.8.7
     restart: always
     ports:
       - '${DB_PORT:-5432}:5432'
