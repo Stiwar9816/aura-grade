@@ -9,7 +9,7 @@ import { AssignmentExtension } from '../src/assignment/entities/assignment-exten
 import { Rubric } from '../src/rubric/entities/rubric.entity';
 import { RubricService } from '../src/rubric/rubric.service';
 import { AssignmentService } from '../src/assignment/assignment.service';
-import { RubricAcademicLevel, RubricPerformanceLevel } from '../src/rubric/enums';
+import { RubricAcademicLevel, RubricPerformanceLevel, RubricSource } from '../src/rubric/enums';
 import { CourseDocumentVersion } from '../src/course-documents/entities/course-document-version.entity';
 import { AcademicAccessService } from '../src/academic-access/academic-access.service';
 import { CourseDocumentsService } from '../src/course-documents/course-documents.service';
@@ -80,14 +80,18 @@ async function main() {
       assert.ok(text.includes(`ACTIVIDAD ${item.number}:`));
       const sourceWeights = item.criteria.map((c) => c[1]);
       const weights = normalizePilotWeights(sourceWeights);
+      if (item.proposal)
+        assert.equal(item.draftOnly, true, 'Las propuestas deben permanecer en borrador.');
       if (!item.draftOnly)
         assert.equal(
           sourceWeights.reduce((sum, n) => sum + n, 0),
           100
         );
-      const note = item.draftOnly
-        ? `Borrador normalizado proporcionalmente desde ${sourceWeights.reduce((sum, n) => sum + n, 0)}%. Revisar y actualizar la guía antes de utilizarlo.`
-        : 'Transcripción de la rúbrica oficial revisada.';
+      const note = item.proposal
+        ? 'Propuesta asistida por IA: conserva los criterios de la guía; añade pesos iguales de 25% y descriptores de desempeño para revisión docente. Estos pesos y niveles aún no forman parte de la guía oficial.'
+        : item.draftOnly
+          ? `Borrador normalizado proporcionalmente desde ${sourceWeights.reduce((sum, n) => sum + n, 0)}%. Revisar y actualizar la guía antes de utilizarlo.`
+          : 'Transcripción de la rúbrica oficial revisada.';
       const title = `Actividad ${item.number}: ${item.title}`;
       const saved = existing.length
         ? await rubrics.findOne(existing[0].id, course.user)
@@ -110,20 +114,31 @@ async function main() {
           );
       if (!existing.length)
         await m.getRepository(Rubric).update(saved.id, {
+          ...(item.proposal ? { source: RubricSource.AI } : {}),
           standardizationMetadata: {
             ...tag,
             scheduleVersionId: schedule.id,
             guidePages: [item.firstPage, item.lastPage],
-            sourceWeights,
-            normalizedWeights: weights,
-            normalizationApproved: !!item.draftOnly,
+            sourceWeights: item.proposal ? null : sourceWeights,
+            ...(item.proposal
+              ? {
+                  proposedWeights: weights,
+                  weightsAndLevelsOrigin: 'ASSISTANT_PROPOSAL',
+                  criteriaOrigin: 'PUBLISHED_GUIDE',
+                }
+              : { normalizedWeights: weights }),
+            normalizationApproved: !!item.draftOnly && !item.proposal,
           },
         });
       if (item.draftOnly) {
         results.push({
           activity: item.number,
           rubricId: saved.id,
-          result: existing.length ? 'existing rubric; unchanged' : 'normalized draft only',
+          result: existing.length
+            ? 'existing rubric; unchanged'
+            : item.proposal
+              ? 'proposed exam rubric draft only'
+              : 'normalized draft only',
         });
         continue;
       }
@@ -137,6 +152,7 @@ async function main() {
           'Ya existe una actividad distinta con ese título.'
         );
       const instructions = text.split(/Criterio de\s+evaluación/)[0].trim();
+      assert.ok(item.closingDate, 'Una actividad programada requiere fecha de cierre.');
       const activity =
         previous ??
         (await assignments.create(
@@ -164,8 +180,11 @@ async function main() {
         {
           applied: apply,
           results,
-          omittedExams: [3, 7],
-          reason: 'La guía no define pesos por criterio para estos exámenes.',
+          unprogrammedExamDrafts: activities
+            .filter((item) => item.proposal)
+            .map((item) => item.number),
+          reason:
+            'Las propuestas de examen se guardan solo como rúbricas DRAFT para revisión docente.',
           coherenceConfirmed: false,
         },
         null,

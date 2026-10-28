@@ -34,11 +34,11 @@ Manifiesto revisable: `scripts/course-pilot/manifest.ts`. Importador: `scripts/i
 | --- | --- | --- |
 | 1. Pseudocódigo a Python | Actividad inactiva y rúbrica oficial asociada | 21/08/2026 23:59 |
 | 2. Análisis y comparación | Solo rúbrica DRAFT normalizada de 105% a 100% | No se creó actividad |
-| 3. Examen parcial 1 | No importado: faltan pesos por criterio | Pendiente |
+| 3. Examen parcial 1 | Rúbrica DRAFT propuesta posteriormente por solicitud del usuario: 4 criterios al 25% | No se creó actividad |
 | 4. Diseño y modularización | Actividad inactiva y rúbrica oficial asociada | 09/10/2026 23:59 |
 | 5. Gestión de información | Solo rúbrica DRAFT normalizada de 125% a 100% | No se creó actividad |
 | 6. Proyecto final | Actividad inactiva y rúbrica oficial asociada | 06/11/2026 23:59 |
-| 7. Examen final | No importado: faltan pesos por criterio | Pendiente |
+| 7. Examen final | Rúbrica DRAFT propuesta posteriormente por solicitud del usuario: 4 criterios al 25% | No se creó actividad |
 
 El usuario autorizó normalizar exclusivamente los borradores del sitio; no se cambió la guía. Actividad 2: pesos 19.05, 23.81, 19.05, 14.28, 23.81. Actividad 5: 12, 20, 20, 16, 12, 20. Se guardaron pesos originales, normalizados y referencias de origen en los metadatos de cada rúbrica. El redondeo por restos mayores mantiene exactamente 100.00%.
 
@@ -51,7 +51,24 @@ DB_HOST=127.0.0.1 STATE=dev ./node_modules/.bin/ts-node -r tsconfig-paths/regist
 DB_HOST=127.0.0.1 STATE=dev ./node_modules/.bin/ts-node -r tsconfig-paths/register scripts/import-course-pilot.ts --apply
 ```
 
-Para el piloto estudiantil: el docente debe revisar/activar las actividades preparadas y confirmar su coherencia en Preparación del curso; resolver los pesos de los exámenes; incorporar las normalizaciones aprobadas a una nueva guía oficial antes de utilizar 2 y 5. Las fechas de 1 y 4 ya son pasadas; se preservaron literalmente. RAG y Telegram continúan como siguientes etapas.
+Para el piloto estudiantil: el docente debe revisar/activar las actividades preparadas y confirmar su coherencia en Preparación del curso; revisar los pesos propuestos de los exámenes; incorporar las normalizaciones aprobadas a una nueva guía oficial antes de utilizar 2 y 5. Las fechas de 1 y 4 ya son pasadas; se preservaron literalmente. RAG y Telegram continúan como siguientes etapas.
+
+### Actualización: criterios de los exámenes 3 y 7
+
+El usuario solicitó crear los criterios faltantes. Se conservaron los cuatro nombres de criterio de cada examen en la guía; se propusieron pesos iguales de 25% y cuatro niveles de desempeño específicos del propósito conceptual de cada examen. No se exige entregar o ejecutar un programa como requisito nuevo.
+
+| Examen parcial 1 (actividad 3) | Examen final (actividad 7) | Peso por criterio |
+| --- | --- | --- |
+| Comprensión conceptual | Comprensión conceptual | 25% |
+| Capacidad de análisis | Capacidad de análisis | 25% |
+| Claridad en la argumentación | Argumentación | 25% |
+| Identificación de errores | Interpretación de código | 25% |
+
+Los borradores distinguen su origen: `source=AI`, `criteriaOrigin=PUBLISHED_GUIDE` y `weightsAndLevelsOrigin=ASSISTANT_PROPOSAL`. Los pesos propuestos no se registran como pesos extraídos de la guía (`sourceWeights=null`). No se atribuye un modelo o una llamada API que no se haya ejecutado. Se guardan solo rúbricas DRAFT; no se publican, no crean tareas ni cambian el cronograma. El docente debe revisar estas propuestas antes de incorporarlas a la guía oficial y programar los exámenes.
+
+El manifiesto y el importador incluyen ahora ambas propuestas de forma idempotente. Las rúbricas/actividades importadas anteriormente se conservan sin cambios.
+
+Validación de esta actualización: ensayo con rollback y aplicación correctos; lectura posterior confirma ambas rúbricas DRAFT de origen AI, cuatro criterios de 25% y cuatro niveles por criterio. Total 100% en cada rúbrica. TypeScript y los 635 tests del backend pasan (un test opcional de Redis omitido). Inventario posterior: siete rúbricas del piloto, tres PUBLISHED y cuatro DRAFT; continúan las mismas tres actividades inactivas.
 
 ## Verificación final de la implementación
 

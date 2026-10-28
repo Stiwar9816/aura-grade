@@ -1,4 +1,4 @@
-// Transcribed from the reviewed, published guide. No generated grading criteria.
+// Official transcriptions; proposal entries explicitly distinguish new weights/levels.
 type CriterionSource = [
   title: string,
   weight: number,
@@ -12,8 +12,9 @@ export type PilotActivity = {
   title: string;
   firstPage: number;
   lastPage: number;
-  closingDate: string;
+  closingDate?: string;
   draftOnly?: boolean;
+  proposal?: boolean;
   criteria: CriterionSource[];
 };
 export const pilot = {
@@ -118,6 +119,48 @@ export const activities: PilotActivity[] = [
         'Pruebas suficientes',
         'Pruebas limitadas',
         'No valida',
+      ],
+    ],
+  },
+  {
+    number: 3,
+    title: 'EXAMEN PARCIAL 1',
+    firstPage: 18,
+    lastPage: 18,
+    draftOnly: true,
+    proposal: true,
+    criteria: [
+      [
+        'Comprensión conceptual',
+        25,
+        'Explica con precisión entradas, procesos, salidas, variables y estructuras de control, y establece su correspondencia entre pseudocódigo y Python con ejemplos pertinentes.',
+        'Explica los conceptos principales y su correspondencia entre pseudocódigo y Python; presenta imprecisiones menores que no alteran la idea central.',
+        'Reconoce conceptos básicos, pero explica de forma parcial su relación con Python o confunde algunas estructuras.',
+        'Confunde los conceptos fundamentales o no explica la relación entre pseudocódigo y Python.',
+      ],
+      [
+        'Capacidad de análisis',
+        25,
+        'Sigue paso a paso el algoritmo propuesto, determina cambios de variables y salidas, y explica el efecto de las condiciones y ciclos para los datos del ejercicio.',
+        'Analiza correctamente el recorrido principal y las salidas, con omisiones menores en pasos o casos particulares.',
+        'Analiza solo parte del recorrido; comete errores que afectan algunas salidas o no considera condiciones relevantes.',
+        'No logra seguir el algoritmo o presenta un análisis incompatible con sus instrucciones.',
+      ],
+      [
+        'Claridad en la argumentación',
+        25,
+        'Justifica sus respuestas con una secuencia lógica, vocabulario preciso y referencias concretas al pseudocódigo o código del ejercicio.',
+        'Presenta razones pertinentes y comprensibles, aunque algunas conexiones o referencias al ejercicio quedan poco desarrolladas.',
+        'Formula conclusiones con explicaciones generales o incompletas y escasa evidencia del ejercicio.',
+        'Da respuestas sin justificación o con argumentos contradictorios que no sustentan sus conclusiones.',
+      ],
+      [
+        'Identificación de errores',
+        25,
+        'Localiza los errores presentes en el ejercicio, explica su causa y efecto, y propone correcciones coherentes que verifica mediante un recorrido o ejemplo.',
+        'Identifica y corrige los errores principales, con explicaciones o comprobaciones parcialmente desarrolladas.',
+        'Identifica algunos errores, pero explica de forma incompleta sus efectos o propone correcciones que solo resuelven parte del problema.',
+        'No identifica los errores relevantes o propone cambios que mantienen o agravan el problema.',
       ],
     ],
   },
@@ -284,6 +327,48 @@ export const activities: PilotActivity[] = [
         'No funcional',
       ],
       ['Sustentación', 15, 'Clara, argumentada y técnica', 'Adecuada', 'Básica', 'Deficiente'],
+    ],
+  },
+  {
+    number: 7,
+    title: 'EXAMEN PARCIAL FINAL',
+    firstPage: 31,
+    lastPage: 32,
+    draftOnly: true,
+    proposal: true,
+    criteria: [
+      [
+        'Comprensión conceptual',
+        25,
+        'Explica con precisión cómo funciones, estructuras de datos y operaciones con archivos se integran para organizar un programa y conservar información.',
+        'Explica los conceptos principales y sus relaciones, con imprecisiones menores sobre su integración.',
+        'Reconoce funciones, estructuras o archivos de forma aislada, pero explica parcialmente su integración.',
+        'Confunde los conceptos fundamentales o no explica su función dentro de un programa.',
+      ],
+      [
+        'Capacidad de análisis',
+        25,
+        'Descompone el problema propuesto en datos, responsabilidades y operaciones; plantea una solución coherente y analiza casos relevantes de validación y persistencia.',
+        'Propone una descomposición y solución adecuadas, con omisiones menores en validación o manejo de información.',
+        'Identifica parte de los datos y operaciones, pero la solución presenta vacíos en su organización o persistencia.',
+        'No identifica los componentes esenciales del problema o plantea una solución incoherente con lo solicitado.',
+      ],
+      [
+        'Argumentación',
+        25,
+        'Justifica la elección de funciones, estructuras de datos y manejo de archivos con razones vinculadas al problema y explica sus efectos sobre la claridad y confiabilidad de la solución.',
+        'Justifica las decisiones principales con razones pertinentes, aunque no desarrolla todas sus consecuencias.',
+        'Ofrece justificaciones generales o incompletas, con poca relación entre las decisiones y las necesidades del problema.',
+        'Presenta decisiones sin sustento o argumentos contradictorios con el funcionamiento de la solución.',
+      ],
+      [
+        'Interpretación de código',
+        25,
+        'Explica el flujo del fragmento propuesto, el paso de datos entre funciones y las operaciones con estructuras o archivos; determina las salidas y cambios para los casos planteados.',
+        'Interpreta correctamente el flujo principal y los resultados, con omisiones menores en casos particulares o efectos secundarios.',
+        'Interpreta algunos bloques, pero pierde la relación entre funciones o comete errores en las salidas y cambios de datos.',
+        'No interpreta el flujo ni los efectos del código, o atribuye comportamientos incompatibles con las instrucciones.',
+      ],
     ],
   },
 ];
