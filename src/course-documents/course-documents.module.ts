@@ -1,3 +1,6 @@
+import { CoursePreparationService } from '../course-preparation/course-preparation.service';
+import { CoursePreparationController } from '../course-preparation/course-preparation.controller';
+import { CourseActivityConfirmation } from '../course-preparation/entities/course-activity-confirmation.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicAccessModule } from '../academic-access/academic-access.module';
@@ -10,12 +13,12 @@ import { DocumentExtractionService } from './document-extraction.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CourseDocument, CourseDocumentVersion]),
+    TypeOrmModule.forFeature([CourseDocument, CourseDocumentVersion, CourseActivityConfirmation]),
     AcademicAccessModule,
     CloudinaryModule,
   ],
-  controllers: [CourseDocumentsController],
-  providers: [CourseDocumentsService, DocumentExtractionService],
+  controllers: [CourseDocumentsController, CoursePreparationController],
+  providers: [CourseDocumentsService, DocumentExtractionService, CoursePreparationService],
   exports: [CourseDocumentsService],
 })
 export class CourseDocumentsModule {}

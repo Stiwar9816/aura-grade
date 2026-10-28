@@ -264,7 +264,7 @@ export class CourseDocumentsService {
     });
   }
 
-  private async authorize(
+  async authorize(
     courseId: string,
     actorId: string,
     write: boolean,
