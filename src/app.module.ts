@@ -50,6 +50,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { OperationsModule } from './operations/operations.module';
 import { AcademicAccessModule } from './academic-access/academic-access.module';
+import { CourseAssistantModule } from './course-assistant/course-assistant.module';
 import { AcademicQueriesModule } from './academic-queries/academic-queries.module';
 import { CourseDocumentsModule } from './course-documents/course-documents.module';
 
@@ -65,6 +66,7 @@ const isDevelopment = envs.state === 'dev';
   imports: [
     AcademicAccessModule,
     AcademicQueriesModule,
+    CourseAssistantModule,
     CourseDocumentsModule,
     OutboxModule,
     ConfigModule.forRoot({ isGlobal: true }),

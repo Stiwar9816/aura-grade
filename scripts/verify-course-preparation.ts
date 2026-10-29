@@ -1,3 +1,4 @@
+import { verifyRag } from './course-pilot/verify-rag';
 /** Local PostgreSQL integration check. All fixture data and DDL are rolled back. */
 import 'reflect-metadata';
 import * as assert from 'node:assert/strict';
@@ -284,6 +285,7 @@ async function main() {
       'synthetic response'
     );
     assert.equal(providerCalls, 1, 'Reactivation must permit a fresh authorized operation');
+    if (process.env.RUN_RAG_INTEGRATION === 'true') await verifyRag(m, documents, access, teacher, student, course.id, guide.id, schedule.id);
     console.log(
       'PostgreSQL: confirmation, source withdrawal/reopening, stale snapshot, personal deadlines, pending/rejected approval, inactive institution, withdrawn enrollment, foreign institution, deactivation before job execution and reactivation passed. Denials invoked no provider; rollback follows.'
     );
