@@ -50,6 +50,20 @@ export class AcademicQueriesService {
     private readonly access: AcademicAccessService
   ) {}
 
+  /** Courses the student is currently enrolled in, inside their own institution. */
+  async courses(studentId: string) {
+    const student = await this.access.requireStudent(studentId);
+    const rows = await this.db.query(
+      `SELECT c.id, c.course_name AS name, c.code_course AS code
+       FROM courses c
+       JOIN course_users cu ON cu."courseId" = c.id AND cu."userId" = $1
+       JOIN users t ON t.id = c.user_id AND t.institution_id = $2
+       ORDER BY c.course_name, c.id LIMIT 50`,
+      [student.studentId, student.institutionId]
+    );
+    return rows.map((row) => ({ id: row.id, name: row.name, code: row.code }));
+  }
+
   async activities(studentId: string, courseId: string, query: AcademicActivityQuery = {}) {
     return this.access.runForStudentCourse(studentId, courseId, async (context) => {
       const { page = 1, limit = 20, upcoming = false } = query;

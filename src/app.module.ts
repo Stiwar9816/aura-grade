@@ -53,6 +53,7 @@ import { AcademicAccessModule } from './academic-access/academic-access.module';
 import { CourseAssistantModule } from './course-assistant/course-assistant.module';
 import { AcademicQueriesModule } from './academic-queries/academic-queries.module';
 import { CourseDocumentsModule } from './course-documents/course-documents.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 const redisQueueConnection = envs.redis_url
   ? { url: envs.redis_url }
@@ -68,6 +69,7 @@ const isDevelopment = envs.state === 'dev';
     AcademicQueriesModule,
     CourseAssistantModule,
     CourseDocumentsModule,
+    TelegramModule,
     OutboxModule,
     ConfigModule.forRoot({ isGlobal: true }),
     // Rate Limiting
