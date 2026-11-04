@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:17-alpine
+    build:
+      context: ./docker/postgres
+    image: aura-grade-postgres:17-vector0.8.7
     restart: always
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -74,6 +76,12 @@ services:
       AI_PROVIDER: ${AI_PROVIDER}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      RAG_ENABLED: ${RAG_ENABLED:-false}
+      RAG_GENERATION_MODEL: ${RAG_GENERATION_MODEL:-gemini-3.5-flash}
+      RAG_DAILY_QUESTIONS: ${RAG_DAILY_QUESTIONS:-20}
+      RAG_GLOBAL_QUESTIONS: ${RAG_GLOBAL_QUESTIONS:-1000}
+      RAG_DAILY_CHUNKS: ${RAG_DAILY_CHUNKS:-512}
+      RAG_GLOBAL_CHUNKS: ${RAG_GLOBAL_CHUNKS:-4096}
       ## Redis
       REDIS_URL: ${REDIS_URL}
       ## BFF

@@ -11,7 +11,7 @@ import { Repository } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 // Interfaces
 import { JwtPayload } from '../interface/jwt-payload.interface';
-import { InstitutionApprovalStatus } from '../../institution/enums/institution-approval-status.enum';
+import { hasAcademicAccess } from '../../academic-access/academic-access.policy';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -34,11 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       relations: ['institution'],
     });
     if (!user) throw new UnauthorizedException('El token no es válido.');
-    if (
-      !user.isActive ||
-      user.approvalStatus !== InstitutionApprovalStatus.APPROVED ||
-      !user.institution?.isActive
-    )
+    if (!hasAcademicAccess(user))
       throw new UnauthorizedException('El usuario está inactivo. Comunícate con un administrador.');
 
     delete user.password;

@@ -7,6 +7,8 @@ const { AppDataSource } = require('../dist/config/datasource.config');
   await AppDataSource.initialize();
   try {
     await AppDataSource.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+    // The RAG migration refuses to create the extension itself; the disposable CI image provides it.
+    await AppDataSource.query('CREATE EXTENSION IF NOT EXISTS vector');
     await AppDataSource.runMigrations();
     assert.equal(await AppDataSource.showMigrations(), false);
     assert.deepEqual(await AppDataSource.runMigrations(), []);

@@ -12,7 +12,7 @@ import helmet from 'helmet';
 // Envs
 import { envs } from './config';
 // GraphQL
-import { graphqlUploadExpress } from 'graphql-upload-ts';
+import { configureGraphqlUploads } from './common/graphql/graphql-upload.config';
 // Filters
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 // Basic Auth
@@ -36,7 +36,7 @@ async function bootstrap() {
       crossOriginResourcePolicy: isDev ? false : true,
     })
   );
-  app.use(graphqlUploadExpress({ maxFileSize: 15 * 1024 * 1024, maxFiles: 1 }));
+  configureGraphqlUploads(app);
   app.setGlobalPrefix('api', {
     exclude: ['queues', 'queues/*path'],
   });

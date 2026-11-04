@@ -144,6 +144,19 @@ describe('SessionService', () => {
     await expect(service.validate(created.sessionToken)).resolves.toBeNull();
   });
 
+  it.each([
+    { isActive: false },
+    { isActive: undefined },
+    { approvalStatus: InstitutionApprovalStatus.PENDING },
+    { institution: undefined },
+    { institution: { isActive: false } },
+  ])('revokes an existing session when academic access changes: %p', async (changes) => {
+    const created = await service.create(user, false, 'mfa');
+    repository.findOne.mockResolvedValue({ ...user, ...changes });
+    await expect(service.validate(created.sessionToken)).resolves.toBeNull();
+    expect(values.size).toBe(0);
+  });
+
   it('revokes all indexed sessions for a user', async () => {
     await service.create(user, false, 'mfa');
     await service.create(user, false, 'mfa');

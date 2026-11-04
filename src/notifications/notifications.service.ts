@@ -27,6 +27,7 @@ import {
 } from './notification-queue.constants';
 import { NotificationQueueService } from './notification-queue.service';
 import { WebPushService } from './web-push.service';
+import { canStudentAccessCourse } from 'src/academic-access/academic-access.policy';
 
 export type NotificationPreferences = {
   emailEnabled: boolean;
@@ -470,7 +471,9 @@ export class NotificationsService {
       relations: [
         'user',
         'course',
+        'course.user',
         'course.users',
+        'course.users.institution',
         'submissions',
         'submissions.student',
         'extensions',
@@ -493,8 +496,7 @@ export class NotificationsService {
     const uniqueStudents = new Map<string, PendingReminderStudent>();
     for (const student of assignment.course?.users ?? []) {
       if (
-        student.role === UserRoles.Estudiante &&
-        student.isActive !== false &&
+        canStudentAccessCourse(student, assignment.course) &&
         !submittedStudentIds.has(student.id)
       )
         uniqueStudents.set(student.id, {
