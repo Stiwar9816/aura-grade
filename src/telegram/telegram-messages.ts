@@ -1,14 +1,18 @@
 import { MAX_REPLY_LENGTH } from './telegram.constants';
 
 export const HELP = [
-  'Comandos disponibles:',
-  '/cursos — tus cursos',
-  '/curso N — elegir el curso activo',
-  '/entregas — próximas entregas',
-  '/actividades — todas las actividades',
-  '/resultado N — nota y retroalimentación publicada de la actividad N',
-  '/desvincular — desvincular este Telegram',
-  'Cualquier otro texto se responde con los documentos oficiales del curso.',
+  'Escríbeme con tus palabras, por ejemplo:',
+  '«¿Qué pide la actividad 3?» o «¿Cuándo es el parcial?»',
+  '',
+  'O usa estos atajos:',
+  '📚 /cursos – tus cursos',
+  '🎯 /curso 2 – elegir el curso activo',
+  '⏰ /entregas – próximas entregas',
+  '📋 /actividades – todas las actividades',
+  '📝 /resultado 1 – nota y comentarios de la actividad 1',
+  '🔌 /desvincular – desconectar este Telegram',
+  '',
+  'Respondo con los documentos oficiales de tu curso e indico la página de cada dato.',
 ].join('\n');
 
 export const NOT_LINKED =
