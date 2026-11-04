@@ -82,7 +82,7 @@ export class TelegramBotService {
     const outcome = await this.links.consume(token, job.telegramUserId, job.chatId);
     switch (outcome) {
       case 'LINKED':
-        return `Cuenta vinculada. Usa /cursos para ver tus cursos.\n\n${HELP}`;
+        return `¡Listo! Tu cuenta quedó vinculada ✅\n\n${HELP}`;
       case 'ACCESS_DENIED':
         return DENIED;
       case 'TELEGRAM_IN_USE':

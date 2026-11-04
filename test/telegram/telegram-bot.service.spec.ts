@@ -209,7 +209,7 @@ describe('Telegram bot: answers and personal queries', () => {
 
 describe('Telegram bot: linking', () => {
   it.each([
-    ['LINKED', /Cuenta vinculada/],
+    ['LINKED', /quedó vinculada/],
     ['INVALID_TOKEN', /no es válido, ya se usó o venció/],
     ['ACCESS_DENIED', /No tienes acceso académico/],
     ['TELEGRAM_IN_USE', /ya está vinculado a otra cuenta/],
