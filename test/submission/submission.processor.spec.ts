@@ -20,7 +20,9 @@ describe('SubmissionProcessor', () => {
     evaluationService as never,
     notificationsGateway as never,
     config as never,
-    { downloadUrl: jest.fn(() => 'https://api.cloudinary.com/download') } as never,
+    {
+      submissionDownloadUrl: jest.fn(async () => 'https://ref.storage.supabase.co/signed'),
+    } as never,
     gradingMemory as never
   );
   const job = {
@@ -29,7 +31,7 @@ describe('SubmissionProcessor', () => {
     updateProgress: jest.fn(),
   };
   const submission = {
-    cloudinaryPublicId: 'auragrade/submissions/file.docx',
+    storageKey: 'submissions/3f0f8f7e-1c2b-4c2d-9a0e-0d6f7b8c9a10.docx',
     id: 'submission-id',
     student: { id: 'student-id' },
     assignment: {

@@ -229,8 +229,7 @@ async function main() {
     const storage = {
       uploadSubmission: async () => {
         uploads++;
-        const publicId = `auragrade/submissions/${randomUUID()}.docx`;
-        return { publicId, secureUrl: 'https://example.test/private.docx' };
+        return { key: `submissions/${randomUUID()}.docx` };
       },
       deleteSubmission: async () => {
         deleted++;

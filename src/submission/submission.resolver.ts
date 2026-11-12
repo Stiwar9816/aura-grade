@@ -24,10 +24,13 @@ import { User } from 'src/user/entities/user.entity';
 export class SubmissionResolver {
   constructor(private readonly submissionService: SubmissionService) {}
 
-  @ResolveField(() => String, { nullable: true })
+  @ResolveField(() => String, {
+    nullable: true,
+    description: 'Download path; it redirects to a short-lived signed URL of private storage.',
+  })
   fileUrl(@Parent() submission: Submission): string | null {
     // Download endpoint revalidates the session and ownership on every access.
-    return submission.fileUrl ? `/api/submissions/${submission.id}/download` : null;
+    return submission.storageKey ? `/api/submissions/${submission.id}/download` : null;
   }
 
   @Mutation(() => Submission, { name: 'createSubmission' })

@@ -1,9 +1,10 @@
+import { IDLE_EFFICIENT_QUEUE_EVENTS_OPTIONS } from 'src/common/queue/queue-polling.options';
 import { InjectQueue, OnQueueEvent, QueueEventsHost, QueueEventsListener } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { AuthMetricsService, captureExhaustedQueueJob } from 'src/observability';
 
-@QueueEventsListener('audit')
+@QueueEventsListener('audit', IDLE_EFFICIENT_QUEUE_EVENTS_OPTIONS)
 export class AuditQueueEvents extends QueueEventsHost {
   private readonly logger = new Logger(AuditQueueEvents.name);
 

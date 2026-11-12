@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://res.cloudinary.com/dwtf5ftav/image/upload/v1778560040/1_ujpdg5.png" width="500" alt="AuraGrade Logo" /></a>
+  <a href="http://nestjs.com/" target="blank"><img src="https://cwqqnloewcseaoxzuhrf.supabase.co/storage/v1/object/sign/auragrade/auragrade.png?token=eyJraWQiOiJkYzM0OTJkNi04MmNlLTRiMDAtYjViZC05ODk2NDAwM2JlODYiLCJhbGciOiJFUzI1NiJ9.eyJ1cmwiOiJhdXJhZ3JhZGUvYXVyYWdyYWRlLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3OTQ1MDE2ODgsImV4cCI6MjEwOTg2MTY4OH0._UhmAzTz3R0g0mzLPo298aWq6nQMtw6TSCXKBlBkUbaULH0gUPXaLW6AhkgzKUcCaLpjMIjsj75S_8KSrk4ESQ" width="500" alt="AuraGrade Logo" /></a>
 </p>
 
 # 🚀 AuraGrade - NestJS (Clasificación asistida por IA)
@@ -10,7 +10,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 [![Gemini](https://img.shields.io/badge/Gemini-412991?style=for-the-badge&logo=gemini-ai&logoColor=white)](https://gemini.google.com/)
-[![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white)](https://cloudinary.com/)
+[![Supabase](https://img.shields.io/badge/Supabase_Storage-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/storage)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Redis](https://img.shields.io/badge/Redis-DC3814?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![CI/CD](https://img.shields.io/badge/CI/CD-412991?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
@@ -27,7 +27,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 ### ☁️ Gestión de Archivos
 
-- **Carga Directa**: Upload de archivos a Cloudinary mediante GraphQL Streams.
+- **Carga Directa**: Upload de archivos a almacenamiento privado (Supabase Storage) mediante GraphQL Streams.
 - **Validación**: Control de tipos MIME y tamaño máximo (15MB).
 
 ### 🔔 Tiempo Real
@@ -90,7 +90,7 @@ API avanzada para la gestión y calificación automática de trabajos universita
 - Node.js >= 22.x (LTS)
 - pnpm 11.23.0 (fijado en `package.json` y en la imagen Docker)
 - Docker & Docker Compose (para DB y Redis)
-- Cuenta en Cloudinary
+- Proyecto de Supabase con un bucket privado de Storage y llaves S3
 - Cuenta y API key de Resend
 - API Key de OpenAI o Gemini
 - Proyecto y DSN de Sentry (opcional)
@@ -356,7 +356,7 @@ Para ejecutar:
 4. Despliega la aplicación solo cuando el workflow termine correctamente.
 
 La configuración de la CLI valida únicamente las variables de PostgreSQL. No
-copies al workflow secretos de JWT, correo, Redis, IA, Cloudinary ni del BFF.
+copies al workflow secretos de JWT, correo, Redis, IA, almacenamiento ni del BFF.
 
 Como alternativa local, un responsable con acceso al endpoint externo puede
 compilar y ejecutar:
@@ -534,7 +534,7 @@ src/
 ├── ai/                   # Servicio de integración con OpenAI
 ├── assignment/           # Gestión de tareas académicas
 ├── auth/                 # Autenticación y Guards
-├── cloudinary/           # Servicio de almacenamiento de archivos
+├── storage/              # Almacenamiento privado de archivos (Supabase Storage vía S3)
 ├── common/               # Configuración Compartida
 ├── config/               # Configuración de variables de entorno
 ├── course/               # Gestión de cursos
@@ -558,7 +558,7 @@ src/
 - **Base de Datos**: **[PostgreSQL](https://www.postgresql.org/)** + **[TypeORM](https://typeorm.io/)**
 - **Caché**: **[Redis](https://redis.io/)** + **[Cache Manager](https://github.com/node-cache-manager/node-cache-manager)**
 - **AI**: **[OpenAI](https://openai.com/)** GPT-4o | **[Gemini](https://gemini.com/)** gemini-2.5-flash
-- **Almacenamiento**: **[Cloudinary](https://cloudinary.com/)**
+- **Almacenamiento**: **[Supabase Storage](https://supabase.com/storage)** (API compatible con S3, URLs firmadas)
 - **Autenticación**: sesiones opacas en Redis + **[Passport](https://www.passportjs.org/)** + TOTP/OTP
 - **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
 - **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**

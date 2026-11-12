@@ -65,10 +65,10 @@ Errores esperados: 400 archivo/revisión inválidos, 401 sesión inválida, 403 
 
 ## Activación y verificación
 
-Migración aditiva: `1792843200000-AddCourseDocumentLibrary`. Aplicarla en el entorno destino mediante el procedimiento habitual antes de servir estas rutas. Usa la configuración Cloudinary existente; no necesita credenciales de IA ni Telegram. `synchronize` debe permanecer desactivado.
+Migración aditiva: `1792843200000-AddCourseDocumentLibrary`. Aplicarla en el entorno destino mediante el procedimiento habitual antes de servir estas rutas. Usa el almacenamiento privado (Supabase Storage, `src/storage`); no necesita credenciales de IA ni Telegram. `synchronize` debe permanecer desactivado.
 
 El smoke SQL reproducible se genera con `node scripts/print-course-library-migration-check.cjs` después de compilar. Ejecutar ese SQL con `psql -v ON_ERROR_STOP=1`: crea un esquema temporal dentro de una transacción, prueba restricciones y `up/down/up`, y termina con `ROLLBACK`. Usa tablas mínimas de usuarios/cursos; no sustituye una prueba de actualización completa del entorno.
 
-Pruebas en `test/course-documents` cubren archivos reales, ZIP manipulado, publicación, acceso, idempotencia, limpieza y middleware multipart. Estas pruebas automatizadas simulan Cloudinary. El 2026-10-24 también se verificó el proveedor real desde el BFF del frontend contra el backend local, PostgreSQL y Redis: PDF/DOCX, revisión, publicación, descarga, revocación y vencimiento. Evidencia y límites en [verificación del entorno](../../docs/verification/2026-10-24-course-library-live.md).
+Pruebas en `test/course-documents` cubren archivos reales, ZIP manipulado, publicación, acceso, idempotencia, limpieza y middleware multipart. Estas pruebas automatizadas simulan el almacenamiento. El 2026-10-24 también se verificó el proveedor real desde el BFF del frontend contra el backend local, PostgreSQL y Redis: PDF/DOCX, revisión, publicación, descarga, revocación y vencimiento. Evidencia y límites en [verificación del entorno](../../docs/verification/2026-10-24-course-library-live.md).
 
 La migración quedó aplicada en la base local de desarrollo `auraGradeDB`; los demás entornos deben ejecutar su propio procedimiento de migración. La inspección visual anterior usó datos sintéticos; la prueba real posterior ejercitó las rutas HTTP del BFF, sin repetir la inspección visual. El siguiente paso es enlazar actividades y calendario con las versiones oficiales; el RAG recuperará solo publicaciones autorizadas y tendrá que retirar contenido archivado de sus índices.

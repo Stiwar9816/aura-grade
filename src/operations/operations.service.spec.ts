@@ -29,7 +29,7 @@ describe('OperationsService', () => {
     submissions.findOne.mockResolvedValue({
       id: 'c0a8c7af-4ef1-4209-b0f1-83dc4fbca8a5',
       status: SubmissionStatus.FAILED,
-      fileUrl: 'https://private.example/submission.docx',
+      storageKey: 'submissions/c0a8c7af-4ef1-4209-b0f1-83dc4fbca8a5.docx',
       assignment: { user: { institutionId: '72f9eea3-b302-4797-98a2-f36173ce9754' } },
     } as Submission);
 
@@ -43,7 +43,7 @@ describe('OperationsService', () => {
     submissions.findOne.mockResolvedValue({
       id: 'c0a8c7af-4ef1-4209-b0f1-83dc4fbca8a5',
       status: SubmissionStatus.FAILED,
-      fileUrl: 'https://private.example/submission.docx',
+      storageKey: 'submissions/c0a8c7af-4ef1-4209-b0f1-83dc4fbca8a5.docx',
       evaluation: null,
       assignment: { user: { institutionId: administrator.institutionId } },
     } as Submission);

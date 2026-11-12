@@ -16,7 +16,7 @@ const { AddCourseDocumentLibrary1792843200000: Migration } = require('../dist/mi
     EXCEPTION WHEN unique_violation THEN NULL; END;
   END $$`);
   const insert = (version, status, reviewed) => `INSERT INTO course_document_versions
-    (document_id,version,status,original_name,format,size_bytes,storage_public_id,content_hash,idempotency_key,extraction_state,extracted_text,uploaded_by_id,reviewed_by_id,reviewed_at,published_at)
+    (document_id,version,status,original_name,format,size_bytes,storage_key,content_hash,idempotency_key,extraction_state,extracted_text,uploaded_by_id,reviewed_by_id,reviewed_at,published_at)
     VALUES ('00000000-0000-4000-8000-000000000003',${version},'${status}','guide.pdf','pdf',100,'private/file.pdf',repeat('a',64),uuid_generate_v4(),'READY','Texto oficial','00000000-0000-4000-8000-000000000002',${reviewed ? "'00000000-0000-4000-8000-000000000002',now(),now()" : 'NULL,NULL,NULL'})`;
   statements.push(`DO $$ BEGIN BEGIN ${insert(1, 'PUBLISHED', false)}; RAISE EXCEPTION 'Unreviewed publication accepted'; EXCEPTION WHEN check_violation THEN NULL; END; END $$`);
   statements.push(insert(1, 'PUBLISHED', true));

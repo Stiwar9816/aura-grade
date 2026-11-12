@@ -32,23 +32,14 @@ export class Submission {
   @Field(() => ID, { description: 'Submission ID' })
   id: string;
 
-  @Column({ name: 'cloudinary_public_id', type: 'text', nullable: true })
-  cloudinaryPublicId?: string | null;
+  @Column({ name: 'storage_key', type: 'text', nullable: true })
+  storageKey?: string | null;
 
   @Column({ name: 'idempotency_key', type: 'uuid', nullable: true })
   idempotencyKey?: string | null;
 
   @Column({ name: 'content_hash', type: 'varchar', length: 64, nullable: true })
   contentHash?: string | null;
-
-  @ApiProperty({
-    example: 'https://example.com/file.docx',
-    description: 'URL of the file stored (Cloudinary)',
-    format: 'uri',
-  })
-  @Column({ type: 'text', nullable: true })
-  @Field(() => String, { description: 'URL of the file stored (Cloudinary)', nullable: true })
-  fileUrl?: string;
 
   @ApiProperty({
     example: 'Extracted text from the document for the AI',

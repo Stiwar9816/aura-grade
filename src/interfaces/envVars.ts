@@ -20,9 +20,11 @@ export interface EnvVars {
   RESEND_USER_INVITATION_TEMPLATE_ID: string;
   APP_NAME: string;
   FRONTEND_URL: string;
-  CLOUDINARY_API_KEY: string;
-  CLOUDINARY_API_SECRET: string;
-  CLOUDINARY_NAME: string;
+  STORAGE_S3_ENDPOINT: string;
+  STORAGE_S3_REGION: string;
+  STORAGE_S3_ACCESS_KEY_ID: string;
+  STORAGE_S3_SECRET_ACCESS_KEY: string;
+  STORAGE_BUCKET: string;
   AI_PROVIDER: string;
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
