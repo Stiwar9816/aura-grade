@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://cwqqnloewcseaoxzuhrf.supabase.co/storage/v1/object/sign/auragrade/auragrade.png?token=eyJraWQiOiJkYzM0OTJkNi04MmNlLTRiMDAtYjViZC05ODk2NDAwM2JlODYiLCJhbGciOiJFUzI1NiJ9.eyJ1cmwiOiJhdXJhZ3JhZGUvYXVyYWdyYWRlLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3OTQ1MDE2ODgsImV4cCI6MjEwOTg2MTY4OH0._UhmAzTz3R0g0mzLPo298aWq6nQMtw6TSCXKBlBkUbaULH0gUPXaLW6AhkgzKUcCaLpjMIjsj75S_8KSrk4ESQ" width="500" alt="AuraGrade Logo" /></a>
+  <a href="https://aura-grade-front.vercel.app/" target="blank"><img src="https://cwqqnloewcseaoxzuhrf.supabase.co/storage/v1/object/sign/auragrade/auragrade.png?token=eyJraWQiOiJkYzM0OTJkNi04MmNlLTRiMDAtYjViZC05ODk2NDAwM2JlODYiLCJhbGciOiJFUzI1NiJ9.eyJ1cmwiOiJhdXJhZ3JhZGUvYXVyYWdyYWRlLnBuZyIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3OTQ1MDE2ODgsImV4cCI6MjEwOTg2MTY4OH0._UhmAzTz3R0g0mzLPo298aWq6nQMtw6TSCXKBlBkUbaULH0gUPXaLW6AhkgzKUcCaLpjMIjsj75S_8KSrk4ESQ" width="500" alt="AuraGrade Logo" /></a>
 </p>
 
 # 🚀 AuraGrade - NestJS (Clasificación asistida por IA)
@@ -12,41 +12,65 @@
 [![Gemini](https://img.shields.io/badge/Gemini-412991?style=for-the-badge&logo=gemini-ai&logoColor=white)](https://gemini.google.com/)
 [![Supabase](https://img.shields.io/badge/Supabase_Storage-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/storage)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Redis](https://img.shields.io/badge/Redis-DC3814?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![Redis](https://img.shields.io/badge/Upstash_Redis-00E9A3?style=for-the-badge&logo=upstash&logoColor=white)](https://upstash.com/)
+[![Render](https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://render.com/)
 [![CI/CD](https://img.shields.io/badge/CI/CD-412991?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-API avanzada para la gestión y calificación automática de trabajos universitarios. AuraGrade utiliza Inteligencia Artificial para analizar documentos (.docx), comparar el contenido con rúbricas dinámicas y proporcionar feedback detallado en tiempo real.
+API para la gestión y calificación asistida por IA de trabajos académicos. AuraGrade analiza entregas en DOCX, las compara con rúbricas versionadas y genera un borrador de evaluación que el docente revisa antes de publicar. También administra la biblioteca de documentos de cada curso (PDF/DOCX) y un asistente que responde con base en esos documentos.
+
+## 🗺️ Arquitectura de despliegue
+
+| Componente       | Servicio                     | Notas                                                         |
+| :--------------- | :--------------------------- | :------------------------------------------------------------ |
+| API NestJS       | Render (Web Service, Docker) | Proceso continuo: HTTP, workers de BullMQ, outbox y timers    |
+| Frontend + BFF   | Vercel (`aura-grade-front`)  | Único cliente autorizado del backend (`BFF_SHARED_SECRET`)    |
+| PostgreSQL 17    | Supabase                     | `pgvector` para RAG y `pg_cron` para limpieza programada      |
+| Archivos         | Supabase Storage             | Bucket privado `auragrade`, acceso por API S3 y URLs firmadas |
+| Redis            | Upstash                      | Colas BullMQ, sesiones y rate limiting (TLS, `rediss://`)     |
+| Correo / Errores | Resend / Sentry              |                                                               |
+
+La API no usa la API REST, Auth ni Realtime de Supabase: los roles `anon`,
+`authenticated` y `service_role` no tienen permisos sobre las tablas de
+`public`.
 
 ## ✨ Características
 
 ### 🤖 Inteligencia Artificial & Automatización
 
-- **Evaluación Automática**: Análisis de contenido con OpenAI (GPT-4) o Gemini (gemini-2.5-flash) basado en rúbricas personalizadas.
-- **Extracción de Texto**: Soporte nativo para lectura de archivos DOCX.
-- **Feedback Estructurado**: Generación de puntuaciones por criterio y retroalimentación cualitativa.
+- **Evaluación asistida**: borrador de calificación con OpenAI (`gpt-4o`) o Gemini (`gemini-3.5-flash`) según rúbricas versionadas; el docente revisa y publica.
+- **Extracción de texto**: DOCX para entregas; PDF y DOCX para documentos del curso.
+- **Feedback estructurado**: puntaje por criterio, retroalimentación cualitativa, diagnósticos de calificación y solicitudes de reevaluación.
+- **Biblioteca y asistente del curso (RAG)**: documentos oficiales versionados con revisión y publicación, fragmentados e indexados con `gemini-embedding-001` en `pgvector`.
+- **Exportación para entrenamiento**: historial de calificaciones exportable en JSONL.
 
 ### ☁️ Gestión de Archivos
 
-- **Carga Directa**: Upload de archivos a almacenamiento privado (Supabase Storage) mediante GraphQL Streams.
-- **Validación**: Control de tipos MIME y tamaño máximo (15MB).
+- **Almacenamiento privado**: Supabase Storage mediante su API compatible con S3 (`src/storage`). Las llaves S3 solo dan acceso a Storage, no a la base de datos.
+- **Organización**: bucket `auragrade` con carpetas `submissions/` y `course-documents/`; claves `<carpeta>/<uuid>.<pdf|docx>` validadas por carpeta antes de cada operación.
+- **Descargas**: URLs firmadas de 60 segundos emitidas tras validar sesión y permisos. El campo GraphQL `fileUrl` devuelve la ruta del BFF, nunca una URL del proveedor.
+- **Validación**: el bucket solo admite `application/pdf` y DOCX, con máximo 15 MB.
 
-### 🔔 Tiempo Real
+### 🔔 Notificaciones
 
-- **WebSocket Gateway**: Notificaciones en vivo sobre el estado de la evaluación (Procesando -> Completado).
-- **Salas Privadas**: Canales seguros por usuario para recibir actualizaciones personales.
+- **Centro in-app, correo, Web Push y Telegram**, con preferencias por usuario.
+- **WebSocket Gateway** (Socket.io) disponible para actualizaciones del estado de calificación.
 
 ### 🛡️ Seguridad y Rendimiento
 
-- **Rate Limiting**: Protección global contra abusos mediante `@nestjs/throttler` (100 req/min).
-- **Caché con Redis**: Optimización de costos y velocidad en evaluaciones de IA usando `CACHE_MANAGER`.
+- **Rate Limiting**: `@nestjs/throttler` con almacenamiento en Redis (200 req/min por cliente).
+- **Mínimo privilegio en base de datos**: la API conecta con el rol `aura_grade_app` (solo lectura/escritura de datos); las migraciones usan el rol administrador.
+- **Auditoría**: registro durable de acciones administrativas con retención de 30 días.
 - **Validación de Entorno**: Esquemas de validación con Joi para asegurar que la App no arranque con variables faltantes.
 - **Docker Hardening**: Imagen basada en Alpine (Node 22 LTS), Multi-stage builds y ejecución segura con usuario no-root.
 
 ### ⚙️ Procesamiento Asíncrono y Colas
 
-- **BullMQ**: Procesamiento asíncrono y durable para evaluaciones con IA y notificaciones de nuevas entregas y calificaciones publicadas.
-- **Bull Board**: Panel de control interactivo para monitorizar el estado de los trabajos (jobs) en tiempo real.
-- **Entrega idempotente**: Registro por evento y canal para reintentar solo el correo o push pendiente sin duplicar el canal ya completado.
+- **BullMQ**: colas `grading`, `notifications`, `audit` y `telegram`.
+- **Outbox transaccional**: los eventos se guardan en `outbox_events` dentro de la misma transacción y un despachador (cada 5 s) los publica en BullMQ; un reconciliador recupera trabajos perdidos.
+- **Bajo consumo en Redis**: workers y listeners esperan trabajos hasta 5 minutos por consulta (`src/common/queue/queue-polling.options.ts`), y el escaneo de recordatorios usa un timer del proceso en lugar de un job repetitivo. Upstash cobra por comando; así el consumo en reposo baja a unos 4–5k comandos/día.
+- **Bull Board**: panel en `/queues` protegido con Basic Auth.
+- **Entrega idempotente**: registro por evento y canal para reintentar solo el canal pendiente.
+- **Limpieza programada**: `pg_cron` ejecuta `public.purge_expired_records()` a diario (ver [Retención de datos](#-retención-de-datos)).
 
 ### 🔐 Autenticación y Autorización
 
@@ -89,8 +113,9 @@ API avanzada para la gestión y calificación automática de trabajos universita
 
 - Node.js >= 22.x (LTS)
 - pnpm 11.23.0 (fijado en `package.json` y en la imagen Docker)
-- Docker & Docker Compose (para DB y Redis)
-- Proyecto de Supabase con un bucket privado de Storage y llaves S3
+- Docker & Docker Compose (PostgreSQL con pgvector + pg_cron y Redis locales)
+- Proyecto de Supabase (PostgreSQL y Storage con un bucket privado y llaves S3)
+- Base Redis en Upstash para producción
 - Cuenta y API key de Resend
 - API Key de OpenAI o Gemini
 - Proyecto y DSN de Sentry (opcional)
@@ -142,6 +167,13 @@ verifica estos grupos antes de iniciar la API:
   `RESEND_USER_INVITATION_TEMPLATE_ID`.
 - IA: `AI_PROVIDER=openai` o `AI_PROVIDER=gemini` y la clave del proveedor
   seleccionado.
+- Almacenamiento: `STORAGE_S3_ENDPOINT`
+  (`https://<project-ref>.storage.supabase.co/storage/v1/s3`),
+  `STORAGE_S3_REGION`, `STORAGE_S3_ACCESS_KEY_ID`,
+  `STORAGE_S3_SECRET_ACCESS_KEY` y `STORAGE_BUCKET`. Las llaves se crean en
+  Supabase > Storage > Settings > S3 Connection. Para desarrollo usa un bucket
+  distinto al de producción.
+- Notificaciones: `VAPID_*` y, si se habilita Telegram, `TELEGRAM_*`.
 - Seguridad: `JWT_SECRET`, `BASIC_AUTH_PASSWORD`, `BFF_SHARED_SECRET`,
   `METRICS_TOKEN` y `AUTH_2FA_ENCRYPTION_KEY`.
 - Observabilidad: `SENTRY_ENABLED`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`,
@@ -153,7 +185,10 @@ Redis admite dos configuraciones excluyentes según el entorno:
 | :--------------------------------------- | :----------------------------------------- |
 | API dentro del Compose de desarrollo     | `REDIS_HOST=redis` y `REDIS_PORT=6379`     |
 | API local con Redis publicado por Docker | `REDIS_HOST=localhost` y `REDIS_PORT=6379` |
-| Producción                               | `REDIS_URL=redis://...` o `rediss://...`   |
+| Producción (Upstash)                     | `REDIS_URL=rediss://default:...@...:6379`  |
+
+En Upstash desactiva **Eviction**: BullMQ requiere `noeviction` para no perder
+trabajos (`upstash redis disable-eviction --db-id <DB_ID>`).
 
 En producción, `BFF_SHARED_SECRET`, `METRICS_TOKEN` y
 `AUTH_2FA_ENCRYPTION_KEY` deben tener al menos 32 caracteres. Las variables
@@ -235,6 +270,12 @@ recordatorio manual con `POST /api/notifications/assignments/:assignmentId/remin
 el envío manual aplica un enfriamiento real de seis horas por estudiante y tarea.
 
 ### 3. Iniciar Servicios (Docker)
+
+La imagen local de PostgreSQL (`docker/postgres/Dockerfile`) compila pgvector
+0.8.7 y pg_cron 1.6.4, la misma versión de pg_cron que usa Supabase. Compose la
+inicia con `shared_preload_libraries=pg_cron` y `cron.database_name=${DB_NAME}`,
+de modo que las migraciones y los jobs programados se comportan igual en local y
+en producción.
 
 Para ejecutar API, PostgreSQL y Redis dentro de Docker:
 
@@ -329,23 +370,25 @@ Cada PR que cambie el esquema debe incluir:
 
 Después de aprobar y fusionar el PR, el responsable ejecuta manualmente el
 workflow de GitHub Actions **Production Database Migrations** desde `main`.
-Este flujo permite operar con un Web Service Free de Render, que no ofrece
-Shell ni SSH, y nunca se dispara con un `push` o un despliegue.
+Este flujo no requiere Shell ni SSH en Render y nunca se dispara con un `push`
+o un despliegue.
 
 Configura estos secretos en **GitHub > Settings > Secrets and variables >
 Actions**:
 
-```text
-PRODUCTION_DB_HOST
-PRODUCTION_DB_NAME
-PRODUCTION_DB_USERNAME
-PRODUCTION_DB_PASSWORD
-```
+| Secreto                               | Valor (Supabase, rol administrador)                    |
+| :------------------------------------ | :----------------------------------------------------- |
+| `PRODUCTION_DB_HOST`                  | `aws-1-us-east-1.pooler.supabase.com` (Session pooler) |
+| `PRODUCTION_DB_PORT`                  | `5432`                                                 |
+| `PRODUCTION_DB_NAME`                  | `postgres`                                             |
+| `PRODUCTION_DB_USERNAME`              | `postgres.<project-ref>`                               |
+| `PRODUCTION_DB_PASSWORD`              | Contraseña del administrador de la base                |
+| `PRODUCTION_DB_SSL_MODE`              | `require`                                              |
+| `PRODUCTION_DB_CONNECTION_TIMEOUT_MS` | `10000`                                                |
 
-Usa el hostname **externo** de Render PostgreSQL. El workflow fija el puerto
-`5432`, `STATE=prod` y `DB_SSL_MODE=require`. PostgreSQL debe permitir conexiones
-externas desde el runner de GitHub; si existe una lista de acceso restrictiva,
-la conexión será rechazada.
+Las migraciones crean tablas, funciones y jobs de `pg_cron`, por eso usan el rol
+administrador y **no** `aura_grade_app`. No uses la conexión directa
+`db.<ref>.supabase.co`: en el plan gratuito solo funciona por IPv6.
 
 Para ejecutar:
 
@@ -374,9 +417,8 @@ reinicia la aplicación. Antes de una migración destructiva, crea y comprueba u
 respaldo. En producción no uses `migration:revert`; corrige mediante una nueva
 migración revisada.
 
-- Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en Compose o con la
-  conexión interna de Render.
-- Usa `DB_SSL_MODE=require` con un endpoint externo que exija TLS.
+- Usa `DB_SSL_MODE=disable` con el PostgreSQL incluido en Compose.
+- Usa `DB_SSL_MODE=require` con Supabase.
 - Dentro de Compose, la API conecta a `db:5432`; `DB_PORT` solo cambia el puerto
   publicado en el host para desarrollo.
 
@@ -388,6 +430,41 @@ migración revisada.
 | `pnpm run migration:revert`    | Revierte la última migración local.               | Local       |
 | `pnpm run migration:show:prod` | Lista el estado del artefacto compilado.          | Prod/manual |
 | `pnpm run migration:run:prod`  | Aplica manualmente las migraciones compiladas.    | Prod/manual |
+
+### Rol de la aplicación en Supabase
+
+`scripts/provision-app-role.cjs` crea o actualiza el rol `aura_grade_app`
+(sin superusuario, sin crear tablas ni roles, máximo 20 conexiones), le otorga
+`SELECT/INSERT/UPDATE/DELETE` sobre `public` y permisos por defecto para tablas
+futuras, habilita `vector` y retira todo acceso de `anon`, `authenticated` y
+`service_role`. Es idempotente: ejecútalo con la conexión administradora antes
+de la primera migración y después de migraciones que creen tablas.
+
+```bash
+ADMIN_DATABASE_URL=... APP_DB_PASSWORD=... node scripts/provision-app-role.cjs
+```
+
+En Render la API usa `DB_USERNAME=aura_grade_app.<project-ref>` y el host del
+Session pooler. Las credenciales administradoras se guardan solo localmente
+(archivo ignorado por Git) y en los secretos de GitHub.
+
+### 🧹 Retención de datos
+
+La migración `ScheduleRecordRetention` crea `public.purge_expired_records()` y
+la programa con `pg_cron` todos los días a las 08:30 GMT (03:30 en Bogotá):
+
+| Tabla                     | Se elimina                                                                   |
+| :------------------------ | :--------------------------------------------------------------------------- |
+| `audit_logs`              | Registros con más de 30 días                                                 |
+| `outbox_events`           | Eventos despachados hace más de 30 días, salvo calificaciones aún pendientes |
+| `notification_deliveries` | Más de 90 días y sin evento de outbox asociado                               |
+| `in_app_notifications`    | Leídas hace más de 90 días o con más de 180 días                             |
+| `telegram_link_tokens`    | Usados o vencidos hace más de un día                                         |
+
+Los plazos superan la retención de trabajos de BullMQ para no romper la
+idempotencia. La migración falla si `pg_cron` no está precargado; solo el CI
+la ejecuta con `ALLOW_MISSING_PG_CRON=true`. Para cambiar un plazo, crea una
+migración nueva con `CREATE OR REPLACE FUNCTION`.
 
 ### Bootstrap institucional y aprobación de cuentas
 
@@ -496,12 +573,22 @@ mantienen manualmente en este documento porque cambian con cada suite añadida.
 
 El proyecto incluye un pipeline automatizado con **GitHub Actions** (`.github/workflows/main.yml`) que realiza:
 
+- **Verificación**: type check, pruebas (incluida integración con Redis), build y
+  aplicación de todas las migraciones sobre una base aislada con pgvector.
 - **Build & Push**: Construcción de la imagen Docker y subida automática a Docker Hub.
+- **Production Database Migrations**: workflow manual para migrar Supabase.
 - **Instalación reproducible**: Node 22 y pnpm 11.23.0 con lockfile congelado;
   las instalaciones Docker se ejecutan con `CI=true` para evitar solicitudes de
   confirmación sin TTY.
 
 ## 📖 Documentación de API
+
+### Health checks
+
+- `GET /api/health`: liveness sin consultar PostgreSQL ni Redis. Úsalo como
+  health check de Render.
+- `GET /api/health/providers`: estado de base de datos, Redis, disco y proveedor
+  de IA. Requiere sesión de administrador.
 
 ### Swagger (REST API)
 
@@ -531,22 +618,39 @@ mutation CreateSubmission($file: Upload!, $input: CreateSubmissionInput!) {
 
 ```
 src/
-├── ai/                   # Servicio de integración con OpenAI
-├── assignment/           # Gestión de tareas académicas
-├── auth/                 # Autenticación y Guards
-├── storage/              # Almacenamiento privado de archivos (Supabase Storage vía S3)
-├── common/               # Configuración Compartida
-├── config/               # Configuración de variables de entorno
-├── course/               # Gestión de cursos
+├── academic-access/      # Políticas de acceso académico
+├── academic-queries/     # Consultas académicas privadas
+├── ai/                   # Integración con OpenAI y Gemini
+├── assignment/           # Tareas, prórrogas y fechas límite
+├── audit/                # Auditoría durable (cola audit)
+├── auth/                 # Sesiones, 2FA, guards y decoradores
+├── common/               # Filtros, guards, throttler y opciones de colas
+├── config/               # Variables de entorno y DataSource
+├── course/               # Cursos y matrículas
+├── course-assistant/     # Asistente del curso (RAG)
+├── course-documents/     # Biblioteca de documentos versionados
+├── course-preparation/   # Preparación de material del curso
 ├── criterion/            # Criterios de evaluación
-├── evaluation/           # Lógica de calificaciones y feedback
-├── extractor/            # Extracción de texto (DOCX)
-├── mail/                 # Envío de correos electrónicos
-├── notifications/        # WebSockets, Web Push y cola durable de notificaciones
-├── rubric/               # Gestión de rúbricas dinámicas
-├── seed/                 # Poblado de datos iniciales
-├── submission/           # Gestión de entregas de estudiantes
-├── user/                 # Gestión de usuarios
+├── evaluation/           # Calificaciones, feedback y exportación de entrenamiento
+├── extractor/            # Extracción de texto (DOCX/PDF)
+├── feedback/             # Comentarios de usuarios
+├── health/               # Liveness y estado de dependencias
+├── institution/          # Instituciones y aprobación de cuentas
+├── mail/                 # Correo con Resend
+├── migrations/           # Migraciones TypeORM
+├── notifications/        # In-app, Web Push, correo y cola de notificaciones
+├── observability/        # Sentry y métricas
+├── onboarding/           # Primeros pasos
+├── operations/           # Operación administrativa (reintentos, colas)
+├── outbox/               # Outbox transaccional hacia BullMQ
+├── redis/                # Cliente Redis compartido
+├── reevaluation/         # Solicitudes de reevaluación
+├── rubric/               # Rúbricas versionadas
+├── seed/                 # Datos de prueba locales
+├── storage/              # Almacenamiento privado (Supabase Storage vía S3)
+├── submission/           # Entregas y procesador de calificación
+├── telegram/             # Bot y vinculación de Telegram
+├── user/                 # Usuarios
 └── main.ts               # Entry point
 ```
 
@@ -555,13 +659,14 @@ src/
 - **Framework**: **[NestJS](https://nestjs.com/)** - Framework Node.js progresivo
 - **Lenguaje**: **[TypeScript](https://www.typescriptlang.org/)** - Lenguaje de programación tipado
 - **API**: **[GraphQL](https://graphql.org/)** (Apollo Server)
-- **Base de Datos**: **[PostgreSQL](https://www.postgresql.org/)** + **[TypeORM](https://typeorm.io/)**
-- **Caché**: **[Redis](https://redis.io/)** + **[Cache Manager](https://github.com/node-cache-manager/node-cache-manager)**
-- **AI**: **[OpenAI](https://openai.com/)** GPT-4o | **[Gemini](https://gemini.com/)** gemini-2.5-flash
+- **Base de Datos**: **[PostgreSQL 17](https://www.postgresql.org/)** en **[Supabase](https://supabase.com/)** + **[TypeORM](https://typeorm.io/)**, con pgvector y pg_cron
+- **Redis**: **[Upstash](https://upstash.com/)** para colas, sesiones y rate limiting
+- **AI**: **[OpenAI](https://openai.com/)** gpt-4o | **[Gemini](https://ai.google.dev/)** gemini-3.5-flash y gemini-embedding-001
 - **Almacenamiento**: **[Supabase Storage](https://supabase.com/storage)** (API compatible con S3, URLs firmadas)
 - **Autenticación**: sesiones opacas en Redis + **[Passport](https://www.passportjs.org/)** + TOTP/OTP
 - **Seguridad**: **[Throttler](https://github.com/nestjs/throttler)** (Rate Limit)
-- **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**
+- **Despliegue**: **[Render](https://render.com/)** (API) y **[Vercel](https://vercel.com/)** (frontend)
+- **Herramientas**: **[Docker](https://www.docker.com/)**, **[GitHub Actions](https://github.com/features/actions)**, **[Mammoth](https://github.com/mwilliamson/mammoth)**, **[pdf-parse](https://www.npmjs.com/package/pdf-parse)**
 - **Testing**: **[Jest](https://jestjs.io/)**
 - **Mail**: **[Resend](https://resend.com/)**
 - **WebSockets**: **[Socket.io](https://socket.io/)**
