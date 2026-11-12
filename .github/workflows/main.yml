@@ -120,6 +120,9 @@ jobs:
           command: cves
           image: local://${{ secrets.DOCKERHUB_USERNAME }}/aura_grade:${{ github.sha }}
           only-severities: critical,high
+          only-vex-affected: true
+          vex-location: ./.github/vex
+          vex-author: <.*@aura-grade.invalid>
           exit-code: true
 
       - name: Build and push verified image
