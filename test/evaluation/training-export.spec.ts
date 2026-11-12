@@ -296,58 +296,223 @@ describe('Training export options', () => {
     });
   });
 
-  it('exports one JSON line per evaluation with input, teacher output and draft', async () => {
-    const f = fixture([evaluation(), evaluation({ id: 'eval-2' })]);
-    const result = await f.service.export(admin, 'jsonl');
-    expect(result).toMatchObject({ rows: 2, extension: 'jsonl' });
-    const lines = result.content
+  const jsonl = async (rows: unknown[], options = {}) =>
+    (await fixture(rows).service.export(admin, 'jsonl', options)).content
       .trimEnd()
       .split('\n')
       .map((line) => JSON.parse(line));
-    expect(lines).toHaveLength(2);
-    expect(lines[0].input.rubric.criteria.map((c: any) => c.id)).toEqual(['c1', 'c2']);
-    expect(lines[0].input).not.toHaveProperty('submission_text');
-    expect(lines[0].output).toEqual({
+
+  it('exports one self-contained JSON line per evaluation', async () => {
+    const f = fixture([evaluation(), evaluation({ id: 'eval-2' })]);
+    const result = await f.service.export(admin, 'jsonl');
+    expect(result).toMatchObject({ rows: 2, extension: 'jsonl' });
+    const [line] = await jsonl([evaluation()]);
+    expect(line).toMatchObject({ schema_version: 2, id: 'eval-1' });
+    expect(['train', 'validation', 'test']).toContain(line.split);
+    expect(line.input.assignment.title).toBe('Ensayo 1');
+    expect(line.input.rubric.criteria).toEqual([
+      expect.objectContaining({
+        id: 'c1',
+        title: 'Argumento',
+        description: 'Tesis clara',
+        weight: 60,
+      }),
+      expect.objectContaining({ id: 'c2', weight: 40 }),
+    ]);
+    // The label is the teacher's grade, with weights so the total can be re-derived.
+    expect(line.output).toEqual({
       total_score: 0,
       general_feedback: 'No cumple, "revisar"',
       criteria: [
-        { criterion_id: 'c1', score: 0, feedback: 'Sin tesis' },
-        { criterion_id: 'c2', score: 0, feedback: 'Ilegible' },
+        {
+          criterion_id: 'c1',
+          criterion_title: 'Argumento',
+          weight: 60,
+          score: 0,
+          weighted_contribution: 0,
+          feedback: 'Sin tesis',
+        },
+        {
+          criterion_id: 'c2',
+          criterion_title: 'Redacción',
+          weight: 40,
+          score: 0,
+          weighted_contribution: 0,
+          feedback: 'Ilegible',
+        },
       ],
     });
-    expect(lines[0].draft).toMatchObject({ prompt_version: 'grading-v2', total_score: 3 });
-    expect(lines[0].meta).toMatchObject({ score_delta: -3, adjustment_reason: 'AI_TOO_LENIENT' });
-    expect(lines[0].meta.student_pseudonym).toMatch(/^stu_[0-9a-f]{16}$/);
-    expect(JSON.stringify(lines)).not.toContain('student-1');
+    expect(line.draft).toMatchObject({
+      origin: 'AI',
+      ai_model: 'gemini-3.5-flash',
+      prompt_version: 'grading-v2',
+      used_grading_memory: false,
+      total_score: 3,
+    });
+    expect(line.draft.criteria[0]).toMatchObject({
+      score: 3,
+      weighted_contribution: 1.8,
+      feedback: 'Tesis débil',
+    });
+    expect(line.history.publication).toMatchObject({
+      published_at: '2026-11-02T10:00:00.000Z',
+      adjustment_reason: 'AI_TOO_LENIENT',
+      adjustment_note: 'Copiado',
+      total_score: 0,
+    });
+    expect(line.history).toMatchObject({ reevaluation: null, revision: null });
+    expect(line.signals).toEqual({
+      score_delta: -3,
+      absolute_score_delta: 3,
+      teacher_changed_score: true,
+      teacher_changed_feedback: true,
+      criteria_changed: 2,
+      criteria_total: 2,
+      revised_after_reevaluation: false,
+      complete: true,
+    });
+    expect(line.meta).toMatchObject({
+      institution_id: 'inst-1',
+      course_id: 'course-1',
+      course_name: 'Algoritmos II',
+      assignment_id: 'assignment-1',
+      language: 'es',
+      score_scale: { min: 0, max: 5 },
+      personal_data_redacted: true,
+    });
+    expect(line.meta.student_pseudonym).toMatch(/^stu_[0-9a-f]{16}$/);
+    expect(line.meta.reviewer_pseudonym).toMatch(/^tch_[0-9a-f]{16}$/);
   });
 
-  it('uses the re-evaluation correction as the JSONL target', async () => {
-    const f = fixture([
+  it('describes the submission without its text unless requested, and then adds chat messages', async () => {
+    const [without] = await jsonl([evaluation()]);
+    expect(without.input).not.toHaveProperty('submission_text');
+    expect(without).not.toHaveProperty('messages');
+    expect(without.submission).toEqual({
+      content_hash: 'hash-1',
+      characters: 23,
+      words: 5,
+      text_included: false,
+    });
+    expect(JSON.stringify(without)).not.toContain('Mi ensayo');
+    for (const leak of ['student-1', 'teacher-1', 'ana@example.test'])
+      expect(JSON.stringify(without)).not.toContain(leak);
+
+    const [withText] = await jsonl([evaluation()], { includeSubmissionText: true });
+    expect(withText.input.submission_text).toBe('Mi ensayo, de [NOMBRE] [NOMBRE]');
+    expect(withText.submission.text_included).toBe(true);
+    expect(withText.messages.map((m: any) => m.role)).toEqual(['system', 'user', 'assistant']);
+    expect(JSON.parse(withText.messages[1].content)).toEqual(withText.input);
+    expect(JSON.parse(withText.messages[2].content)).toEqual({
+      totalScore: 0,
+      generalFeedback: 'No cumple, "revisar"',
+      detailedFeedback: [
+        {
+          criterionId: 'c1',
+          criterion: 'Argumento',
+          score: 0,
+          weight: 60,
+          weightedContribution: 0,
+          observations: 'Sin tesis',
+        },
+        {
+          criterionId: 'c2',
+          criterion: 'Redacción',
+          score: 0,
+          weight: 40,
+          weightedContribution: 0,
+          observations: 'Ilegible',
+        },
+      ],
+    });
+  });
+
+  it('uses the re-evaluation correction as the label and keeps the full history', async () => {
+    const [line] = await jsonl(
+      [
+        evaluation({
+          reevaluationRequest: {
+            status: 'APPROVED',
+            reason: 'Revisar c1',
+            teacherResponse: 'De acuerdo',
+          },
+          reevaluationRevisionSnapshot: {
+            capturedAt: '2026-11-05T10:00:00.000Z',
+            totalScore: 2.4,
+            previousTotalScore: 0,
+            generalFeedback: 'Corregido',
+            adjustment: { reason: 'OTHER', note: null },
+            detailedFeedback: [{ criteriaId: 'c1', score: 4, feedback: 'Sí había tesis' }],
+          },
+        }),
+      ],
+      { includeSubmissionText: true }
+    );
+    expect(line.output.total_score).toBe(2.4);
+    expect(line.output.criteria[0]).toMatchObject({
+      score: 4,
+      weighted_contribution: 2.4,
+      feedback: 'Sí había tesis',
+    });
+    // Criteria the correction did not touch keep the published values.
+    expect(line.output.criteria[1]).toMatchObject({ score: 0, feedback: 'Ilegible' });
+    expect(line.history.publication.total_score).toBe(0);
+    expect(line.history.reevaluation).toEqual({
+      status: 'APPROVED',
+      student_reason: 'Revisar c1',
+      teacher_response: 'De acuerdo',
+    });
+    expect(line.history.revision).toEqual({
+      revised_at: '2026-11-05T10:00:00.000Z',
+      previous_total_score: 0,
+      adjustment_reason: 'OTHER',
+      adjustment_note: null,
+    });
+    expect(line.signals).toMatchObject({
+      revised_after_reevaluation: true,
+      score_delta: -0.6,
+      criteria_changed: 2,
+    });
+    expect(JSON.parse(line.messages[2].content).totalScore).toBe(2.4);
+  });
+
+  it('keeps one student in a single split and flags incomplete or unredacted examples', async () => {
+    const lines = await jsonl([
+      evaluation(),
+      evaluation({ id: 'eval-2' }),
+      evaluation({ id: 'eval-3' }),
+    ]);
+    expect(new Set(lines.map((l) => l.split)).size).toBe(1);
+
+    const [incomplete] = await jsonl([
       evaluation({
-        reevaluationRevisionSnapshot: {
-          totalScore: 2.4,
-          generalFeedback: 'Corregido',
-          adjustment: { reason: 'OTHER', note: null },
-          detailedFeedback: [{ criteriaId: 'c1', score: 4, feedback: 'Sí había tesis' }],
+        teacherReviewSnapshot: {
+          ...evaluation().teacherReviewSnapshot,
+          detailedFeedback: [{ criteriaId: 'c1', score: 0, feedback: 'Sin tesis' }],
         },
       }),
     ]);
-    const [line] = (await f.service.export(admin, 'jsonl', { includeSubmissionText: true })).content
-      .trimEnd()
-      .split('\n')
-      .map((l) => JSON.parse(l));
-    expect(line.output.total_score).toBe(2.4);
-    expect(line.output.criteria[0]).toEqual({
-      criterion_id: 'c1',
-      score: 4,
-      feedback: 'Sí había tesis',
+    expect(incomplete.signals.complete).toBe(false);
+    expect(incomplete.output.criteria[1]).toMatchObject({ score: '', weighted_contribution: '' });
+
+    const [raw] = await jsonl([evaluation()], {
+      redactPersonalData: false,
+      includeSubmissionText: true,
     });
-    expect(line.output.criteria[1]).toEqual({ criterion_id: 'c2', score: 0, feedback: 'Ilegible' });
-    expect(line.meta).toMatchObject({
-      revised_after_reevaluation: true,
-      adjustment_reason: 'OTHER',
-    });
-    expect(line.input.submission_text).toBe('Mi ensayo, de [NOMBRE] [NOMBRE]');
+    expect(raw.meta.personal_data_redacted).toBe(false);
+    expect(raw.input.submission_text).toBe('Mi ensayo, de Ana Pérez');
+  });
+
+  it('marks drafts graded with the correction memory', async () => {
+    const [line] = await jsonl([
+      evaluation({
+        originalDraftSnapshot: {
+          ...evaluation().originalDraftSnapshot,
+          promptVersion: 'grading-v2+memory',
+        },
+      }),
+    ]);
+    expect(line.draft.used_grading_memory).toBe(true);
   });
 
   it('returns an empty JSONL file when nothing is exportable', async () => {

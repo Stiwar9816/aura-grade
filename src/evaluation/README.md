@@ -40,7 +40,7 @@ Ninguno se sobrescribe. Las evaluaciones publicadas antes de `PreserveEvaluation
 - Es POST a propósito: las peticiones que modifican se auditan, así que cada descarga queda en `audit_logs` (recurso `TrainingExport`) con las opciones usadas.
 - `evaluations`: una fila por evaluación con borrador, versión final, diferencia, motivo, reevaluación y corrección. `criteria`: una fila por criterio de la rúbrica vigente al calificar.
 - Personas seudonimizadas con HMAC-SHA256 (`stu_…`, `tch_…`), estables entre archivos. Clave: `TRAINING_EXPORT_PSEUDONYM_SECRET`, o `JWT_SECRET` si falta; cambiarla cambia todos los seudónimos. Sin nombre, correo ni documento.
-- `jsonl`: un ejemplo por línea con `input` (tarea, rúbrica y, si se pide, la entrega), `output` (calificación vigente del docente por criterio), `draft` (lo que propuso la IA) y `meta`.
+- `jsonl`: un ejemplo autocontenido por línea (ver «Formato JSONL»).
 - `courseId` limita la exportación a un curso, siempre dentro de la institución del administrador.
 - El texto de la entrega solo se incluye con `includeSubmissionText: true` (en `evaluations` y `jsonl`).
 - **Limpieza de datos personales** (`redactPersonalData`, activa salvo que se envíe `false`): en comentarios, notas, motivos de reevaluación y texto de entregas reemplaza correos, números largos (teléfonos, documentos) y los nombres y apellidos del estudiante y del docente de ese registro por `[CORREO]`, `[NUMERO]` y `[NOMBRE]`. Es heurística: no reconoce nombres de terceros ni datos escritos de forma inusual, y puede tapar una palabra común que coincida con un nombre. No sustituye una revisión antes de compartir el archivo.
@@ -48,6 +48,25 @@ Ninguno se sobrescribe. Las evaluaciones publicadas antes de `PreserveEvaluation
 - Se genera en memoria: adecuado para el volumen de un piloto; con decenas de miles de evaluaciones habría que paginar o transmitir.
 
 El uso de estos datos para entrenar un modelo es una finalidad distinta a calificar. No se implementó un registro de autorización: obtenerla y decidir qué se exporta es responsabilidad de la institución.
+
+## Formato JSONL (`schema_version: 2`)
+
+Cada línea es un objeto JSON con:
+
+| Campo | Contenido |
+| --- | --- |
+| `schema_version`, `id` | Versión del formato (`TRAINING_SCHEMA_VERSION`) e identificador de la evaluación |
+| `split` | `train` / `validation` / `test` (80/10/10), determinista por estudiante: el trabajo de una persona nunca cae en dos conjuntos |
+| `input` | `assignment` (título y descripción), `rubric` (criterios con descripción, peso, puntos máximos y niveles) y `submission_text` si se pidió |
+| `output` | **La etiqueta**: nota vigente del docente, comentario general y, por criterio, nota, peso, contribución ponderada y comentario. Si hubo corrección por reevaluación es esa, y los criterios que no tocó conservan lo publicado |
+| `draft` | Lo que propuso la IA (o el borrador manual): origen, modelo, versión del prompt, `used_grading_memory`, fecha y la misma estructura de notas |
+| `history` | `publication` (nota publicada, motivo y nota del ajuste), `reevaluation` (estado, motivo del estudiante, respuesta) y `revision` (fecha, nota anterior, motivo) |
+| `signals` | Diferencia de nota y su valor absoluto, si cambió la nota o el comentario, criterios cambiados, `revised_after_reevaluation` y `complete` (falso si falta la nota de algún criterio: filtrar antes de entrenar) |
+| `submission` | Hash, caracteres y palabras de la entrega, y `text_included`. Presentes aunque no se incluya el texto |
+| `meta` | Institución, curso, actividad, seudónimos de estudiante y docente, idioma, escala y `personal_data_redacted` |
+| `messages` | Conversación lista para ajuste fino (sistema, usuario con `input`, asistente con la calificación en el mismo formato que usa el calificador). **Solo cuando se incluye el texto de la entrega** |
+
+Subir `TRAINING_SCHEMA_VERSION` al cambiar la forma. Los campos numéricos sin dato van como cadena vacía.
 
 ## Pruebas
 
