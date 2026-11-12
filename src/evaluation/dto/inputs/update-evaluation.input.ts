@@ -1,8 +1,9 @@
 // GraphQL
 import { InputType, Field, ID, Float } from '@nestjs/graphql';
 // Validators
-import { IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
+import { EvaluationAdjustmentReason } from 'src/enums';
 
 @InputType()
 export class UpdateEvaluationInput {
@@ -24,4 +25,18 @@ export class UpdateEvaluationInput {
   @Field(() => GraphQLJSON, { nullable: true, description: 'Retroalimentación detallada' })
   @IsOptional()
   detailedFeedback?: unknown;
+
+  @Field(() => EvaluationAdjustmentReason, {
+    nullable: true,
+    description: 'Motivo por el que el docente ajustó el borrador',
+  })
+  @IsEnum(EvaluationAdjustmentReason)
+  @IsOptional()
+  adjustmentReason?: EvaluationAdjustmentReason;
+
+  @Field(() => String, { nullable: true, description: 'Comentario breve sobre el ajuste' })
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  adjustmentNote?: string;
 }

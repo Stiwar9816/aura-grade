@@ -57,6 +57,18 @@ export class EvaluationResolver {
     return this.evaluationService.publish(id, updateEvaluationInput, user);
   }
 
+  @Mutation(() => Evaluation, { name: 'reviseEvaluation' })
+  @UseGuards(JwtAuthGuard)
+  reviseEvaluation(
+    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
+    @Args('input') input: UpdateEvaluationInput,
+    @Args('teacherResponse', { type: () => String, nullable: true })
+    teacherResponse: string | undefined,
+    @CurrentUser([UserRoles.Docente]) user: User
+  ): Promise<Evaluation> {
+    return this.evaluationService.revise(id, input, user, teacherResponse);
+  }
+
   @Mutation(() => Evaluation, { name: 'createManualEvaluationDraft' })
   @UseGuards(JwtAuthGuard)
   createManualEvaluationDraft(

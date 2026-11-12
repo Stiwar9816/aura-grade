@@ -28,4 +28,9 @@ export class CreateEvaluationInput {
   @IsOptional()
   @IsString()
   aiModelUsed?: string;
+
+  @Field(() => String, { nullable: true, description: 'Grading prompt version' })
+  @IsOptional()
+  @IsString()
+  promptVersion?: string;
 }

@@ -17,7 +17,12 @@ import { Queue } from 'bullmq';
 import { Evaluation } from './entities/evaluation.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 // Enums
-import { EvaluationOrigin, EvaluationStatus, SubmissionStatus } from 'src/enums';
+import {
+  EvaluationOrigin,
+  EvaluationStatus,
+  ReEvaluationStatus,
+  SubmissionStatus,
+} from 'src/enums';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
@@ -26,6 +31,7 @@ import { UserRoles } from 'src/auth/enums';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { recordOutboxEvent } from 'src/outbox/outbox';
 import { normalizeWeightedEvaluation } from './weighted-evaluation';
+import { ReEvaluationRequest } from 'src/reevaluation/entities/reevaluation-request.entity';
 
 @Injectable()
 export class EvaluationService {
@@ -195,6 +201,7 @@ export class EvaluationService {
       evaluation.teacherReviewSnapshot = {
         ...this.snapshotEvaluation(evaluation, 'TEACHER_PUBLICATION'),
         reviewerId: teacher.id,
+        adjustment: this.adjustmentOf(updateEvaluationInput),
       };
       evaluation.status = EvaluationStatus.PUBLISHED;
       const saved = await repository.save(evaluation);
@@ -211,6 +218,100 @@ export class EvaluationService {
       evaluationId: savedEvaluation.id,
     });
     return savedEvaluation;
+  }
+
+  /**
+   * One correction of a published grade, tied to the student's re-evaluation request. A pending
+   * request is approved in the same transaction, so it can never end up approved but uncorrected.
+   * The publication snapshot stays intact; the correction is stored as a third record.
+   */
+  async revise(
+    id: string,
+    input: UpdateEvaluationInput,
+    teacher: User,
+    teacherResponse?: string
+  ): Promise<Evaluation> {
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Evaluation);
+      await repository.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      const evaluation = await repository.findOne({
+        where: { id },
+        relations: this.evaluationRelations,
+      });
+      if (!evaluation) throw new NotFoundException('No se encontró la evaluación.');
+      this.assertTeacherOwner(evaluation, teacher);
+      if (input.id !== id)
+        throw new BadRequestException('La evaluación de la ruta no coincide con la enviada.');
+      const request = evaluation.reevaluationRequest;
+      if (
+        evaluation.status !== EvaluationStatus.PUBLISHED ||
+        !request ||
+        request.status === ReEvaluationStatus.REJECTED
+      )
+        throw new BadRequestException(
+          'Solo se puede corregir una evaluación publicada con una reevaluación pendiente o aprobada.'
+        );
+      if (evaluation.reevaluationRevisionSnapshot)
+        throw new ConflictException('Esta evaluación ya fue corregida por reevaluación.');
+      const response = teacherResponse?.trim() ?? '';
+      if (
+        request.status === ReEvaluationStatus.PENDING &&
+        (response.length < 10 || response.length > 2000)
+      )
+        throw new BadRequestException('La respuesta debe tener entre 10 y 2000 caracteres.');
+
+      const previousTotalScore = Number(evaluation.totalScore);
+      if (input.generalFeedback !== undefined) evaluation.generalFeedback = input.generalFeedback;
+      if (input.detailedFeedback !== undefined)
+        evaluation.detailedFeedback = input.detailedFeedback;
+      const normalized = normalizeWeightedEvaluation(
+        evaluation.detailedFeedback,
+        evaluation.submission.assignment.rubric?.criteria ?? []
+      );
+      evaluation.detailedFeedback = normalized.items;
+      evaluation.totalScore = normalized.totalScore;
+      this.validateScore(
+        Number(evaluation.totalScore),
+        evaluation.submission.assignment.rubric?.maxTotalScore
+      );
+      if (typeof evaluation.generalFeedback !== 'string' || !evaluation.generalFeedback.trim())
+        throw new BadRequestException('La retroalimentación final es obligatoria.');
+      evaluation.generalFeedback = evaluation.generalFeedback.trim();
+
+      evaluation.reevaluationRevisionSnapshot = {
+        ...this.snapshotEvaluation(evaluation, 'REEVALUATION_REVISION'),
+        reviewerId: teacher.id,
+        reevaluationRequestId: request.id,
+        previousTotalScore,
+        adjustment: this.adjustmentOf(input),
+      };
+      if (request.status === ReEvaluationStatus.PENDING) {
+        const reviewedAt = new Date();
+        await manager.getRepository(ReEvaluationRequest).update(request.id, {
+          status: ReEvaluationStatus.APPROVED,
+          teacherResponse: response,
+          reviewedAt,
+        });
+        Object.assign(request, {
+          status: ReEvaluationStatus.APPROVED,
+          teacherResponse: response,
+          reviewedAt,
+        });
+      }
+      return repository.save(evaluation);
+    });
+    this.notificationsGateway.notifyStudent(saved.submission.student.id, {
+      submissionId: saved.submission.id,
+      status: SubmissionStatus.PUBLISHED,
+      message: 'Tu calificación fue corregida tras la reevaluación.',
+      evaluationId: saved.id,
+    });
+    return saved;
+  }
+
+  private adjustmentOf(input: UpdateEvaluationInput | undefined) {
+    const note = input?.adjustmentNote?.trim();
+    return { reason: input?.adjustmentReason ?? null, note: note || null };
   }
 
   async findAll(actor: User): Promise<Evaluation[]> {
@@ -356,6 +457,7 @@ export class EvaluationService {
         captureStage,
         origin: evaluation.origin,
         aiModelUsed: evaluation.aiModelUsed ?? null,
+        promptVersion: evaluation.promptVersion ?? null,
         totalScore: evaluation.totalScore,
         generalFeedback: evaluation.generalFeedback,
         detailedFeedback: evaluation.detailedFeedback,

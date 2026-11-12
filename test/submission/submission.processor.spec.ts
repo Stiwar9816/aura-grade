@@ -12,6 +12,7 @@ describe('SubmissionProcessor', () => {
   const evaluationService = { createDraft: jest.fn() };
   const notificationsGateway = { notifyStudent: jest.fn() };
   const config = { get: jest.fn().mockReturnValue('gemini') };
+  const gradingMemory = { calibrationFor: jest.fn().mockResolvedValue(null) };
   const processor = new SubmissionProcessor(
     submissionRepository as never,
     extractorService as never,
@@ -19,7 +20,8 @@ describe('SubmissionProcessor', () => {
     evaluationService as never,
     notificationsGateway as never,
     config as never,
-    { downloadUrl: jest.fn(() => 'https://api.cloudinary.com/download') } as never
+    { downloadUrl: jest.fn(() => 'https://api.cloudinary.com/download') } as never,
+    gradingMemory as never
   );
   const job = {
     id: 'job-id',
@@ -144,5 +146,60 @@ describe('SubmissionProcessor', () => {
       status: 'DRAFT_ALREADY_EXISTS',
     });
     expect(notificationsGateway.notifyStudent).not.toHaveBeenCalled();
+  });
+
+  it('grades with the teacher correction memory and labels the draft', async () => {
+    submissionRepository.findOne.mockResolvedValue({
+      ...submission,
+      extractedText: 'Contenido',
+      assignment: { ...submission.assignment, user: { id: 'teacher-id' } },
+    });
+    gradingMemory.calibrationFor.mockResolvedValue({
+      text: 'CALIBRACION',
+      evaluations: 3,
+      examples: 1,
+    });
+    aiService.evaluateSubmission.mockResolvedValue({
+      totalScore: 4,
+      generalFeedback: 'Bien',
+      detailedFeedback: [],
+    });
+    evaluationService.createDraft.mockResolvedValue({ id: 'evaluation-id', totalScore: 4 });
+
+    await processor.process(job as never);
+
+    expect(gradingMemory.calibrationFor).toHaveBeenCalledWith('teacher-id', 'rubric-id');
+    expect(aiService.evaluateSubmission).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      'Ensayo',
+      'CALIBRACION'
+    );
+    expect(evaluationService.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ promptVersion: 'grading-v2+memory' })
+    );
+  });
+
+  it('labels a draft graded without memory with the plain prompt version', async () => {
+    submissionRepository.findOne.mockResolvedValue({ ...submission, extractedText: 'Contenido' });
+    gradingMemory.calibrationFor.mockResolvedValue(null);
+    aiService.evaluateSubmission.mockResolvedValue({
+      totalScore: 4,
+      generalFeedback: 'Bien',
+      detailedFeedback: [],
+    });
+    evaluationService.createDraft.mockResolvedValue({ id: 'evaluation-id', totalScore: 4 });
+
+    await processor.process(job as never);
+
+    expect(aiService.evaluateSubmission).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      'Ensayo',
+      undefined
+    );
+    expect(evaluationService.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ promptVersion: 'grading-v2' })
+    );
   });
 });

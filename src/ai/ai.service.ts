@@ -18,6 +18,12 @@ import {
 } from '../rubric/rubric.constants';
 import { AiSanitizer } from '../common/helpers/ai-sanitizer.helper';
 
+/** Bump together with any change to the grading prompt: it labels every stored draft. */
+export const GRADING_PROMPT_VERSION = 'grading-v2';
+/** Drafts graded with the teacher's correction history are labelled apart, so both can be compared. */
+export const gradingPromptVersion = (withMemory: boolean) =>
+  withMemory ? `${GRADING_PROMPT_VERSION}+memory` : GRADING_PROMPT_VERSION;
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -32,11 +38,16 @@ export class AiService {
     return this.aiProvider.modelName;
   }
 
-  async evaluateSubmission(extractedText: string, rubric: any, assignmentTitle: string) {
+  async evaluateSubmission(
+    extractedText: string,
+    rubric: any,
+    assignmentTitle: string,
+    calibration?: string
+  ) {
     // Generar una llave única basada en el contenido
     const hash = createHash('sha256')
       .update(
-        `grading-v2-${this.aiProvider.modelName}-${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}`
+        `${GRADING_PROMPT_VERSION}-${this.aiProvider.modelName}-${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}-${calibration ?? ''}`
       )
       .digest('hex');
     const cacheKey = `ai-evaluation:${hash}`;
@@ -55,7 +66,8 @@ export class AiService {
     const rawResult = await this.aiProvider.evaluateSubmission(
       extractedText,
       rubric,
-      assignmentTitle
+      assignmentTitle,
+      calibration
     );
     const result = this.validateWeightedEvaluation(rawResult, rubric);
 
