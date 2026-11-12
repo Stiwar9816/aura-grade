@@ -16,6 +16,16 @@ const { AppDataSource } = require('../dist/config/datasource.config');
       "SELECT column_name FROM information_schema.columns WHERE table_name='evaluations' AND column_name IN ('original_draft_snapshot','teacher_review_snapshot')"
     );
     assert.equal(columns.length, 2);
+    const [{ purged }] = await AppDataSource.query(
+      'SELECT public.purge_expired_records() AS purged'
+    );
+    assert.deepEqual(Object.keys(purged).sort(), [
+      'audit_logs',
+      'in_app_notifications',
+      'notification_deliveries',
+      'outbox_events',
+      'telegram_link_tokens',
+    ]);
     // Exercise only the new additive migration's down/up on this disposable schema.
     const {
       PreserveEvaluationReviewSnapshots1791806400000: Migration,

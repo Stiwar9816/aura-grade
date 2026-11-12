@@ -2,8 +2,17 @@ services:
   db:
     build:
       context: ./docker/postgres
-    image: aura-grade-postgres:17-vector0.8.7
+    image: aura-grade-postgres:17-vector0.8.7-cron1.6.4
     restart: always
+    # pg_cron must be preloaded and bound to the application database (Supabase does the same).
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=${DB_NAME}
+      - -c
+      - cron.timezone=GMT
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}

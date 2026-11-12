@@ -67,6 +67,8 @@ jobs:
           DB_USERNAME: aura_ci
           DB_PASSWORD: ci_database_only
           DB_SSL_MODE: disable
+          # The CI service image has pgvector but not pg_cron; only the schedule is skipped.
+          ALLOW_MISSING_PG_CRON: 'true'
           BOOTSTRAP_INSTITUTION_NAME: CI Institution
           BOOTSTRAP_INSTITUTION_SLUG: ci-institution
           BOOTSTRAP_INSTITUTION_EMAIL_DOMAIN: example.test
