@@ -1,3 +1,4 @@
+import { IDLE_EFFICIENT_QUEUE_EVENTS_OPTIONS } from 'src/common/queue/queue-polling.options';
 import { QueueEventsHost, QueueEventsListener, OnQueueEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
@@ -9,7 +10,7 @@ import { Submission } from './entities/submission.entity';
 import { SubmissionStatus } from 'src/enums';
 import { captureExhaustedQueueJob, captureOperationalException } from 'src/observability';
 
-@QueueEventsListener('grading')
+@QueueEventsListener('grading', IDLE_EFFICIENT_QUEUE_EVENTS_OPTIONS)
 export class GradingQueueEvents extends QueueEventsHost {
   private readonly logger = new Logger(GradingQueueEvents.name);
 

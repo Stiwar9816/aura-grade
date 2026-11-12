@@ -94,7 +94,7 @@ describe('CourseDocumentsService', () => {
       extractedText: 'Contenido oficial',
       pages: [],
       contentHash: 'a'.repeat(64),
-      storagePublicId: 'auragrade/course-documents/file.pdf',
+      storageKey: 'course-documents/file.pdf',
       reviewedAt: null,
     });
     documents.findOne.mockImplementation(async ({ where }) =>
@@ -116,10 +116,10 @@ describe('CourseDocumentsService', () => {
       contentHash: 'a'.repeat(64),
     });
     storage.uploadCourseDocument.mockResolvedValue({
-      publicId: 'auragrade/course-documents/new.pdf',
+      key: 'course-documents/new.pdf',
     });
     storage.deleteCourseDocument.mockResolvedValue(undefined);
-    storage.courseDocumentDownloadUrl.mockReturnValue('https://signed.example/file');
+    storage.courseDocumentDownloadUrl.mockResolvedValue('https://signed.example/file');
     service = new CourseDocumentsService(
       db as never,
       storage as never,
@@ -159,7 +159,7 @@ describe('CourseDocumentsService', () => {
     version.status = DocumentVersionStatus.PUBLISHED;
     const result = await service.detail('course', document.id, version.id, student);
     expect(result.extractedText).toBe('Contenido oficial');
-    expect(result).not.toHaveProperty('storagePublicId');
+    expect(result).not.toHaveProperty('storageKey');
     expect(result).not.toHaveProperty('document');
     expect(await service.download('course', document.id, version.id, student)).toBe(
       'https://signed.example/file'
@@ -319,25 +319,25 @@ describe('CourseDocumentsService', () => {
     await expect(service.upload('course', document.id, teacher, file, key)).rejects.toThrow(
       'database unavailable'
     );
-    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('auragrade/course-documents/new.pdf');
+    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('course-documents/new.pdf');
   });
   it('rechecks current access after upload and removes the file if the author was deactivated', async () => {
     storage.uploadCourseDocument.mockImplementationOnce(async () => {
       users.findOne.mockResolvedValue({ ...teacher, isActive: false });
-      return { publicId: 'auragrade/course-documents/new.pdf' };
+      return { key: 'course-documents/new.pdf' };
     });
     await expect(service.upload('course', document.id, teacher, file, key)).rejects.toBeInstanceOf(
       ForbiddenException
     );
     expect(versions.save).not.toHaveBeenCalled();
-    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('auragrade/course-documents/new.pdf');
+    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('course-documents/new.pdf');
   });
   it('removes the redundant file if an identical upload won the idempotency race', async () => {
     versions.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(version);
     const result = await service.upload('course', document.id, teacher, file, key);
     expect(result.id).toBe(version.id);
     expect(versions.save).not.toHaveBeenCalled();
-    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('auragrade/course-documents/new.pdf');
+    expect(storage.deleteCourseDocument).toHaveBeenCalledWith('course-documents/new.pdf');
   });
   it('archives the publication without deleting the original file', async () => {
     await service.archive('course', document.id, teacher);

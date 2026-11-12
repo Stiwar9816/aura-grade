@@ -2,7 +2,7 @@ import { NotificationQueueService } from 'src/notifications/notification-queue.s
 import { NotificationJobType } from 'src/notifications/notification-queue.constants';
 
 describe('NotificationQueueService', () => {
-  const queue = { getJob: jest.fn(), add: jest.fn(), upsertJobScheduler: jest.fn() };
+  const queue = { getJob: jest.fn(), add: jest.fn(), removeJobScheduler: jest.fn() };
   const metrics = { increment: jest.fn() };
   const service = new NotificationQueueService(queue as any, metrics as any);
 
@@ -10,7 +10,7 @@ describe('NotificationQueueService', () => {
     jest.clearAllMocks();
     queue.getJob.mockResolvedValue(null);
     queue.add.mockResolvedValue({ id: 'job-id' });
-    queue.upsertJobScheduler.mockResolvedValue({ id: 'scheduler-job' });
+    queue.removeJobScheduler.mockResolvedValue(false);
   });
 
   it('enqueues a retryable new-submission job with a stable identifier', async () => {
@@ -70,19 +70,30 @@ describe('NotificationQueueService', () => {
     expect(metrics.increment).toHaveBeenCalledWith('notification_enqueue_failed_total');
   });
 
-  it('registers the durable deadline reminder scheduler', async () => {
+  it('replaces the legacy job scheduler with a deduplicated in-process scan', async () => {
     await service.onModuleInit();
+    service.onModuleDestroy();
 
-    expect(queue.upsertJobScheduler).toHaveBeenCalledWith(
-      'assignment-deadline-reminder-scan',
-      { every: 30 * 60 * 1000 },
-      expect.objectContaining({ name: NotificationJobType.DEADLINE_REMINDER_SCAN })
-    );
+    expect(queue.removeJobScheduler).toHaveBeenCalledWith('assignment-deadline-reminder-scan');
     expect(queue.add).toHaveBeenCalledWith(
       NotificationJobType.DEADLINE_REMINDER_SCAN,
-      expect.objectContaining({ aggregateId: 'startup-scan' }),
-      expect.objectContaining({ jobId: expect.stringContaining('assignment-deadline-reminder-') })
+      expect.objectContaining({ aggregateId: 'scheduled-scan' }),
+      expect.objectContaining({
+        jobId: expect.stringContaining('assignment-deadline-reminder-scan-'),
+      })
     );
+  });
+
+  it('enqueues at most one deadline scan per interval bucket', async () => {
+    const now = Date.UTC(2026, 10, 12, 10, 5);
+    queue.getJob.mockResolvedValue({ id: 'already-queued' });
+
+    await service.enqueueDeadlineReminderScan(now);
+
+    expect(queue.getJob).toHaveBeenCalledWith(
+      `assignment-deadline-reminder-scan-${Math.floor(now / (30 * 60 * 1000))}`
+    );
+    expect(queue.add).not.toHaveBeenCalled();
   });
 
   it('uses a stable per-recipient key for assignment reminders', async () => {

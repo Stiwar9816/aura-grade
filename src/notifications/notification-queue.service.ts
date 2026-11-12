@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { AuthMetricsService } from 'src/observability';
 import {
@@ -21,6 +21,7 @@ const NOTIFICATION_JOB_OPTIONS = {
 
 const MANUAL_REMINDER_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const DEADLINE_REMINDER_SCAN_INTERVAL_MS = 30 * 60 * 1000;
+const LEGACY_DEADLINE_REMINDER_SCHEDULER_ID = 'assignment-deadline-reminder-scan';
 
 export type AssignmentReminderQueueResult = {
   eventKey: string;
@@ -29,7 +30,10 @@ export type AssignmentReminderQueueResult = {
 };
 
 @Injectable()
-export class NotificationQueueService implements OnModuleInit {
+export class NotificationQueueService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(NotificationQueueService.name);
+  private deadlineReminderTimer?: NodeJS.Timeout;
+
   constructor(
     @InjectQueue(NOTIFICATIONS_QUEUE) private readonly queue: Queue<NotificationJobData>,
     private readonly metrics: AuthMetricsService
@@ -55,32 +59,41 @@ export class NotificationQueueService implements OnModuleInit {
     );
   }
 
+  /**
+   * Scans are scheduled by an in-process timer instead of a BullMQ job scheduler: a pending
+   * repeatable job caps the notifications worker's long-poll at 10s, which multiplies idle
+   * Redis commands. The per-bucket jobId keeps one scan per interval across instances.
+   */
   async registerDeadlineReminderScheduler(): Promise<void> {
-    await this.queue.upsertJobScheduler(
-      'assignment-deadline-reminder-scan',
-      { every: DEADLINE_REMINDER_SCAN_INTERVAL_MS },
-      {
-        name: NotificationJobType.DEADLINE_REMINDER_SCAN,
-        data: {
-          type: NotificationJobType.DEADLINE_REMINDER_SCAN,
-          aggregateId: 'scheduled-scan',
-          eventKey: 'assignment-deadline-reminder-scan',
-        },
-        opts: { removeOnComplete: true, removeOnFail: 100 },
-      }
-    );
-    const scanBucket = Math.floor(Date.now() / DEADLINE_REMINDER_SCAN_INTERVAL_MS);
-    const startupEventKey = `assignment-deadline-reminder-startup-${scanBucket}`;
-    if (!(await this.queue.getJob(startupEventKey))) {
+    await this.queue.removeJobScheduler(LEGACY_DEADLINE_REMINDER_SCHEDULER_ID);
+    await this.enqueueDeadlineReminderScan();
+    this.deadlineReminderTimer = setInterval(() => {
+      this.enqueueDeadlineReminderScan().catch((error: unknown) =>
+        this.logger.error(
+          `No se pudo encolar el escaneo de recordatorios: ${error instanceof Error ? error.message : 'error desconocido'}`
+        )
+      );
+    }, DEADLINE_REMINDER_SCAN_INTERVAL_MS);
+    this.deadlineReminderTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.deadlineReminderTimer) clearInterval(this.deadlineReminderTimer);
+  }
+
+  async enqueueDeadlineReminderScan(now = Date.now()): Promise<void> {
+    const scanBucket = Math.floor(now / DEADLINE_REMINDER_SCAN_INTERVAL_MS);
+    const eventKey = `assignment-deadline-reminder-scan-${scanBucket}`;
+    if (!(await this.queue.getJob(eventKey))) {
       await this.queue.add(
         NotificationJobType.DEADLINE_REMINDER_SCAN,
         {
           type: NotificationJobType.DEADLINE_REMINDER_SCAN,
-          aggregateId: 'startup-scan',
-          eventKey: startupEventKey,
+          aggregateId: 'scheduled-scan',
+          eventKey,
         },
         {
-          jobId: startupEventKey,
+          jobId: eventKey,
           attempts: 3,
           backoff: { type: 'exponential', delay: 10_000 },
           removeOnComplete: { age: 60 * 60, count: 10 },

@@ -32,6 +32,8 @@
   "dependencies": {
     "@apollo/server": "^5.5.1",
     "@as-integrations/express5": "^1.1.2",
+    "@aws-sdk/client-s3": "^3.1166.0",
+    "@aws-sdk/s3-request-presigner": "^3.1166.0",
     "@bull-board/api": "^6.21.3",
     "@bull-board/express": "^6.21.3",
     "@bull-board/nestjs": "^6.21.3",
@@ -58,7 +60,6 @@
     "bullmq": "^5.81.4",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
-    "cloudinary": "^2.11.0",
     "dotenv": "^17.4.2",
     "express-basic-auth": "^1.2.1",
     "graphql": "^16.14.2",

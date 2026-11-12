@@ -97,7 +97,7 @@ async function main() {
         originalName: kind + '.pdf',
         format: 'pdf',
         sizeBytes: 100,
-        storagePublicId: 'never-uploaded-test-fixture',
+        storageKey: 'never-uploaded-test-fixture',
         contentHash: 'a'.repeat(64),
         idempotencyKey: randomUUID(),
         extractionState: DocumentExtractionState.READY,

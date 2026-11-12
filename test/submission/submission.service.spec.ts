@@ -19,7 +19,7 @@ describe('SubmissionService', () => {
   };
   const assignmentRepository = { findOne: jest.fn() };
   const gradingQueue = { add: jest.fn() };
-  const cloudinaryService = {
+  const storageService = {
     uploadSubmission: jest.fn(),
     deleteSubmission: jest.fn(),
   };
@@ -28,7 +28,7 @@ describe('SubmissionService', () => {
     submissionRepository as never,
     assignmentRepository as never,
     gradingQueue as never,
-    cloudinaryService as never,
+    storageService as never,
     notificationQueue as never,
     { extractFromBuffer: jest.fn(async () => 'Texto académico') } as never
   );
@@ -111,11 +111,10 @@ describe('SubmissionService', () => {
       })
     );
     assignmentRepository.findOne.mockResolvedValue(assignment);
-    cloudinaryService.uploadSubmission.mockResolvedValue({
-      secureUrl: 'https://example.com/entrega.docx',
-      publicId: 'auragrade/submissions/generated.docx',
+    storageService.uploadSubmission.mockResolvedValue({
+      key: 'submissions/generated.docx',
     });
-    cloudinaryService.deleteSubmission.mockResolvedValue(undefined);
+    storageService.deleteSubmission.mockResolvedValue(undefined);
     submissionRepository.create.mockImplementation((value) => value);
     submissionRepository.save.mockImplementation((value) => ({ ...value, id: 'submission-id' }));
     submissionRepository.remove.mockResolvedValue(undefined);
@@ -174,7 +173,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('No estás matriculado en el curso de esta tarea.');
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('accepts a submission after the general deadline when the student has an active extension', async () => {
@@ -217,7 +216,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('fecha límite');
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects a renamed file whose content is not a DOCX', async () => {
@@ -228,7 +227,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('contenido del archivo no corresponde a un DOCX válido');
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects a file above the real 15 MB stream limit', async () => {
@@ -241,11 +240,11 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('supera el límite de 15 MB');
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('does not persist or queue a submission when storage fails', async () => {
-    cloudinaryService.uploadSubmission.mockRejectedValue(new Error('Cloudinary unavailable'));
+    storageService.uploadSubmission.mockRejectedValue(new Error('Storage unavailable'));
 
     await expect(
       service.create(
@@ -253,7 +252,7 @@ describe('SubmissionService', () => {
         { assignmentId: assignment.id, idempotencyKey: '11111111-1111-4111-8111-111111111111' },
         student
       )
-    ).rejects.toThrow('Cloudinary unavailable');
+    ).rejects.toThrow('Storage unavailable');
 
     expect(submissionRepository.save).not.toHaveBeenCalled();
     expect(gradingQueue.add).not.toHaveBeenCalled();
@@ -269,9 +268,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('Database unavailable');
-    expect(cloudinaryService.deleteSubmission).toHaveBeenCalledWith(
-      'auragrade/submissions/generated.docx'
-    );
+    expect(storageService.deleteSubmission).toHaveBeenCalledWith('submissions/generated.docx');
     expect(gradingQueue.add).not.toHaveBeenCalled();
   });
 
@@ -287,7 +284,7 @@ describe('SubmissionService', () => {
     ).resolves.toEqual(expect.objectContaining({ id: 'submission-id' }));
 
     expect(submissionRepository.remove).not.toHaveBeenCalled();
-    expect(cloudinaryService.deleteSubmission).not.toHaveBeenCalled();
+    expect(storageService.deleteSubmission).not.toHaveBeenCalled();
   });
 
   it('scopes each role when listing submissions', async () => {
@@ -363,7 +360,7 @@ describe('SubmissionService', () => {
   it('atomically queues a retry for a failed submission owned by the teacher', async () => {
     const failedSubmission = {
       id: 'submission-id',
-      fileUrl: 'https://example.com/entrega.docx',
+      storageKey: 'submissions/entrega.docx',
       status: SubmissionStatus.FAILED,
       student,
       assignment: { user: teacher },
@@ -390,7 +387,7 @@ describe('SubmissionService', () => {
   it('rejects retrying another teacher submission', async () => {
     submissionRepository.findOne.mockResolvedValue({
       id: 'submission-id',
-      fileUrl: 'https://example.com/entrega.docx',
+      storageKey: 'submissions/entrega.docx',
       status: SubmissionStatus.FAILED,
       assignment: { user: { id: 'other-teacher-id' } },
     });
@@ -410,7 +407,7 @@ describe('SubmissionService', () => {
   it('prevents duplicate retries with an atomic status claim', async () => {
     submissionRepository.findOne.mockResolvedValue({
       id: 'submission-id',
-      fileUrl: 'https://example.com/entrega.docx',
+      storageKey: 'submissions/entrega.docx',
       status: SubmissionStatus.FAILED,
       assignment: { user: teacher },
     });
@@ -423,7 +420,7 @@ describe('SubmissionService', () => {
   it('rolls back the retry transaction when its durable event cannot be saved', async () => {
     submissionRepository.findOne.mockResolvedValue({
       id: 'submission-id',
-      fileUrl: 'https://example.com/entrega.docx',
+      storageKey: 'submissions/entrega.docx',
       status: SubmissionStatus.FAILED,
       assignment: { user: teacher },
     });
@@ -445,7 +442,7 @@ describe('SubmissionService', () => {
       )
     ).rejects.toThrow('ya fue calificada');
     expect(file.createReadStream).not.toHaveBeenCalled();
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('returns the original submission for a repeated request without uploading again', async () => {
@@ -453,7 +450,7 @@ describe('SubmissionService', () => {
       id: 'original-id',
       student,
       assignment,
-      cloudinaryPublicId: 'auragrade/submissions/original.docx',
+      storageKey: 'submissions/original.docx',
     };
     submissionRepository.findOne.mockResolvedValue(original);
     const file = makeFile();
@@ -465,7 +462,7 @@ describe('SubmissionService', () => {
       )
     ).resolves.toEqual(expect.objectContaining({ id: 'original-id' }));
     expect(file.createReadStream).not.toHaveBeenCalled();
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects reuse of a submission key for another assignment', async () => {
@@ -480,7 +477,7 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow('otra tarea');
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 
   it('does not offer a download to another student', async () => {
@@ -488,7 +485,7 @@ describe('SubmissionService', () => {
       id: 'original-id',
       student: { id: 'another-student' },
       assignment,
-      cloudinaryPublicId: 'auragrade/submissions/original.docx',
+      storageKey: 'submissions/original.docx',
     });
     await expect(service.download('original-id', student)).rejects.toThrow('No puedes acceder');
   });
@@ -504,6 +501,6 @@ describe('SubmissionService', () => {
         student
       )
     ).rejects.toThrow();
-    expect(cloudinaryService.uploadSubmission).not.toHaveBeenCalled();
+    expect(storageService.uploadSubmission).not.toHaveBeenCalled();
   });
 });

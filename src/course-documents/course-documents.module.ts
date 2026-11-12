@@ -4,7 +4,7 @@ import { CourseActivityConfirmation } from '../course-preparation/entities/cours
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicAccessModule } from '../academic-access/academic-access.module';
-import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { StorageModule } from '../storage/storage.module';
 import { CourseDocument } from './entities/course-document.entity';
 import { CourseDocumentVersion } from './entities/course-document-version.entity';
 import { CourseDocumentsService } from './course-documents.service';
@@ -15,7 +15,7 @@ import { DocumentExtractionService } from './document-extraction.service';
   imports: [
     TypeOrmModule.forFeature([CourseDocument, CourseDocumentVersion, CourseActivityConfirmation]),
     AcademicAccessModule,
-    CloudinaryModule,
+    StorageModule,
   ],
   controllers: [CourseDocumentsController, CoursePreparationController],
   providers: [CourseDocumentsService, DocumentExtractionService, CoursePreparationService],

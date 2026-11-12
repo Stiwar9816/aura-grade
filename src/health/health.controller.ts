@@ -23,14 +23,13 @@ export class HealthController {
     private openai: OpenaiHealthIndicator
   ) {}
 
+  /**
+   * Liveness only: platform health checks hit this every few seconds, so it must not touch
+   * Postgres or Redis (hosted Redis bills per command). Dependency status lives in /providers.
+   */
   @Get()
-  @HealthCheck()
   check() {
-    return this.health.check([
-      () => this.db.pingCheck('database'),
-      () => this.bullmq.isHealthy('redis_bullmq'),
-      () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
-    ]);
+    return { status: 'ok' };
   }
 
   @Get('providers')

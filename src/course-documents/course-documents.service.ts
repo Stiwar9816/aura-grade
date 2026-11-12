@@ -13,7 +13,7 @@ import { hasAcademicAccess } from '../academic-access/academic-access.policy';
 import { User } from '../user/entities/user.entity';
 import { Course } from '../course/entities/course.entity';
 import { UserRoles } from '../auth/enums';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { CourseDocument } from './entities/course-document.entity';
 import { CourseDocumentVersion } from './entities/course-document-version.entity';
 import { DocumentExtractionState, DocumentVersionStatus } from './document.enums';
@@ -41,7 +41,7 @@ export class CourseDocumentsService {
   private readonly logger = new Logger(CourseDocumentsService.name);
   constructor(
     private readonly db: DataSource,
-    private readonly storage: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly extraction: DocumentExtractionService,
     private readonly access: AcademicAccessService
   ) {}
@@ -126,7 +126,7 @@ export class CourseDocumentsService {
             originalName: file.originalname.replace(/[\\/\p{Cc}]/gu, '_').slice(0, 255),
             format: extracted.format,
             sizeBytes: file.buffer.length,
-            storagePublicId: stored.publicId,
+            storageKey: stored.key,
             contentHash: extracted.contentHash,
             idempotencyKey: key,
             extractionState: extracted.state as DocumentExtractionState,
@@ -148,9 +148,9 @@ export class CourseDocumentsService {
     } finally {
       if (!persisted) {
         try {
-          await this.storage.deleteCourseDocument(stored.publicId);
+          await this.storage.deleteCourseDocument(stored.key);
         } catch {
-          this.logger.error(`No se pudo limpiar el archivo huérfano ${stored.publicId}.`);
+          this.logger.error(`No se pudo limpiar el archivo huérfano ${stored.key}.`);
         }
       }
     }
@@ -180,7 +180,7 @@ export class CourseDocumentsService {
     actor: User
   ): Promise<string> {
     const version = await this.readVersion(courseId, documentId, versionId, actor);
-    return this.storage.courseDocumentDownloadUrl(version.storagePublicId);
+    return this.storage.courseDocumentDownloadUrl(version.storageKey);
   }
 
   async review(

@@ -166,9 +166,6 @@ type Submission {
   """Submission ID"""
   id: ID!
 
-  """URL of the file stored (Cloudinary)"""
-  fileUrl: String
-
   """Extracted text from the document for the AI"""
   extractedText: String
 
@@ -188,6 +185,11 @@ type Submission {
   student: User!
   assignment: Assignment!
   evaluation: Evaluation
+
+  """
+  Download path; it redirects to a short-lived signed URL of private storage.
+  """
+  fileUrl: String
 }
 
 """Status of a submission"""

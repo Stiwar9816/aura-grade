@@ -1,5 +1,6 @@
+import { IDLE_EFFICIENT_WORKER_OPTIONS } from 'src/common/queue/queue-polling.options';
 import { ConfigService } from '@nestjs/config';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { StorageService } from 'src/storage/storage.service';
 import { Logger } from '@nestjs/common';
 // BullMQ
 import { Processor, WorkerHost } from '@nestjs/bullmq';
@@ -32,7 +33,7 @@ type GradingJobResult = {
   score?: number;
 };
 
-@Processor('grading', { concurrency: 2 })
+@Processor('grading', { ...IDLE_EFFICIENT_WORKER_OPTIONS, concurrency: 2 })
 export class SubmissionProcessor extends WorkerHost {
   private readonly logger = new Logger(SubmissionProcessor.name);
 
@@ -44,7 +45,7 @@ export class SubmissionProcessor extends WorkerHost {
     private readonly evaluationService: EvaluationService,
     private readonly notificationsGateway: NotificationsGateway,
     private readonly config: ConfigService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly gradingMemory: GradingMemoryService
   ) {
     super();
@@ -85,12 +86,12 @@ export class SubmissionProcessor extends WorkerHost {
       await job.updateProgress(10);
       const text =
         submission.extractedText ||
-        (submission.cloudinaryPublicId
+        (submission.storageKey
           ? await this.extractorService.extractTextFromUrl(
-              this.cloudinary.downloadUrl(submission.cloudinaryPublicId)
+              await this.storage.submissionDownloadUrl(submission.storageKey)
             )
           : (() => {
-              throw new Error('El documento requiere migración a almacenamiento privado.');
+              throw new Error('La entrega no tiene un archivo almacenado.');
             })());
       await job.updateProgress(30);
 

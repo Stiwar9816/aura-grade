@@ -1,3 +1,4 @@
+import { IDLE_EFFICIENT_WORKER_OPTIONS } from 'src/common/queue/queue-polling.options';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -29,7 +30,7 @@ type NotificationJobResult = {
   queuedCount?: number;
 };
 
-@Processor(NOTIFICATIONS_QUEUE, { concurrency: 4 })
+@Processor(NOTIFICATIONS_QUEUE, { ...IDLE_EFFICIENT_WORKER_OPTIONS, concurrency: 4 })
 export class NotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(NotificationProcessor.name);
 

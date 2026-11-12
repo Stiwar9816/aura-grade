@@ -108,7 +108,7 @@ export class OperationsService {
     if (submission.status !== SubmissionStatus.FAILED) {
       throw new BadRequestException('Solo se pueden reintentar entregas fallidas.');
     }
-    if (!submission.fileUrl)
+    if (!submission.storageKey)
       throw new BadRequestException('La entrega no tiene archivo disponible.');
 
     await this.dataSource.transaction(async (manager) => {

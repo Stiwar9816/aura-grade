@@ -23,7 +23,7 @@ export class CourseDocumentVersion {
   @Column({ name: 'original_name', type: 'varchar', length: 255 }) originalName: string;
   @Column({ type: 'text' }) format: 'pdf' | 'docx';
   @Column({ name: 'size_bytes', type: 'integer' }) sizeBytes: number;
-  @Column({ name: 'storage_public_id', type: 'text' }) storagePublicId: string;
+  @Column({ name: 'storage_key', type: 'text' }) storageKey: string;
   @Column({ name: 'content_hash', type: 'varchar', length: 64 }) contentHash: string;
   @Column({ name: 'idempotency_key', type: 'uuid' }) idempotencyKey: string;
   @Column({ name: 'extraction_state', type: 'text' }) extractionState: DocumentExtractionState;

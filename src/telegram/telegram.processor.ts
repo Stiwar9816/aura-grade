@@ -1,10 +1,11 @@
+import { IDLE_EFFICIENT_WORKER_OPTIONS } from 'src/common/queue/queue-polling.options';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { TELEGRAM_QUEUE, TelegramJobData } from './telegram.constants';
 import { TelegramBotService } from './telegram-bot.service';
 
-@Processor(TELEGRAM_QUEUE, { concurrency: 4 })
+@Processor(TELEGRAM_QUEUE, { ...IDLE_EFFICIENT_WORKER_OPTIONS, concurrency: 4 })
 export class TelegramProcessor extends WorkerHost {
   private readonly logger = new Logger(TelegramProcessor.name);
 

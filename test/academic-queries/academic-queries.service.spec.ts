@@ -43,7 +43,7 @@ describe('authorized academic queries', () => {
         submissionId: 'submission',
         submittedAt: '2026-11-30',
         submissionStatus: 'REVIEW_PENDING',
-        cloudinaryPublicId: 'private',
+        storageKey: 'private',
       },
     ]);
     const response = await service.activities('student', 'course', {});
@@ -55,7 +55,7 @@ describe('authorized academic queries', () => {
       effectiveDueDate: '2026-12-03',
       submission: { id: 'submission', submittedAt: '2026-11-30', status: 'REVIEW_PENDING' },
     });
-    expect(response).not.toHaveProperty('cloudinaryPublicId');
+    expect(response).not.toHaveProperty('storageKey');
   });
 
   it('reports no submission and hides unpublished feedback', async () => {

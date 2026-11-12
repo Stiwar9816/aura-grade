@@ -28,7 +28,7 @@ import { UserRoles } from 'src/auth/enums';
 import { FileUpload } from 'graphql-upload-ts';
 import { User } from 'src/user/entities/user.entity';
 import { NotificationQueueService } from 'src/notifications/notification-queue.service';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { StorageService } from 'src/storage/storage.service';
 import { getEffectiveAssignmentDueDate } from 'src/assignment/assignment-deadline';
 
 const MAX_SUBMISSION_FILE_SIZE = 15 * 1024 * 1024;
@@ -62,7 +62,7 @@ export class SubmissionService {
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectQueue('grading') private readonly gradingQueue: Queue,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly notificationQueue: NotificationQueueService,
     private readonly extractor: ExtractorService
   ) {}
@@ -88,7 +88,7 @@ export class SubmissionService {
     const fileBuffer = await this.readAndValidateDocx(file);
     const extractedText = AiSanitizer.clean(await this.extractor.extractFromBuffer(fileBuffer));
     const contentHash = createHash('sha256').update(fileBuffer).digest('hex');
-    const storedFile = await this.cloudinaryService.uploadSubmission(fileBuffer);
+    const storedFile = await this.storage.uploadSubmission(fileBuffer);
     let saved: Submission;
     try {
       saved = await this.submissionRepository.manager.transaction(async (manager) => {
@@ -116,8 +116,7 @@ export class SubmissionService {
         );
         const submission = await submissions.save(
           submissions.create({
-            fileUrl: storedFile.secureUrl,
-            cloudinaryPublicId: storedFile.publicId,
+            storageKey: storedFile.key,
             extractedText,
             contentHash,
             idempotencyKey,
@@ -131,11 +130,10 @@ export class SubmissionService {
         return submission;
       });
     } catch (error) {
-      await this.cleanupFailedSubmission(storedFile.publicId);
+      await this.cleanupFailedSubmission(storedFile.key);
       throw error;
     }
-    if (saved.cloudinaryPublicId !== storedFile.publicId)
-      await this.cleanupFailedSubmission(storedFile.publicId);
+    if (saved.storageKey !== storedFile.key) await this.cleanupFailedSubmission(storedFile.key);
     return this.hideStudentDraft(saved, user);
   }
 
@@ -170,11 +168,9 @@ export class SubmissionService {
 
   async download(id: string, actor: User): Promise<string> {
     const submission = await this.findOne(id, actor);
-    if (!submission.cloudinaryPublicId)
-      throw new NotFoundException(
-        'El documento requiere migración a almacenamiento privado. Contacta a soporte.'
-      );
-    return this.cloudinaryService.downloadUrl(submission.cloudinaryPublicId);
+    if (!submission.storageKey)
+      throw new NotFoundException('La entrega no tiene un archivo disponible.');
+    return this.storage.submissionDownloadUrl(submission.storageKey);
   }
 
   async findAll(actor: User): Promise<Submission[]> {
@@ -227,7 +223,7 @@ export class SubmissionService {
       throw new BadRequestException('La entrega ya tiene una evaluación y no necesita reintento.');
     if (submission.status !== SubmissionStatus.FAILED)
       throw new BadRequestException('Solo se pueden reintentar entregas con estado fallido.');
-    if (!submission.fileUrl)
+    if (!submission.storageKey)
       throw new BadRequestException('La entrega no tiene un archivo disponible para reprocesar.');
 
     await this.submissionRepository.manager.transaction(async (manager) => {
@@ -301,11 +297,11 @@ export class SubmissionService {
   }
 
   private async cleanupFailedSubmission(
-    cloudinaryPublicId: string,
+    storageKey: string,
     submission?: Submission
   ): Promise<void> {
     const cleanupResults = await Promise.allSettled([
-      this.cloudinaryService.deleteSubmission(cloudinaryPublicId),
+      this.storage.deleteSubmission(storageKey),
       ...(submission ? [this.submissionRepository.remove(submission)] : []),
     ]);
     cleanupResults.forEach((result) => {
