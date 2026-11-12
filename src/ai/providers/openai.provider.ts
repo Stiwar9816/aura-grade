@@ -22,7 +22,12 @@ export class OpenAiProvider implements IAiProvider {
     });
   }
 
-  async evaluateSubmission(extractedText: string, rubric: any, assignmentTitle: string) {
+  async evaluateSubmission(
+    extractedText: string,
+    rubric: any,
+    assignmentTitle: string,
+    calibration?: string
+  ) {
     try {
       const prompt = `
         Actúa como un evaluador académico de nivel universitario con 20 años de experiencia. Tu objetivo es proporcionar una calificación justa, rigurosa y constructiva basada ESTRICTAMENTE en la rúbrica proporcionada.
@@ -39,6 +44,7 @@ export class OpenAiProvider implements IAiProvider {
         3. **Calidad del Feedback:** - En "observations", explica QUÉ falta para llegar al siguiente nivel de la rúbrica.
         - En "generalFeedback", destaca una fortaleza y una oportunidad de mejora clave. Usa un tono profesional pero alentador.
         4. **Detección de Irrelevancia:** Si el texto no corresponde a la tarea o es spam, asigna 0 o el puntaje mínimo de la rúbrica en todos los campos y explica la razón.
+${calibration ? `\n${calibration}\n` : ''}
 
         ### FORMATO DE SALIDA (JSON ÚNICAMENTE)
         Responde exclusivamente con un objeto JSON siguiendo esta estructura. No incluyas texto introductorio ni explicaciones fuera del JSON.

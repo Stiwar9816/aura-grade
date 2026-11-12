@@ -10,7 +10,8 @@ import { Repository } from 'typeorm';
 // Services
 import { ExtractorService } from 'src/extractor/extractor.service';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
-import { AiService, GRADING_PROMPT_VERSION } from 'src/ai/ai.service';
+import { AiService, gradingPromptVersion } from 'src/ai/ai.service';
+import { GradingMemoryService } from 'src/evaluation/grading-memory.service';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 // Entities
@@ -43,7 +44,8 @@ export class SubmissionProcessor extends WorkerHost {
     private readonly evaluationService: EvaluationService,
     private readonly notificationsGateway: NotificationsGateway,
     private readonly config: ConfigService,
-    private readonly cloudinary: CloudinaryService
+    private readonly cloudinary: CloudinaryService,
+    private readonly gradingMemory: GradingMemoryService
   ) {
     super();
   }
@@ -56,7 +58,7 @@ export class SubmissionProcessor extends WorkerHost {
     try {
       const submission = await this.submissionRepository.findOne({
         where: { id },
-        relations: ['student', 'assignment', 'assignment.rubric', 'evaluation'],
+        relations: ['student', 'assignment', 'assignment.user', 'assignment.rubric', 'evaluation'],
       });
 
       if (!submission) {
@@ -114,10 +116,15 @@ export class SubmissionProcessor extends WorkerHost {
       this.logger.log(`Solicitando a la IA la calificación de la entrega ${id}.`);
       const cleanText = AiSanitizer.clean(text);
 
+      const calibration = await this.gradingMemory.calibrationFor(
+        submission.assignment.user?.id,
+        submission.assignment.rubric?.id
+      );
       const aiResponse = await this.aiService.evaluateSubmission(
         cleanText,
         submission.assignment.rubric,
-        submission.assignment.title
+        submission.assignment.title,
+        calibration?.text
       );
       await job.updateProgress(80);
 
@@ -127,7 +134,7 @@ export class SubmissionProcessor extends WorkerHost {
         generalFeedback: aiResponse.generalFeedback,
         detailedFeedback: aiResponse.detailedFeedback,
         aiModelUsed: this.aiService.modelName,
-        promptVersion: GRADING_PROMPT_VERSION,
+        promptVersion: gradingPromptVersion(Boolean(calibration)),
       });
       await job.updateProgress(90);
 

@@ -1,17 +1,30 @@
 import { ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
 import { createHmac } from 'crypto';
-import { Repository } from 'typeorm';
 import { UserRoles } from 'src/auth/enums';
-import { EvaluationStatus } from 'src/enums';
+import { redactPersonalData } from 'src/common/helpers/personal-data-redactor';
 import { User } from 'src/user/entities/user.entity';
 import { Evaluation } from './entities/evaluation.entity';
+import {
+  compareCriteria,
+  delta,
+  effectiveFinal,
+  GradingHistoryService,
+  num,
+  rubricOf,
+  Snapshot,
+} from './grading-history.service';
 import { toCsv } from './training-export.csv';
 
-export type TrainingDataset = 'evaluations' | 'criteria';
-type Snapshot = Record<string, any> | null | undefined;
-type CriterionItem = { criteriaId?: string; score?: number; feedback?: string };
+export type TrainingDataset = 'evaluations' | 'criteria' | 'jsonl';
+export type TrainingExportOptions = {
+  includeSubmissionText?: boolean;
+  courseId?: string;
+  /** On unless explicitly disabled. */
+  redactPersonalData?: boolean;
+};
+type Pseudonym = (prefix: string, id: unknown) => string;
+type Clean = (text: unknown) => string;
 
 export const EVALUATION_COLUMNS = [
   'evaluation_id',
@@ -67,19 +80,6 @@ export const CRITERIA_COLUMNS = [
   'revised_feedback',
 ] as const;
 
-const num = (value: unknown): number | '' =>
-  value === null || value === undefined || !Number.isFinite(Number(value)) ? '' : Number(value);
-const delta = (final: unknown, draft: unknown): number | '' =>
-  num(final) === '' || num(draft) === '' ? '' : Number((Number(final) - Number(draft)).toFixed(2));
-const items = (snapshot: Snapshot): CriterionItem[] =>
-  Array.isArray(snapshot?.detailedFeedback)
-    ? snapshot.detailedFeedback.map((item: Record<string, any>) => ({
-        criteriaId: item?.criteriaId ?? item?.criterionId,
-        score: item?.score,
-        feedback: item?.feedback ?? item?.observations,
-      }))
-    : [];
-
 /**
  * Consolidated grading history for model training: what the draft proposed, what the teacher
  * published and any later correction. Reads only the immutable snapshots, so a rubric edited
@@ -88,66 +88,81 @@ const items = (snapshot: Snapshot): CriterionItem[] =>
 @Injectable()
 export class TrainingExportService {
   constructor(
-    @InjectRepository(Evaluation) private readonly evaluations: Repository<Evaluation>,
+    private readonly history: GradingHistoryService,
     private readonly config: ConfigService
   ) {}
 
-  async export(actor: User, dataset: TrainingDataset, includeSubmissionText = false) {
+  async export(actor: User, dataset: TrainingDataset, options: TrainingExportOptions = {}) {
     if (actor.role !== UserRoles.Administrador || (!actor.isPlatformAdmin && !actor.institutionId))
       throw new ForbiddenException('Solo un administrador puede exportar este consolidado.');
     const secret =
       this.config.get<string>('TRAINING_EXPORT_PSEUDONYM_SECRET') ||
       this.config.get<string>('JWT_SECRET');
     if (!secret) throw new ServiceUnavailableException('La exportación no está configurada.');
-    const pseudonym = (prefix: string, id: unknown) =>
+    const pseudonym: Pseudonym = (prefix, id) =>
       typeof id === 'string' && id
         ? `${prefix}_${createHmac('sha256', secret).update(`${prefix}:${id}`).digest('hex').slice(0, 16)}`
         : '';
+    const includeText = options.includeSubmissionText === true;
+    const redact = options.redactPersonalData !== false;
 
-    const query = this.evaluations
-      .createQueryBuilder('e')
-      .innerJoinAndSelect('e.submission', 's')
-      .innerJoinAndSelect('s.student', 'student')
-      .innerJoinAndSelect('s.assignment', 'a')
-      .innerJoinAndSelect('a.user', 'teacher')
-      .leftJoinAndSelect('a.course', 'course')
-      .leftJoinAndSelect('e.reevaluationRequest', 'r')
-      // Only complete pairs are useful: rows published before snapshots existed are skipped.
-      .where('e.status = :status', { status: EvaluationStatus.PUBLISHED })
-      .andWhere('e.originalDraftSnapshot IS NOT NULL')
-      .andWhere('e.teacherReviewSnapshot IS NOT NULL')
-      .orderBy('e.createdAt', 'ASC')
-      .addOrderBy('e.id', 'ASC');
     // A platform administrator consolidates every institution; anyone else only their own.
-    if (!actor.isPlatformAdmin)
-      query.andWhere('teacher.institutionId = :institutionId', {
-        institutionId: actor.institutionId,
-      });
-    const evaluations = await query.getMany();
+    const evaluations = await this.history.load({
+      institutionId: actor.isPlatformAdmin ? undefined : actor.institutionId,
+      courseId: options.courseId,
+    });
+    const cleanerFor = (evaluation: Evaluation): Clean => {
+      if (!redact) return (text) => (typeof text === 'string' ? text : '');
+      const student = evaluation.submission.student;
+      const teacher = evaluation.submission.assignment.user;
+      const names = [student?.name, student?.last_name, teacher?.name, teacher?.last_name];
+      return (text) => redactPersonalData(text, names);
+    };
 
+    if (dataset === 'jsonl') {
+      const lines = evaluations.map((evaluation) =>
+        JSON.stringify(
+          this.trainingExample(evaluation, pseudonym, cleanerFor(evaluation), includeText)
+        )
+      );
+      return {
+        content: lines.length ? `${lines.join('\n')}\n` : '',
+        rows: lines.length,
+        contentType: 'application/x-ndjson; charset=utf-8',
+        extension: 'jsonl',
+      };
+    }
     const rows =
       dataset === 'criteria'
-        ? evaluations.flatMap((evaluation) => this.criteriaRows(evaluation, pseudonym))
+        ? evaluations.flatMap((evaluation) =>
+            this.criteriaRows(evaluation, pseudonym, cleanerFor(evaluation))
+          )
         : evaluations.map((evaluation) =>
-            this.evaluationRow(evaluation, pseudonym, includeSubmissionText)
+            this.evaluationRow(evaluation, pseudonym, cleanerFor(evaluation), includeText)
           );
     const columns: string[] =
       dataset === 'criteria'
         ? [...CRITERIA_COLUMNS]
-        : [...EVALUATION_COLUMNS, ...(includeSubmissionText ? ['submission_text'] : [])];
-    return { csv: toCsv(columns, rows), rows: rows.length };
+        : [...EVALUATION_COLUMNS, ...(includeText ? ['submission_text'] : [])];
+    return {
+      content: toCsv(columns, rows),
+      rows: rows.length,
+      contentType: 'text/csv; charset=utf-8',
+      extension: 'csv',
+    };
   }
 
   private evaluationRow(
     evaluation: Evaluation,
-    pseudonym: (prefix: string, id: unknown) => string,
+    pseudonym: Pseudonym,
+    clean: Clean,
     includeSubmissionText: boolean
   ): Record<string, unknown> {
     const draft: Snapshot = evaluation.originalDraftSnapshot;
     const final: Snapshot = evaluation.teacherReviewSnapshot;
     const revision: Snapshot = evaluation.reevaluationRevisionSnapshot;
     const assignment = evaluation.submission.assignment;
-    const rubric = final?.context?.rubric ?? draft?.context?.rubric;
+    const rubric = rubricOf(evaluation);
     const request = evaluation.reevaluationRequest;
     return {
       evaluation_id: evaluation.id,
@@ -167,62 +182,134 @@ export class TrainingExportService {
       draft_stage: draft?.captureStage ?? '',
       draft_captured_at: draft?.capturedAt ?? '',
       draft_total_score: num(draft?.totalScore),
-      draft_general_feedback: draft?.generalFeedback ?? '',
+      draft_general_feedback: clean(draft?.generalFeedback),
       published_at: final?.capturedAt ?? '',
       final_total_score: num(final?.totalScore),
-      final_general_feedback: final?.generalFeedback ?? '',
+      final_general_feedback: clean(final?.generalFeedback),
       score_delta: delta(final?.totalScore, draft?.totalScore),
       feedback_changed:
         (draft?.generalFeedback ?? '').trim() !== (final?.generalFeedback ?? '').trim(),
       adjustment_reason: final?.adjustment?.reason ?? '',
-      adjustment_note: final?.adjustment?.note ?? '',
+      adjustment_note: clean(final?.adjustment?.note),
       reevaluation_status: request?.status ?? '',
-      reevaluation_reason: request?.reason ?? '',
-      reevaluation_teacher_response: request?.teacherResponse ?? '',
+      reevaluation_reason: clean(request?.reason),
+      reevaluation_teacher_response: clean(request?.teacherResponse),
       revised_at: revision?.capturedAt ?? '',
       revised_total_score: num(revision?.totalScore),
-      revised_general_feedback: revision?.generalFeedback ?? '',
+      revised_general_feedback: clean(revision?.generalFeedback),
       revision_adjustment_reason: revision?.adjustment?.reason ?? '',
       submission_content_hash: final?.context?.contentHash ?? draft?.context?.contentHash ?? '',
       ...(includeSubmissionText
-        ? { submission_text: final?.context?.extractedText ?? draft?.context?.extractedText ?? '' }
+        ? {
+            submission_text: clean(final?.context?.extractedText ?? draft?.context?.extractedText),
+          }
         : {}),
     };
   }
 
   private criteriaRows(
     evaluation: Evaluation,
-    pseudonym: (prefix: string, id: unknown) => string
+    pseudonym: Pseudonym,
+    clean: Clean
   ): Record<string, unknown>[] {
+    const rubric = rubricOf(evaluation);
+    return compareCriteria(evaluation).map((criterion) => ({
+      evaluation_id: evaluation.id,
+      student_pseudonym: pseudonym('stu', evaluation.submission.student?.id),
+      assignment_id: evaluation.submission.assignment.id,
+      rubric_id: rubric?.id ?? '',
+      criterion_id: criterion.criterionId,
+      criterion_title: criterion.title,
+      criterion_description: criterion.description,
+      criterion_weight: criterion.weight,
+      draft_score: criterion.draftScore,
+      draft_feedback: clean(criterion.draftFeedback),
+      final_score: criterion.finalScore,
+      final_feedback: clean(criterion.finalFeedback),
+      score_delta: delta(criterion.finalScore, criterion.draftScore),
+      revised_score: criterion.revisedScore,
+      revised_feedback: clean(criterion.revisedFeedback),
+    }));
+  }
+
+  /**
+   * One supervised example per evaluation: what the grader saw (task, rubric, optionally the
+   * submission) and the grade the teacher stood behind (the re-evaluation correction if any).
+   */
+  private trainingExample(
+    evaluation: Evaluation,
+    pseudonym: Pseudonym,
+    clean: Clean,
+    includeSubmissionText: boolean
+  ) {
     const draft: Snapshot = evaluation.originalDraftSnapshot;
-    const final: Snapshot = evaluation.teacherReviewSnapshot;
-    const revision: Snapshot = evaluation.reevaluationRevisionSnapshot;
-    const rubric = final?.context?.rubric ?? draft?.context?.rubric;
-    const byId = (snapshot: Snapshot) =>
-      new Map(items(snapshot).map((item) => [item.criteriaId, item]));
-    const [drafts, finals, revisions] = [byId(draft), byId(final), byId(revision)];
-    const criteria: Record<string, any>[] = Array.isArray(rubric?.criteria) ? rubric.criteria : [];
-    return criteria.map((criterion) => {
-      const d = drafts.get(criterion.id);
-      const f = finals.get(criterion.id);
-      const r = revisions.get(criterion.id);
-      return {
+    const final = effectiveFinal(evaluation);
+    const rubric = rubricOf(evaluation);
+    const criteria = compareCriteria(evaluation);
+    const revised = Boolean(evaluation.reevaluationRevisionSnapshot);
+    return {
+      input: {
+        assignment_title:
+          final?.context?.assignment?.title ?? evaluation.submission.assignment.title,
+        rubric: {
+          id: rubric?.id ?? null,
+          title: rubric?.title ?? null,
+          max_total_score: num(rubric?.maxTotalScore),
+          criteria: (Array.isArray(rubric?.criteria) ? rubric.criteria : []).map(
+            (criterion: Record<string, any>) => ({
+              id: criterion.id,
+              title: criterion.title,
+              description: criterion.description ?? null,
+              weight: num(criterion.weight),
+              levels: criterion.levels ?? null,
+            })
+          ),
+        },
+        ...(includeSubmissionText
+          ? {
+              submission_text: clean(
+                final?.context?.extractedText ?? draft?.context?.extractedText
+              ),
+            }
+          : {}),
+      },
+      output: {
+        total_score: num(final?.totalScore),
+        general_feedback: clean(final?.generalFeedback),
+        criteria: criteria.map((criterion) => ({
+          criterion_id: criterion.criterionId,
+          score:
+            revised && criterion.revisedScore !== ''
+              ? criterion.revisedScore
+              : criterion.finalScore,
+          feedback: clean(
+            revised && criterion.revisedFeedback
+              ? criterion.revisedFeedback
+              : criterion.finalFeedback
+          ),
+        })),
+      },
+      draft: {
+        origin: draft?.origin ?? evaluation.origin,
+        ai_model: draft?.aiModelUsed ?? null,
+        prompt_version: draft?.promptVersion ?? null,
+        total_score: num(draft?.totalScore),
+        general_feedback: clean(draft?.generalFeedback),
+        criteria: criteria.map((criterion) => ({
+          criterion_id: criterion.criterionId,
+          score: criterion.draftScore,
+          feedback: clean(criterion.draftFeedback),
+        })),
+      },
+      meta: {
         evaluation_id: evaluation.id,
         student_pseudonym: pseudonym('stu', evaluation.submission.student?.id),
-        assignment_id: evaluation.submission.assignment.id,
-        rubric_id: rubric?.id ?? '',
-        criterion_id: criterion.id,
-        criterion_title: criterion.title ?? '',
-        criterion_description: criterion.description ?? '',
-        criterion_weight: num(criterion.weight),
-        draft_score: num(d?.score),
-        draft_feedback: d?.feedback ?? '',
-        final_score: num(f?.score),
-        final_feedback: f?.feedback ?? '',
-        score_delta: delta(f?.score, d?.score),
-        revised_score: num(r?.score),
-        revised_feedback: r?.feedback ?? '',
-      };
-    });
+        course_id: evaluation.submission.assignment.course?.id ?? null,
+        score_delta: delta(final?.totalScore, draft?.totalScore),
+        adjustment_reason: final?.adjustment?.reason ?? null,
+        revised_after_reevaluation: revised,
+        submission_content_hash: final?.context?.contentHash ?? draft?.context?.contentHash ?? null,
+      },
+    };
   }
 }
