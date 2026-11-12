@@ -71,6 +71,13 @@ export class Evaluation {
   @Column({ name: 'teacher_review_snapshot', type: 'jsonb', nullable: true })
   teacherReviewSnapshot?: Record<string, unknown> | null;
 
+  /** Written once, after an approved re-evaluation. The publication snapshot is never replaced. */
+  @Column({ name: 'reevaluation_revision_snapshot', type: 'jsonb', nullable: true })
+  reevaluationRevisionSnapshot?: Record<string, unknown> | null;
+
+  @Column({ name: 'prompt_version', type: 'text', nullable: true })
+  promptVersion?: string | null;
+
   @Column({ name: 'legacy_detailed_feedback', type: 'jsonb', nullable: true })
   legacyDetailedFeedback?: unknown;
 

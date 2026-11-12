@@ -1,8 +1,15 @@
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { OutboxEvent } from 'src/outbox/entities/outbox-event.entity';
 import { Assignment } from 'src/assignment/entities/assignment.entity';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
 import { UserRoles } from 'src/auth/enums';
-import { EvaluationOrigin, EvaluationStatus, SubmissionStatus } from 'src/enums';
+import {
+  EvaluationAdjustmentReason,
+  EvaluationOrigin,
+  EvaluationStatus,
+  ReEvaluationStatus,
+  SubmissionStatus,
+} from 'src/enums';
 import type { User } from 'src/user/entities/user.entity';
 import { Submission } from 'src/submission/entities/submission.entity';
 
@@ -12,6 +19,7 @@ describe('EvaluationService', () => {
     save: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    update: jest.fn(),
   };
   const submissionRepository = {
     findOneBy: jest.fn(),
@@ -493,5 +501,165 @@ describe('EvaluationService', () => {
     expect(result.originalDraftSnapshot).toEqual({ totalScore: 4 });
     expect(result.teacherReviewSnapshot).toEqual({ totalScore: 3 });
     expect(evaluationRepository.save).not.toHaveBeenCalled();
+  });
+
+  describe('training labels', () => {
+    const publishedWith = (overrides: Record<string, unknown> = {}) => ({
+      ...draftEvaluation,
+      detailedFeedback: [{ criteriaId: 'criterion-id', score: 4, feedback: 'Buen argumento' }],
+      status: EvaluationStatus.PUBLISHED,
+      originalDraftSnapshot: { totalScore: 4 },
+      teacherReviewSnapshot: { totalScore: 4, captureStage: 'TEACHER_PUBLICATION' },
+      reevaluationRequest: { id: 'request-id', status: ReEvaluationStatus.APPROVED },
+      ...overrides,
+    });
+    const revision = {
+      id: 'evaluation-id',
+      generalFeedback: 'Corregido tras revisar el argumento',
+      detailedFeedback: [{ criteriaId: 'criterion-id', score: 4.5, feedback: 'Mejor' }],
+      adjustmentReason: EvaluationAdjustmentReason.AI_TOO_STRICT,
+      adjustmentNote: '  Penalizó de más la introducción  ',
+    };
+
+    it('stores the prompt version in the original draft snapshot', async () => {
+      submissionRepository.findOne.mockResolvedValue({ id: 'submission-id' });
+      evaluationRepository.findOne.mockResolvedValue(null);
+      evaluationRepository.create.mockImplementation((value) => value);
+      evaluationRepository.save.mockImplementation((value) => value);
+      const saved = await service.createDraft({
+        submissionId: 'submission-id',
+        totalScore: 4,
+        generalFeedback: 'Buen trabajo',
+        detailedFeedback: {},
+        aiModelUsed: 'model-x',
+        promptVersion: 'grading-v2',
+      });
+      expect(saved.promptVersion).toBe('grading-v2');
+      expect(saved.originalDraftSnapshot).toMatchObject({
+        promptVersion: 'grading-v2',
+        aiModelUsed: 'model-x',
+      });
+    });
+
+    it('records why the teacher adjusted the draft, without touching the original', async () => {
+      evaluationRepository.findOne.mockImplementation(async () => ({
+        ...draftEvaluation,
+        originalDraftSnapshot: { totalScore: 4, marker: 'original' },
+      }));
+      evaluationRepository.save.mockImplementation((value) => value);
+      const saved = await service.publish(
+        'evaluation-id',
+        {
+          id: 'evaluation-id',
+          adjustmentReason: EvaluationAdjustmentReason.AI_TOO_LENIENT,
+          adjustmentNote: '  ',
+        },
+        teacher
+      );
+      expect(saved.teacherReviewSnapshot).toMatchObject({
+        adjustment: { reason: 'AI_TOO_LENIENT', note: null },
+      });
+      expect(saved.originalDraftSnapshot).toEqual({ totalScore: 4, marker: 'original' });
+    });
+
+    it('keeps an empty adjustment when the teacher gives no reason', async () => {
+      evaluationRepository.findOne.mockImplementation(async () => ({ ...draftEvaluation }));
+      evaluationRepository.save.mockImplementation((value) => value);
+      const saved = await service.publish('evaluation-id', undefined, teacher);
+      expect(saved.teacherReviewSnapshot).toMatchObject({
+        adjustment: { reason: null, note: null },
+      });
+    });
+
+    it('corrects a published grade once after an approved re-evaluation, as a third record', async () => {
+      evaluationRepository.findOne.mockImplementation(async () => publishedWith());
+      evaluationRepository.save.mockImplementation((value) => value);
+      const saved = await service.revise('evaluation-id', revision, teacher);
+      expect(saved.totalScore).toBe(4.5);
+      expect(saved.reevaluationRevisionSnapshot).toMatchObject({
+        captureStage: 'REEVALUATION_REVISION',
+        totalScore: 4.5,
+        previousTotalScore: 4,
+        reviewerId: 'teacher-id',
+        reevaluationRequestId: 'request-id',
+        adjustment: { reason: 'AI_TOO_STRICT', note: 'Penalizó de más la introducción' },
+      });
+      // Earlier evidence is never rewritten.
+      expect(saved.teacherReviewSnapshot).toEqual({
+        totalScore: 4,
+        captureStage: 'TEACHER_PUBLICATION',
+      });
+      expect(saved.originalDraftSnapshot).toEqual({ totalScore: 4 });
+      expect(notificationsGateway.notifyStudent).toHaveBeenCalledWith(
+        'student-id',
+        expect.objectContaining({ evaluationId: 'evaluation-id' })
+      );
+    });
+
+    it.each([
+      ['no re-evaluation', { reevaluationRequest: null }],
+      ['rejected', { reevaluationRequest: { id: 'r', status: ReEvaluationStatus.REJECTED } }],
+      ['still a draft', { status: EvaluationStatus.DRAFT }],
+    ])('refuses to revise with %s', async (_name, overrides) => {
+      evaluationRepository.findOne.mockImplementation(async () => publishedWith(overrides));
+      await expect(service.revise('evaluation-id', revision, teacher)).rejects.toThrow(
+        BadRequestException
+      );
+      expect(evaluationRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('approves a pending request in the same transaction as the correction', async () => {
+      evaluationRepository.findOne.mockImplementation(async () =>
+        publishedWith({ reevaluationRequest: { id: 'request-id', status: 'PENDING' } })
+      );
+      evaluationRepository.save.mockImplementation((value) => value);
+      const saved = await service.revise(
+        'evaluation-id',
+        revision,
+        teacher,
+        '  Tenías razón en el criterio 1  '
+      );
+      expect(evaluationRepository.update).toHaveBeenCalledWith(
+        'request-id',
+        expect.objectContaining({
+          status: ReEvaluationStatus.APPROVED,
+          teacherResponse: 'Tenías razón en el criterio 1',
+        })
+      );
+      expect(saved.reevaluationRequest?.status).toBe(ReEvaluationStatus.APPROVED);
+      expect(saved.reevaluationRevisionSnapshot).toMatchObject({ totalScore: 4.5 });
+    });
+
+    it.each([undefined, 'corta'])(
+      'requires a response to the student before approving a pending request (%p)',
+      async (response) => {
+        evaluationRepository.findOne.mockImplementation(async () =>
+          publishedWith({ reevaluationRequest: { id: 'request-id', status: 'PENDING' } })
+        );
+        await expect(service.revise('evaluation-id', revision, teacher, response)).rejects.toThrow(
+          BadRequestException
+        );
+        expect(evaluationRepository.update).not.toHaveBeenCalled();
+        expect(evaluationRepository.save).not.toHaveBeenCalled();
+      }
+    );
+
+    it('refuses a second revision', async () => {
+      evaluationRepository.findOne.mockImplementation(async () =>
+        publishedWith({ reevaluationRevisionSnapshot: { totalScore: 4.5 } })
+      );
+      await expect(service.revise('evaluation-id', revision, teacher)).rejects.toThrow(
+        ConflictException
+      );
+      expect(evaluationRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses a revision by another teacher', async () => {
+      evaluationRepository.findOne.mockImplementation(async () => publishedWith());
+      await expect(
+        service.revise('evaluation-id', revision, { ...teacher, id: 'other-teacher' } as User)
+      ).rejects.toThrow(ForbiddenException);
+      expect(evaluationRepository.save).not.toHaveBeenCalled();
+    });
   });
 });

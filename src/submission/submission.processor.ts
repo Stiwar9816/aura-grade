@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 // Services
 import { ExtractorService } from 'src/extractor/extractor.service';
 import { EvaluationService } from 'src/evaluation/evaluation.service';
-import { AiService } from 'src/ai/ai.service';
+import { AiService, GRADING_PROMPT_VERSION } from 'src/ai/ai.service';
 // Gateways
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 // Entities
@@ -127,6 +127,7 @@ export class SubmissionProcessor extends WorkerHost {
         generalFeedback: aiResponse.generalFeedback,
         detailedFeedback: aiResponse.detailedFeedback,
         aiModelUsed: this.aiService.modelName,
+        promptVersion: GRADING_PROMPT_VERSION,
       });
       await job.updateProgress(90);
 

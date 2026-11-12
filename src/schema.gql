@@ -390,6 +390,7 @@ type Mutation {
   createSubmission(createSubmissionInput: CreateSubmissionInput!, file: Upload!): Submission!
   retrySubmissionGrading(id: ID!): Submission!
   publishEvaluation(id: ID!, updateEvaluationInput: UpdateEvaluationInput): Evaluation!
+  reviseEvaluation(id: ID!, input: UpdateEvaluationInput!, teacherResponse: String): Evaluation!
   createManualEvaluationDraft(input: CreateManualEvaluationInput!): Evaluation!
   createCriterion(createCriterionInput: CreateCriterionInput!): Criterion!
   updateCriterion(updateCriterionInput: UpdateCriterionInput!): Criterion!
@@ -622,6 +623,23 @@ input UpdateEvaluationInput {
 
   """Retroalimentación detallada"""
   detailedFeedback: JSON
+
+  """Motivo por el que el docente ajustó el borrador"""
+  adjustmentReason: EvaluationAdjustmentReason
+
+  """Comentario breve sobre el ajuste"""
+  adjustmentNote: String
+}
+
+"""Reason given by the teacher for changing an evaluation draft"""
+enum EvaluationAdjustmentReason {
+  AI_TOO_STRICT
+  AI_TOO_LENIENT
+  AI_MISSED_ERROR
+  AI_MISREAD_SUBMISSION
+  RUBRIC_MISAPPLIED
+  FEEDBACK_UNCLEAR
+  OTHER
 }
 
 input CreateManualEvaluationInput {

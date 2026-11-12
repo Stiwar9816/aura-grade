@@ -18,6 +18,9 @@ import {
 } from '../rubric/rubric.constants';
 import { AiSanitizer } from '../common/helpers/ai-sanitizer.helper';
 
+/** Bump together with any change to the grading prompt: it labels every stored draft. */
+export const GRADING_PROMPT_VERSION = 'grading-v2';
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -36,7 +39,7 @@ export class AiService {
     // Generar una llave única basada en el contenido
     const hash = createHash('sha256')
       .update(
-        `grading-v2-${this.aiProvider.modelName}-${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}`
+        `${GRADING_PROMPT_VERSION}-${this.aiProvider.modelName}-${extractedText}-${JSON.stringify(rubric)}-${assignmentTitle}`
       )
       .digest('hex');
     const cacheKey = `ai-evaluation:${hash}`;
