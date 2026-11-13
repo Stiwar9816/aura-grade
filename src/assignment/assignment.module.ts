@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 // Services
 import { AssignmentService } from './assignment.service';
+import { SgaGradesController } from './sga-grades.controller';
+import { SgaGradesService } from './sga-grades.service';
 // Resolvers
 import { AssignmentResolver } from './assignment.resolver';
 // TypeORM
@@ -16,7 +18,8 @@ import { RubricModule } from 'src/rubric/rubric.module';
 import { SubmissionModule } from 'src/submission/submission.module';
 
 @Module({
-  providers: [AssignmentResolver, AssignmentService],
+  controllers: [SgaGradesController],
+  providers: [AssignmentResolver, AssignmentService, SgaGradesService],
   imports: [
     TypeOrmModule.forFeature([Assignment, AssignmentExtension, Course, Rubric]),
     forwardRef(() => UserModule),

@@ -5,10 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 // TypeORM
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 // Dto
 import { CreateCourseInput, UpdateCourseInput } from './dto';
+import { SGA_GROUP_CODE_MESSAGE, SGA_GROUP_CODE_PATTERN, normalizeCourseCode } from './course-code';
 // Entities
 import { Course } from './entities/course.entity';
 import { User } from 'src/user/entities/user.entity';
@@ -24,8 +25,12 @@ export class CourseService {
   async create(createCourseInput: CreateCourseInput, teacher: User): Promise<Course> {
     this.assertTeacher(teacher);
     const { userId: _, ...courseData } = createCourseInput;
+    const code = normalizeCourseCode(courseData.code_course);
+    this.assertSgaGroupCode(code);
+    await this.assertUniqueSgaCourse(teacher.id, code, courseData.sga_subject_code);
     const course = this.courseRepository.create({
       ...courseData,
+      code_course: code,
       user: { id: teacher.id } as User,
     });
     return await this.courseRepository.save(course);
@@ -73,11 +78,22 @@ export class CourseService {
         'La matrícula de estudiantes debe gestionarse con assignCoursesToUser.'
       );
 
-    await this.findOne(id, teacher);
+    const current = await this.findOne(id, teacher);
+
+    // A legacy code may stay as it is; any code the teacher writes now must follow the SGA format.
+    const code =
+      toUpdate.code_course !== undefined
+        ? normalizeCourseCode(toUpdate.code_course)
+        : current.code_course;
+    const subject = toUpdate.sga_subject_code ?? current.sga_subject_code;
+    if (code !== current.code_course) this.assertSgaGroupCode(code);
+    if (subject && (code !== current.code_course || subject !== current.sga_subject_code))
+      await this.assertUniqueSgaCourse(teacher.id, code, subject, id);
 
     const course = await this.courseRepository.preload({
       id,
       ...toUpdate,
+      ...(toUpdate.code_course !== undefined && { code_course: code }),
     });
 
     if (!course) throw new NotFoundException(`No se encontró el curso con identificador ${id}.`);
@@ -90,6 +106,27 @@ export class CourseService {
     const course = await this.findOne(id, teacher);
     await this.courseRepository.remove(course);
     return { ...course, id };
+  }
+
+  private assertSgaGroupCode(code: string): void {
+    if (!SGA_GROUP_CODE_PATTERN.test(code)) throw new BadRequestException(SGA_GROUP_CODE_MESSAGE);
+  }
+
+  /** The same teacher cannot have two courses for one subject of one group. */
+  private async assertUniqueSgaCourse(
+    teacherId: string,
+    code: string,
+    subject: string,
+    exceptCourseId?: string
+  ): Promise<void> {
+    const duplicated = await this.courseRepository.existsBy({
+      user: { id: teacherId },
+      code_course: code,
+      sga_subject_code: subject,
+      ...(exceptCourseId && { id: Not(exceptCourseId) }),
+    });
+    if (duplicated)
+      throw new BadRequestException('Ya tienes un curso con ese código de grupo y de materia.');
   }
 
   private assertTeacher(actor: User): void {
