@@ -42,8 +42,20 @@ export class Course {
     description: 'PGINS2101QDOA',
   })
   @Column({ type: 'text' })
-  @Field(() => String)
+  @Field(() => String, { description: 'SGA group code, e.g. PGINS2301QDOA' })
   code_course: string;
+
+  @ApiProperty({
+    example: '000067',
+    description: 'SGA subject code inside the group; null for courses created before it existed',
+    required: false,
+  })
+  @Column({ type: 'text', nullable: true })
+  @Field(() => String, {
+    nullable: true,
+    description: 'SGA subject code inside the group, e.g. 000067',
+  })
+  sga_subject_code?: string | null;
 
   // Relations - Many-to-One with User (Profesor creador del curso)
   @ManyToOne(() => require('../../user/entities/user.entity').User, { nullable: false })

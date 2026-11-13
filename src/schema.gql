@@ -130,7 +130,12 @@ type Institution {
 type Course {
   id: String!
   course_name: String!
+
+  """SGA group code, e.g. PGINS2301QDOA"""
   code_course: String!
+
+  """SGA subject code inside the group, e.g. 000067"""
+  sga_subject_code: String
   user: User!
   users: [User!]
   assignments: [Assignment!]
@@ -477,8 +482,13 @@ input CreateCourseInput {
   """Name of the course"""
   course_name: String!
 
-  """Code of the course"""
+  """
+  Course code, the same one the university system (SGA) uses. Stored upper-cased.
+  """
   code_course: String!
+
+  """SGA subject code inside the group (6 digits), e.g. 000067"""
+  sga_subject_code: String!
 
   """ID of the teacher/professor who created the course"""
   userId: String!
@@ -488,8 +498,13 @@ input UpdateCourseInput {
   """Name of the course"""
   course_name: String
 
-  """Code of the course"""
+  """
+  Course code, the same one the university system (SGA) uses. Stored upper-cased.
+  """
   code_course: String
+
+  """SGA subject code inside the group (6 digits), e.g. 000067"""
+  sga_subject_code: String
 
   """ID of the teacher/professor who created the course"""
   userId: String
